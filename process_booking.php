@@ -12,11 +12,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $startDate = DateTime::createFromFormat('Y-m-d', $_POST['start_date'] ?? '');
     $endDate = DateTime::createFromFormat('Y-m-d', $_POST['end_date'] ?? '');
     $workspace = $_POST['selectedWorkspace'] ?? '';
-    error_log("Debug: startDate=" . var_export($startDate, true) . 
-    ", endDate=" . var_export($endDate, true) . 
-    ", workspace=" . var_export($workspace, true));
+    $timePeriod = $_POST['time_period'] ?? '';
 
-    if (!$startDate || !$endDate || empty($workspace)) {
+    if ($timePeriod === 'vormittags') {
+        $startTime = '09:00';
+        $endTime = '12:00';
+    } elseif ($timePeriod === 'nachmittags') {
+        $startTime = '13:00';
+        $endTime = '17:00';
+    } else {
+        die("Fehler: Ungültige Zeitspanne.");
+    }   
+
+    if (!$startDate || !$endDate || empty($workspace) || empty($timePeriod)) {
         die("Fehler: Alle Felder müssen ausgefüllt sein und gültige Daten enthalten.");
     }
 
@@ -49,8 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'room_id' => $roomId,
                 'seat_id' => $seatId,
                 'date' => $startDate->format('Y-m-d'),
-                'start_time' => '09:00',
-                'end_time' => '17:00'
+                'start_time' => $startTime,
+                'end_time' => $endTime
             ]);
         } else {
             while ($startDate <= $endDate) {
@@ -59,8 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'room_id' => $roomId,
                     'seat_id' => $seatId,
                     'date' => $startDate->format('Y-m-d'),
-                    'start_time' => '09:00',
-                    'end_time' => '17:00'
+                    'start_time' => $startTime,
+                    'end_time' => $endTime
                 ]);
                 $startDate->modify('+1 day');
             }

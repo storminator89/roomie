@@ -4,6 +4,7 @@ function roomieApp() {
         startDate: null,
         endDate: null,
         selectedWorkspace: '',
+        selectedTimePeriod: '',
         bookingToCancel: '',
         currentMonthYear: '',
         blankDays: [],
@@ -85,16 +86,28 @@ function roomieApp() {
         },
         
         submitBooking() {
-            if (!this.startDate || !this.endDate || !this.selectedWorkspace) {
-                alert('Bitte wählen Sie einen Zeitraum und einen Arbeitsplatz aus.');
+            if (!this.startDate || !this.endDate || !this.selectedWorkspace || !this.selectedTimePeriod) {
+                alert('Bitte wählen Sie einen Zeitraum, eine Zeitspanne und einen Arbeitsplatz aus.');
                 return;
             }
-            
+
             const formattedStartDate = this.formatDateToUTC(this.startDate);
             const formattedEndDate = this.formatDateToUTC(this.endDate);
-            
-            alert(`Buchung eingereicht für ${this.selectedWorkspace} von ${formattedStartDate} bis ${formattedEndDate}`);
-            
+
+            let startTime, endTime;
+            if (this.selectedTimePeriod === 'vormittags') {
+                startTime = '09:00';
+                endTime = '12:00';
+            } else if (this.selectedTimePeriod === 'nachmittags') {
+                startTime = '13:00';
+                endTime = '17:00';
+            } else {
+                alert('Ungültige Zeitspanne ausgewählt.');
+                return;
+            }
+
+            alert(`Buchung eingereicht für ${this.selectedWorkspace} von ${formattedStartDate} bis ${formattedEndDate}, Zeitspanne: ${startTime} - ${endTime}`);
+
             document.getElementById("bookingForm").submit();
         },
         
@@ -116,12 +129,21 @@ function roomieApp() {
         formatDateToUTC(date) {
             return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())).toISOString().split('T')[0];
         },
+
+        formatDateToGerman(date) {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}.${month}.${year}`;
+        },
         
         get selectedDateRange() {
             if (!this.startDate) return 'Kein Datum ausgewählt';
-            const formattedStartDate = this.formatDateToUTC(this.startDate);
+            
+            const formattedStartDate = this.formatDateToGerman(this.startDate);
             if (!this.endDate) return formattedStartDate;
-            const formattedEndDate = this.formatDateToUTC(this.endDate);
+            
+            const formattedEndDate = this.formatDateToGerman(this.endDate);
             return `${formattedStartDate} - ${formattedEndDate}`;
         },
 

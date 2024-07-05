@@ -177,6 +177,16 @@ $rooms = $db->query('SELECT * FROM rooms');
                     <input type="hidden" name="start_date" x-bind:value="startDate ? formatDateToUTC(startDate) : ''">
                     <input type="hidden" name="end_date" x-bind:value="endDate ? formatDateToUTC(endDate) : ''">
                     <input type="hidden" name="selectedWorkspace" x-bind:value="selectedWorkspace">
+
+                    <div class="mb-4">
+                        <label for="time_period" class="block text-sm font-medium text-gray-700">Zeitspanne</label>
+                        <select id="time_period" name="time_period" x-model="selectedTimePeriod" class="w-full bg-white border border-gray-300 rounded-md p-2">
+                            <option value="">Zeitspanne auswählen</option>
+                            <option value="vormittags">Vormittags (09:00 - 12:00)</option>
+                            <option value="nachmittags">Nachmittags (13:00 - 17:00)</option>
+                        </select>
+                    </div>
+
                     <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 text-white rounded-md p-2 transition-colors duration-200 flex items-center justify-center">
                         Buchen
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-2">
@@ -187,6 +197,7 @@ $rooms = $db->query('SELECT * FROM rooms');
                         </svg>
                     </button>
                 </form>
+
                 <button @click="clearDateSelection" class="flex-1 bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 rounded-md p-2 transition-colors duration-200">
                     Auswahl löschen
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-2 inline">
