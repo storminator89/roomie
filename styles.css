@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+[x-cloak] { 
+    display: none !important; 
+}
+
+.nav-button {
+    @apply text-gray-600 hover:text-gray-800 p-1 rounded transition-colors duration-300;
+}
+
+.calendar-day {
+    @apply p-2 text-center cursor-pointer transition-all duration-300;
+}
+
+.calendar-day.today {
+    @apply text-blue-600;
+}
+
+.calendar-day.selected {
+    @apply bg-yellow-100;
+}
+
+.calendar-day:hover {
+    @apply bg-yellow-50;
+}
+
+.workspace-select {
+    @apply w-full bg-white border border-gray-300 rounded-md p-2 transition-all duration-300;
+}
+
+.book-button {
+    @apply flex-1 bg-yellow-400 hover:bg-yellow-500 text-white rounded-md p-2 transition-colors duration-200;
+}
+
+.clear-button {
+    @apply flex-1 bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 rounded-md p-2 transition-colors duration-200;
+}
+
+.floorplan-card {
+    @apply bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 transition-all duration-300 hover:shadow-lg;
+}
+
+.floorplan-header {
+    @apply p-3 bg-gray-50 border-b border-gray-200;
+}
+
+.floorplan-title {
+    @apply text-sm font-medium text-gray-700 flex items-center;
+}
+
+.floorplan-image {
+    @apply bg-gray-200 h-32 w-full rounded-md transition-all duration-300;
+}
+
+.cancel-select {
+    @apply w-full bg-white border border-gray-300 rounded-md p-2 mb-2 transition-all duration-300;
+}
+
+.cancel-button {
+    @apply w-full bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 rounded-md p-2 transition-colors duration-200;
+}
+
+.bookings-popup-button {
+    @apply w-full bg-blue-500 hover:bg-blue-600 text-white rounded-md p-2 transition-colors duration-200;
+}
+
+.bookings-popup {
+    @apply fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center;
+}
+
+.bookings-popup-content {
+    @apply relative bg-white rounded-lg shadow-xl max-w-2xl w-full m-4;
+}
+
+.bookings-popup-title {
+    @apply text-lg font-semibold text-gray-900;
+}
+
+.bookings-table {
+    @apply min-w-full divide-y divide-gray-200;
+}
+
+.bookings-table-header {
+    @apply bg-gray-50;
+}
+
+.bookings-table-header th {
+    @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+}
+
+.bookings-table-body {
+    @apply bg-white divide-y divide-gray-200;
+}
+
+.bookings-table-body td {
+    @apply px-6 py-4 whitespace-nowrap;
+}
+
+.close-popup-button {
+    @apply px-4 py-2 bg-gray-100 text-gray-700 text-base font-medium rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors duration-200;
+}
+
+.date-filter {
+    @apply border-gray-300 rounded-md shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50;
+}
+
+/* Additional utility classes */
+.mb-8 {
+    margin-bottom: 2rem;
+}
+
+.mb-4 {
+    margin-bottom: 1rem;
+}
+
+.mt-4 {
+    margin-top: 1rem;
+}
+
+.space-x-3 > * + * {
+    margin-left: 0.75rem;
+}
+
+.grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gap-4 {
+    gap: 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .bookings-popup-content {
+        @apply max-w-full m-2;
+    }
+
+    .bookings-table-header th,
+    .bookings-table-body td {
+        @apply px-2 py-2 text-xs;
+    }
+
+    .date-filter {
+        @apply text-sm;
+    }
+}

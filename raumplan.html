@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interaktiver Raumplan 2. OG</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .room {
+            transition: all 0.3s ease;
+        }
+        .room:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .seat {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .seat:hover {
+            transform: scale(1.2);
+        }
+        .seat.available {
+            background-color: #10B981;
+        }
+        .seat.occupied {
+            background-color: #EF4444;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-6xl mx-auto bg-white rounded-lg shadow-lg p-8">
+        <h1 class="text-3xl font-bold mb-4">Interaktiver Raumplan 2. OG</h1>
+        <p class="mb-6 text-gray-600">Klicken Sie auf einen Raum, um Details anzuzeigen und Sitzplätze auszuwählen.</p>
+        
+        <div id="floorplan" class="grid grid-cols-12 gap-2 bg-gray-200 p-4 rounded-lg aspect-[16/9]">
+            <!-- Räume werden hier dynamisch eingefügt -->
+        </div>
+
+        <div class="mt-8">
+            <h2 class="text-xl font-semibold mb-2">Legende</h2>
+            <div class="flex flex-wrap gap-4">
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-yellow-400 mr-2 rounded"></div>
+                    <span>Shared Desk Büro</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-purple-400 mr-2 rounded"></div>
+                    <span>FK-Büro</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-blue-300 mr-2 rounded"></div>
+                    <span>Spez. Abt-Büro</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-gray-300 mr-2 rounded"></div>
+                    <span>Sonstige Räume</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="roomModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+        <div class="bg-white p-8 rounded-lg max-w-2xl w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="modalTitle" class="text-2xl font-bold"></h2>
+                <button id="closeModal" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="modalContent" class="mb-4"></div>
+            <div id="roomAmenities" class="mb-4"></div>
+            <div id="seatMap" class="bg-gray-200 p-4 rounded-lg relative" style="height: 200px;"></div>
+        </div>
+    </div>
+
+    <script>
+        const floorplan = document.getElementById('floorplan');
+        const modal = document.getElementById('roomModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalContent = document.getElementById('modalContent');
+        const seatMap = document.getElementById('seatMap');
+        const closeModal = document.getElementById('closeModal');
+
+        function generateRandomAmenities() {
+            const amenities = ['fa-wifi', 'fa-tv', 'fa-print', 'fa-coffee', 'fa-phone', 'fa-projector'];
+            return amenities.filter(() => Math.random() > 0.5);
+        }
+
+        fetch('get_rooms.php')
+            .then(response => response.json())
+            .then(rooms => {
+                rooms.forEach((room) => {
+                    room.amenities = generateRandomAmenities();
+                    const div = document.createElement('div');
+                    div.className = `room text-xs font-bold cursor-pointer rounded-md flex items-center justify-center p-2`;
+                    div.style.gridArea = room.grid_area;
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = room.name;
+                    nameSpan.className = 'text-center';
+                    div.appendChild(nameSpan);
+
+                    switch(room.type) {
+                        case 'shared-desk':
+                            div.classList.add('bg-yellow-400', 'text-yellow-800');
+                            break;
+                        case 'fk-buro':
+                            div.classList.add('bg-purple-400', 'text-purple-800');
+                            break;
+                        case 'spez-abt-buro':
+                            div.classList.add('bg-blue-300', 'text-blue-800');
+                            break;
+                        default:
+                            div.classList.add('bg-gray-300', 'text-gray-800');
+                    }
+
+                    div.addEventListener('click', () => showRoomDetails(room));
+                    floorplan.appendChild(div);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+
+        function showRoomDetails(room) {
+            modalTitle.textContent = room.name;
+            modalContent.innerHTML = `
+                <p>Typ: ${getRoomTypeName(room.type)}</p>
+                <p>Anzahl der Sitzplätze: ${room.seats.length}</p>
+                <p class="mt-2">Klicken Sie auf einen Sitzplatz, um ihn auszuwählen:</p>
+            `;
+
+            const amenitiesDiv = document.getElementById('roomAmenities');
+            amenitiesDiv.innerHTML = '<h3 class="font-bold mb-2">Raumausstattung:</h3>';
+            room.amenities.forEach(amenity => {
+                const icon = document.createElement('i');
+                icon.className = `fas ${amenity} mr-2 text-xl`;
+                amenitiesDiv.appendChild(icon);
+            });
+
+            seatMap.innerHTML = '';
+            room.seats.forEach((seat) => {
+                const seatDiv = document.createElement('div');
+                seatDiv.className = 'seat absolute available';
+                seatDiv.style.top = seat.top;
+                seatDiv.style.left = seat.left;
+                seatDiv.addEventListener('click', () => toggleSeat(seatDiv));
+                seatMap.appendChild(seatDiv);
+            });
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function getRoomTypeName(type) {
+            switch(type) {
+                case 'shared-desk': return 'Shared Desk Büro';
+                case 'fk-buro': return 'FK-Büro';
+                case 'spez-abt-buro': return 'Spez. Abt-Büro';
+                default: return 'Sonstiger Raum';
+            }
+        }
+
+        function toggleSeat(seatElement) {
+            const allSeats = seatMap.querySelectorAll('.seat');
+            allSeats.forEach(seat => {
+                seat.classList.remove('occupied');
+                seat.classList.add('available');
+            });
+
+            seatElement.classList.remove('available');
+            seatElement.classList.add('occupied');
+        }
+
+        closeModal.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        });
+    </script>
+</body>
+</html>
