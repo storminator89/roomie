@@ -1,4 +1,5 @@
 <?php
+session_start();
 require_once 'auth.php';
 
 if (!isLoggedIn()) {
@@ -17,6 +18,21 @@ try {
 }
 
 $rooms = $db->query('SELECT * FROM rooms');
+
+function getBookingsForDate($db, $date, $roomId)
+{
+    $stmt = $db->prepare("SELECT bookings.*, users.name AS user_name FROM bookings JOIN users ON bookings.user_id = users.id WHERE date = :date AND room_id = :room_id");
+    $stmt->execute(['date' => $date, 'room_id' => $roomId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getMonthlyBookings($db, $year, $month, $roomId)
+{
+    $stmt = $db->prepare("SELECT date FROM bookings WHERE strftime('%Y', date) = :year AND strftime('%m', date) = :month AND room_id = :room_id");
+    $stmt->execute(['year' => $year, 'month' => sprintf('%02d', $month), 'room_id' => $roomId]);
+    return $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -119,6 +135,21 @@ $rooms = $db->query('SELECT * FROM rooms');
 
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div class="px-4 py-6 sm:px-0">
+            <!-- Fehler- und Erfolgsnachrichten -->
+            <?php if (isset($_SESSION['error'])) : ?>
+                <div class="mb-4 p-4 bg-red-100 text-red-800 rounded-lg">
+                    <?php echo htmlspecialchars($_SESSION['error']);
+                    unset($_SESSION['error']); ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if (isset($_SESSION['success'])) : ?>
+                <div class="mb-4 p-4 bg-green-100 text-green-800 rounded-lg">
+                    <?php echo htmlspecialchars($_SESSION['success']);
+                    unset($_SESSION['success']); ?>
+                </div>
+            <?php endif; ?>
+
             <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300 mb-8">
                 <div class="flex flex-row items-center justify-between p-4 bg-yellow-50 text-gray-800 border-b border-yellow-300">
                     <h2 class="text-xl font-semibold" x-text="currentMonthYear"></h2>
@@ -145,13 +176,15 @@ $rooms = $db->query('SELECT * FROM rooms');
                         </template>
                         <template x-for="date in daysInMonth">
                             <div @click="selectDate(date)" :class="{
-                                    'text-blue-600': isToday(date),
-                                    'bg-yellow-100': isInSelectedRange(date),
-                                    'hover:bg-yellow-50': !isInSelectedRange(date)
-                                }" class="p-2 text-center cursor-pointer transition-colors duration-200">
+            'text-blue-600': isToday(date),
+            'bg-yellow-100': isInSelectedRange(date),
+            'bg-red-200': isBooked(date),
+            'hover:bg-yellow-50': !isInSelectedRange(date) && !isBooked(date)
+        }" class="p-2 text-center cursor-pointer transition-colors duration-200">
                                 <span x-text="date"></span>
                             </div>
                         </template>
+
                     </div>
                 </div>
             </div>
@@ -163,14 +196,41 @@ $rooms = $db->query('SELECT * FROM rooms');
 
             <div class="mb-4">
                 <label for="selectedWorkspace" class="block text-sm font-medium text-gray-700">Raum</label>
-                <select id="selectedWorkspace" name="selectedWorkspace" class="w-full bg-white border border-gray-300 rounded-md p-2" x-model="selectedWorkspace" required>
+                <select id="selectedWorkspace" name="selectedWorkspace" class="w-full bg-white border border-gray-300 rounded-md p-2" x-model="selectedWorkspace" required @change="fetchBookings">
                     <option value="" disabled selected>Raum auswählen</option>
                     <?php while ($room = $rooms->fetch(PDO::FETCH_ASSOC)) : ?>
-                        <option value="<?= htmlspecialchars($room['name'] . '-' . $room['id']) ?>">
+                        <option value="<?= htmlspecialchars($room['id']) ?>">
                             <?= htmlspecialchars($room['name'] . ' (' . $room['type'] . ', Kapazität: ' . $room['capacity'] . ')') ?>
                         </option>
                     <?php endwhile; ?>
                 </select>
+            </div>
+
+            <div class="mb-4" x-show="selectedWorkspace && startDate && endDate">
+                <h3 class="text-sm font-medium text-gray-700">Buchungen:</h3>
+                <table class="min-w-full bg-white">
+                    <thead>
+                        <tr>
+                            <th class="py-2 text-left px-4">Datum</th>
+                            <th class="py-2 text-left px-4">Startzeit</th>
+                            <th class="py-2 text-left px-4">Endzeit</th>
+                            <th class="py-2 text-left px-4">Name</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(booking, index) in filteredBookings" :key="index">
+                            <tr>
+                                <td class="border px-4 py-2" x-text="formatDateToGerman(booking.date)"></td>
+                                <td class="border px-4 py-2" x-text="booking.start_time"></td>
+                                <td class="border px-4 py-2" x-text="booking.end_time"></td>
+                                <td class="border px-4 py-2" x-text="booking.user_name"></td>
+                            </tr>
+                        </template>
+                        <tr x-show="filteredBookings.length === 0">
+                            <td colspan="5" class="border px-4 py-2 text-center">Keine Buchungen für den ausgewählten Zeitraum.</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
 
             <div class="flex space-x-3 mb-8">
@@ -261,7 +321,7 @@ $rooms = $db->query('SELECT * FROM rooms');
             var startDate = new Date(document.querySelector('input[name="start_date"]').value);
             var endDate = new Date(document.querySelector('input[name="end_date"]').value);
             var today = new Date();
-            today.setHours(0, 0, 0, 0); 
+            today.setHours(0, 0, 0, 0);
 
             if (!selectedWorkspace) {
                 event.preventDefault();

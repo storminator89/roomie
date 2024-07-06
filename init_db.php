@@ -50,7 +50,7 @@ try {
 
     // Beispieldaten einfügen
     $db->exec("INSERT OR IGNORE INTO rooms (name, type, capacity, equipment) VALUES 
-        ('2. OG R15 Academy', 'spez-abt-buro', 4, '[\"wifi\",\"docking-station\"]'),
+        ('2. OG R15 Academy', 'spez-abt-buero', 4, '[\"wifi\",\"docking-station\"]'),
         ('2. OG Warschau', 'meeting', 10, '[\"wifi\"]'),     
         ('2. OG Casablanca', 'meeting', 8, '[\"wifi\",\"whiteboard\",\"projector\"]'),
         ('2. OG R11', 'shared-desk', 4, '[\"wifi\",\"docking-station\"]'),
@@ -83,3 +83,4 @@ try {
 } catch(PDOException $e) {
     echo "Fehler bei der Datenbankinitialisierung: " . $e->getMessage();
 }
+?>
