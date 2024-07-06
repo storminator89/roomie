@@ -20,6 +20,9 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
 $filterDate = $_GET['date'] ?? null;
 $searchName = $_GET['search'] ?? '';
 
+// Aktuelles Datum
+$currentDate = date('Y-m-d');
+
 try {
     $db = getDatabaseConnection();
 
@@ -27,8 +30,8 @@ try {
               FROM bookings b 
               JOIN rooms r ON b.room_id = r.id 
               JOIN users u ON b.user_id = u.id
-              WHERE 1=1';
-    $params = [];
+              WHERE b.date >= :current_date';
+    $params = ['current_date' => $currentDate];
 
     if ($filterDate) {
         $query .= ' AND b.date = :filter_date';

@@ -14,7 +14,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $workspace = $_POST['selectedWorkspace'] ?? '';
     $timePeriod = $_POST['time_period'] ?? '';
 
-    if ($timePeriod === 'vormittags') {
+    if ($timePeriod === 'ganzerTag') {
+        $startTime = '09:00';
+        $endTime = '17:00';
+    } elseif ($timePeriod === 'vormittags') {
         $startTime = '09:00';
         $endTime = '12:00';
     } elseif ($timePeriod === 'nachmittags') {
@@ -22,7 +25,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $endTime = '17:00';
     } else {
         die("Fehler: Ungültige Zeitspanne.");
-    }   
+    }
+
+    error_log("Debug: startDate=" . var_export($startDate, true) . 
+    ", endDate=" . var_export($endDate, true) . 
+    ", workspace=" . var_export($workspace, true) . 
+    ", startTime=" . var_export($startTime, true) . 
+    ", endTime=" . var_export($endTime, true));
 
     if (!$startDate || !$endDate || empty($workspace) || empty($timePeriod)) {
         die("Fehler: Alle Felder müssen ausgefüllt sein und gültige Daten enthalten.");

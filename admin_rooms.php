@@ -198,8 +198,8 @@ function getRoomTypeName($type)
                                         <label for="equipment_wifi" class="ml-2 text-sm text-gray-700">WLAN</label>
                                     </div>
                                     <div class="flex items-center">
-                                        <input type="checkbox" id="equipment_projector" name="equipment[]" value="projector" class="focus:ring-yellow-500 h-4 w-4 text-yellow-600 border-gray-300 rounded">
-                                        <label for="equipment_projector" class="ml-2 text-sm text-gray-700">Projektor</label>
+                                        <input type="checkbox" id="equipment_projector" name="equipment[]" value="docking-station" class="focus:ring-yellow-500 h-4 w-4 text-yellow-600 border-gray-300 rounded">
+                                        <label for="equipment_projector" class="ml-2 text-sm text-gray-700">Docking Station</label>
                                     </div>
                                     <div class="flex items-center">
                                         <input type="checkbox" id="equipment_whiteboard" name="equipment[]" value="whiteboard" class="focus:ring-yellow-500 h-4 w-4 text-yellow-600 border-gray-300 rounded">

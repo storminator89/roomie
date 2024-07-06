@@ -11,6 +11,7 @@ try {
         password TEXT NOT NULL,
         is_admin INTEGER DEFAULT 0,
         profile_image VARCHAR(255),
+        notifications BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
@@ -48,12 +49,12 @@ try {
 
     // Beispieldaten einfügen
     $db->exec("INSERT OR IGNORE INTO rooms (name, type, capacity, equipment) VALUES 
-        ('R15', 'spez-abt-buro', 4, '[\"wifi\",\"whiteboard\"]'),
-        ('Warschau', 'other', 10, '[\"wifi\",\"projector\"]'),
-        ('Foyer', 'other', 20, '[\"wifi\"]'),
-        ('Casablanca', 'other', 8, '[\"wifi\",\"whiteboard\",\"projector\"]'),
-        ('R11.7', 'shared-desk', 4, '[\"wifi\"]'),
-        ('R11', 'shared-desk', 4, '[\"wifi\"]')");
+        ('2. OG R15 Academy', 'spez-abt-buro', 4, '[\"wifi\",\"docking-station\"]'),
+        ('2. OG Warschau', 'meeting', 10, '[\"wifi\"]'),     
+        ('2. OG Casablanca', 'meeting', 8, '[\"wifi\",\"whiteboard\",\"projector\"]'),
+        ('2. OG R11', 'shared-desk', 4, '[\"wifi\",\"docking-station\"]'),
+        ('2. OG R12', 'fk-office', 4, '[\"wifi\",\"docking-station\"]'),
+        ('3. OG Mannheim', 'shared-desk', 12, '[\"wifi\",\"docking-station\"]')");
 
     $db->exec("INSERT OR IGNORE INTO seats (room_id, top, left_pos) VALUES 
         (5, '20%', '20%'),

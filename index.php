@@ -73,7 +73,7 @@ $rooms = $db->query('SELECT * FROM rooms');
                         </div>
                         <div x-show="open" @click.away="open = false" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="transform opacity-100 scale-100" x-transition:leave-end="transform opacity-0 scale-95" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
                             <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Ihr Profil</a>
-                            <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Einstellungen</a>
+                            <a href="settings.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Einstellungen</a>
                             <a href="logout.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Abmelden</a>
                         </div>
                     </div>
@@ -110,7 +110,7 @@ $rooms = $db->query('SELECT * FROM rooms');
                 </div>
                 <div class="mt-3 space-y-1">
                     <a href="#" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">Ihr Profil</a>
-                    <a href="#" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">Einstellungen</a>
+                    <a href="settings.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">Einstellungen</a>
                     <a href="logout.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">Abmelden</a>
                 </div>
             </div>
@@ -162,16 +162,17 @@ $rooms = $db->query('SELECT * FROM rooms');
             </div>
 
             <div class="mb-4">
-                <select id="selectedWorkspace" name="selectedWorkspace" class="w-full bg-white border border-gray-300 rounded-md p-2" x-model="selectedWorkspace">
-                    <option value="">Raum auswählen</option>
+                <label for="selectedWorkspace" class="block text-sm font-medium text-gray-700">Raum</label>
+                <select id="selectedWorkspace" name="selectedWorkspace" class="w-full bg-white border border-gray-300 rounded-md p-2" x-model="selectedWorkspace" required>
+                    <option value="" disabled selected>Raum auswählen</option>
                     <?php while ($room = $rooms->fetch(PDO::FETCH_ASSOC)) : ?>
                         <option value="<?= htmlspecialchars($room['name'] . '-' . $room['id']) ?>">
                             <?= htmlspecialchars($room['name'] . ' (' . $room['type'] . ', Kapazität: ' . $room['capacity'] . ')') ?>
                         </option>
                     <?php endwhile; ?>
                 </select>
-
             </div>
+
             <div class="flex space-x-3 mb-8">
                 <form id="bookingForm" action="process_booking.php" method="POST" class="flex-1">
                     <input type="hidden" name="start_date" x-bind:value="startDate ? formatDateToUTC(startDate) : ''">
@@ -180,33 +181,21 @@ $rooms = $db->query('SELECT * FROM rooms');
 
                     <div class="mb-4">
                         <label for="time_period" class="block text-sm font-medium text-gray-700">Zeitspanne</label>
-                        <select id="time_period" name="time_period" x-model="selectedTimePeriod" class="w-full bg-white border border-gray-300 rounded-md p-2">
+                        <select id="time_period" name="time_period" x-model="selectedTimePeriod" class="w-full bg-white border border-gray-300 rounded-md p-2" required>
                             <option value="">Zeitspanne auswählen</option>
+                            <option value="ganzerTag">Ganzer Tag (09:00 - 17:00)</option>
                             <option value="vormittags">Vormittags (09:00 - 12:00)</option>
                             <option value="nachmittags">Nachmittags (13:00 - 17:00)</option>
                         </select>
                     </div>
 
                     <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 text-white rounded-md p-2 transition-colors duration-200 flex items-center justify-center">
-                        Buchen
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M9 17h6M9 11h6" />
                         </svg>
+                        Buchen
                     </button>
                 </form>
-
-                <button @click="clearDateSelection" class="flex-1 bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 rounded-md p-2 transition-colors duration-200">
-                    Auswahl löschen
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-2 inline">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        <line x1="10" y1="11" x2="10" y2="17"></line>
-                        <line x1="14" y1="11" x2="14" y2="17"></line>
-                    </svg>
-                </button>
             </div>
 
             <div class="grid grid-cols-2 gap-4 mb-8">
@@ -266,6 +255,15 @@ $rooms = $db->query('SELECT * FROM rooms');
         </div>
     </div>
 
+    <script>
+        document.getElementById('bookingForm').addEventListener('submit', function(event) {
+            var selectedWorkspace = document.getElementById('selectedWorkspace').value;
+            if (!selectedWorkspace) {
+                event.preventDefault();
+                alert('Bitte wählen Sie einen Raum aus.');
+            }
+        });
+    </script>
     <script src="app.js"></script>
 </body>
 

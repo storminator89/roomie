@@ -87,7 +87,15 @@ function roomieApp() {
         
         submitBooking() {
             if (!this.startDate || !this.endDate || !this.selectedWorkspace || !this.selectedTimePeriod) {
-                alert('Bitte wählen Sie einen Zeitraum, eine Zeitspanne und einen Arbeitsplatz aus.');
+                let errorMessage = 'Bitte wählen Sie ';
+                let missingFields = [];
+                
+                if (!this.startDate || !this.endDate) missingFields.push('einen Zeitraum');
+                if (!this.selectedWorkspace) missingFields.push('einen Raum');
+                if (!this.selectedTimePeriod) missingFields.push('eine Zeitspanne');
+                
+                errorMessage += missingFields.join(', ') + ' aus.';
+                alert(errorMessage);
                 return;
             }
 
@@ -95,7 +103,10 @@ function roomieApp() {
             const formattedEndDate = this.formatDateToUTC(this.endDate);
 
             let startTime, endTime;
-            if (this.selectedTimePeriod === 'vormittags') {
+            if (this.selectedTimePeriod === 'ganzerTag') {
+                startTime = '09:00';
+                endTime = '17:00';
+            } else if (this.selectedTimePeriod === 'vormittags') {
                 startTime = '09:00';
                 endTime = '12:00';
             } else if (this.selectedTimePeriod === 'nachmittags') {
