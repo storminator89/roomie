@@ -204,7 +204,7 @@ function roomieApp() {
                 fetch(`get_bookings.php?room_id=${this.selectedWorkspace}&start_date=${this.formatDateToUTC(this.startDate)}&end_date=${this.formatDateToUTC(this.endDate)}`)
                     .then(response => response.json())
                     .then(data => {
-                        this.filteredBookings = data;
+                        this.filteredBookings = data.sort((a, b) => new Date(a.date) - new Date(b.date));
                         this.getRoomCapacity();
                     })
                     .catch(error => console.error('Error:', error));

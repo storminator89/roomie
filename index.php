@@ -176,17 +176,22 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                         </template>
                         <template x-for="date in daysInMonth">
                             <div @click="selectDate(date)" :class="{
-            'text-blue-600': isToday(date),
-            'bg-yellow-100': isInSelectedRange(date),
-            'bg-red-200': isBooked(date),
-            'hover:bg-yellow-50': !isInSelectedRange(date) && !isBooked(date)
-        }" class="p-2 text-center cursor-pointer transition-colors duration-200">
+                        'text-blue-600': isToday(date),
+                        'bg-yellow-100': isInSelectedRange(date),
+                        'bg-red-200': isBooked(date),
+                        'hover:bg-yellow-50': !isInSelectedRange(date) && !isBooked(date)
+                    }" class="p-2 text-center cursor-pointer transition-colors duration-200">
                                 <span x-text="date"></span>
                             </div>
                         </template>
-
                     </div>
                 </div>
+            </div>
+
+            <!-- Hervorgehobener Hinweis für den Benutzer -->
+            <div class="mb-4 p-4 bg-yellow-100 border-l-4 border-yellow-500">
+                <p class="text-lg font-semibold text-yellow-800">Hinweis:</p>
+                <p class="text-yellow-700">Bitte wählen Sie einen Zeitraum im Kalender aus, indem Sie den Start- und Endtermin anklicken.</p>
             </div>
 
             <div class="mb-4">
@@ -227,7 +232,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                             </tr>
                         </template>
                         <tr x-show="filteredBookings.length === 0">
-                            <td colspan="5" class="border px-4 py-2 text-center">Keine Buchungen für den ausgewählten Zeitraum.</td>
+                            <td colspan="4" class="border px-4 py-2 text-center">Keine Buchungen für den ausgewählten Zeitraum.</td>
                         </tr>
                     </tbody>
                 </table>
