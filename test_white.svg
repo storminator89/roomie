@@ -1,0 +1,89 @@
+<svg width="300" height="80" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@700&amp;display=swap');
+        </style>
+    </defs>
+    <style>
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(5px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes draw {
+            0% { stroke-dashoffset: 1000; }
+            100% { stroke-dashoffset: 0; }
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        @keyframes checkmark {
+            0% { stroke-dashoffset: 100; }
+            100% { stroke-dashoffset: 0; }
+        }
+        @keyframes slideOutRight {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(100%); }
+        }
+        .item { 
+            stroke: #000000;
+            stroke-width: 1.5;
+            stroke-linecap: round; 
+            stroke-linejoin: round;
+            fill: none;
+        }
+        .text { 
+            font-family: 'Source Sans Pro', sans-serif;
+            font-size: 40px; 
+            fill: #FFCC33;
+            font-weight: 700;
+        }
+        .animate-item {
+            opacity: 0;
+            animation: fadeIn 0.5s ease-out forwards, draw 1.5s ease-out forwards;
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+        }
+        #workspace {
+            animation: pulse 2s ease-in-out infinite;
+        }
+        #calendar-group {
+            opacity: 0;
+            animation: fadeIn 0.5s ease-out forwards, slideOutRight 4s ease-out forwards;
+            animation-delay: 2s, 4.5s;
+        }
+        #checkmark {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: checkmark 0.5s ease-out forwards;
+            animation-delay: 3s;
+        }
+    </style>
+
+    <!-- Schreibtisch -->
+    <path d="M195,55 C200,53 220,52 250,52 C280,52 300,53 305,55" class="item animate-item" style="animation-delay: 0.2s" />
+    
+    <!-- Stuhl -->
+    <path d="M240,55 V75 H260 V55" class="item animate-item" style="animation-delay: 0.4s" />
+    
+    <!-- Laptop -->
+    <path d="M220,50 L280,50 L270,30 L230,30 Z" class="item animate-item" style="animation-delay: 0.6s" />
+    
+    <!-- Bildschirm -->
+    <path id="workspace" d="M225,15 Q250,10 275,15 L270,30 L230,30 Z" class="item animate-item" style="animation-delay: 0.7s; fill: #FFCC33;" />
+    
+    <!-- Kalender und Haken Gruppe -->
+    <g id="calendar-group">
+        <!-- Kalender -->
+        <rect x="245" y="17.5" width="25" height="25" fill="white" stroke="#000000" stroke-width="1.5" />
+        <line x1="245" y1="25" x2="270" y2="25" stroke="#000000" stroke-width="1.5" />
+        <text x="251.5" y="37" font-family="Source Sans Pro, sans-serif" font-size="12" fill="#000000" font-weight="bold">15</text>
+        
+        <!-- Haken -->
+        <circle cx="280" cy="30" r="10" fill="#4CAF50" />
+        <path id="checkmark" d="M275,30 L279,34 L285,28" stroke="white" stroke-width="2" fill="none" />
+    </g>
+    
+    <!-- Beschriftung -->
+    <text x="10" y="55" class="text animate-item" style="animation-delay: 1.2s;">Roomie</text>
+</svg>

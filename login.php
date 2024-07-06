@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="bg-white shadow-2xl rounded-lg overflow-hidden">
             <div class="px-6 py-8">
                 <div class="text-center">
-                    <img class="h-16 w-auto mx-auto" src="test.svg" alt="Roomie Logo">
+                    <img class="h-16 w-auto mx-auto" src="test_white.svg" alt="Roomie Logo">
                     <p class="text-sm text-gray-600">
                         Willkommen zurück! Bitte melden Sie sich an.
                     </p>
