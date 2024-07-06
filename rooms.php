@@ -11,9 +11,15 @@ $user_name = $_SESSION['user_name'] ?? 'Benutzer';
 try {
     $db = getDatabaseConnection();
 
-    $stmt = $db->query('SELECT r.id, r.name, r.type, r.capacity, r.equipment
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['favorite_room_id'])) {
+        $favoriteRoomId = $_POST['favorite_room_id'];
+        $stmt = $db->prepare('UPDATE rooms SET is_favorite = 1 - is_favorite WHERE id = :id');
+        $stmt->execute(['id' => $favoriteRoomId]);
+    }
+
+    $stmt = $db->query('SELECT r.id, r.name, r.type, r.capacity, r.equipment, r.is_favorite
                         FROM rooms r
-                        ORDER BY r.name');
+                        ORDER BY r.is_favorite DESC, r.name');
     $rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $error = "Datenbankfehler: " . $e->getMessage();
@@ -104,18 +110,27 @@ function getRoomTypeName($type)
             <div class="bg-white shadow overflow-hidden sm:rounded-md">
                 <ul class="divide-y divide-gray-200">
                     <?php foreach ($rooms as $room) : ?>
-                        <li>
-                            <a href="room_details.php?id=<?php echo $room['id']; ?>" class="block hover:bg-gray-50">
-                                <div class="px-4 py-4 sm:px-6">
-                                    <div class="flex items-center justify-between">
+                        <li class="flex justify-between items-center px-4 py-4 sm:px-6">
+                            <div class="flex items-center">
+                                <a href="room_details.php?id=<?php echo $room['id']; ?>" class="block hover:bg-gray-50">
+                                    <div class="flex items-center">
                                         <p class="text-sm font-medium text-yellow-600 truncate">
                                             <?php echo htmlspecialchars($room['name']); ?>
                                         </p>
-                                        <div class="ml-2 flex-shrink-0 flex">
-                                            <p class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                                <?php echo $room['capacity']; ?> Plätze
-                                            </p>
-                                        </div>
+                                        <form method="POST" action="rooms.php" class="ml-2">
+                                            <input type="hidden" name="favorite_room_id" value="<?php echo $room['id']; ?>">
+                                            <button type="submit" class="focus:outline-none">
+                                                <?php if ($room['is_favorite']): ?>
+                                                    <svg class="h-6 w-6 text-yellow-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17l-5.2 2.9 1-5.8L2.7 9.6l5.9-.9L12 3l2.4 5.7 5.9.9-4.1 4.5 1 5.8z" />
+                                                    </svg>
+                                                <?php else: ?>
+                                                    <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17l-5.2 2.9 1-5.8L2.7 9.6l5.9-.9L12 3l2.4 5.7 5.9.9-4.1 4.5 1 5.8z" />
+                                                    </svg>
+                                                <?php endif; ?>
+                                            </button>
+                                        </form>
                                     </div>
                                     <div class="mt-2 sm:flex sm:justify-between">
                                         <div class="sm:flex">
@@ -126,18 +141,20 @@ function getRoomTypeName($type)
                                                 <?php echo htmlspecialchars(getRoomTypeName($room['type'])); ?>
                                             </p>
                                         </div>
-                                        <div class="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                                            <svg class="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                                            </svg>
-                                            Details anzeigen
-                                        </div>
                                     </div>
                                     <div class="mt-2 text-sm text-gray-500">
                                         <p>Ausstattung: <?php echo htmlspecialchars(implode(', ', json_decode($room['equipment'], true) ?? [])); ?></p>
                                     </div>
-                                </div>
-                            </a>
+                                </a>
+                            </div>
+                            <div class="ml-4 flex-shrink-0 flex flex-col items-end">
+                                <p class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    <?php echo $room['capacity']; ?> Plätze
+                                </p>
+                                <a href="room_details.php?id=<?php echo $room['id']; ?>" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                    Details anzeigen
+                                </a>
+                            </div>
                         </li>
                     <?php endforeach; ?>
                 </ul>

@@ -21,6 +21,7 @@ try {
         name TEXT NOT NULL,
         type TEXT NOT NULL,
         capacity INTEGER DEFAULT 0,
+        is_favorite INTEGER DEFAULT 0,
         equipment TEXT
     )");
 

@@ -258,9 +258,17 @@ $rooms = $db->query('SELECT * FROM rooms');
     <script>
         document.getElementById('bookingForm').addEventListener('submit', function(event) {
             var selectedWorkspace = document.getElementById('selectedWorkspace').value;
+            var startDate = new Date(document.querySelector('input[name="start_date"]').value);
+            var endDate = new Date(document.querySelector('input[name="end_date"]').value);
+            var today = new Date();
+            today.setHours(0, 0, 0, 0); 
+
             if (!selectedWorkspace) {
                 event.preventDefault();
                 alert('Bitte wählen Sie einen Raum aus.');
+            } else if (startDate < today || endDate < today) {
+                event.preventDefault();
+                alert('Buchungen in der Vergangenheit sind nicht zulässig.');
             }
         });
     </script>

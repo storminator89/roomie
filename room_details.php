@@ -7,13 +7,14 @@ if (!isLoggedIn()) {
 }
 
 $user_name = $_SESSION['user_name'] ?? 'Benutzer';
-
 $room_id = $_GET['id'] ?? null;
 
 if (!$room_id) {
     header("Location: rooms.php");
     exit;
 }
+
+$selected_date = $_GET['date'] ?? date('Y-m-d'); // Standardmäßig heute
 
 try {
     $db = getDatabaseConnection();
@@ -28,22 +29,24 @@ try {
         throw new Exception("Raum nicht gefunden");
     }
 
-    // Hole die Buchungen für den aktuellen Tag
-    $today = date('Y-m-d');
+    // Hole die Buchungen für das ausgewählte Datum
     $stmt = $db->prepare('SELECT b.*, u.name as user_name
                           FROM bookings b
                           JOIN users u ON b.user_id = u.id
-                          WHERE b.room_id = :room_id AND b.date = :today
+                          WHERE b.room_id = :room_id AND b.date = :selected_date
                           ORDER BY b.start_time');
-    $stmt->execute(['room_id' => $room_id, 'today' => $today]);
+    $stmt->execute(['room_id' => $room_id, 'selected_date' => $selected_date]);
     $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-} catch(Exception $e) {
+    // Formatiere das ausgewählte Datum im deutschen Format
+    $selected_date_formatted = (new DateTime($selected_date))->format('d.m.Y');
+} catch (Exception $e) {
     $error = $e->getMessage();
 }
 
-function getRoomTypeName($type) {
-    switch($type) {
+function getRoomTypeName($type)
+{
+    switch ($type) {
         case 'shared-desk':
             return 'Shared Desk Büro';
         case 'fk-buro':
@@ -58,6 +61,7 @@ function getRoomTypeName($type) {
 
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -72,6 +76,7 @@ function getRoomTypeName($type) {
         }
     </style>
 </head>
+
 <body class="bg-gray-100">
     <nav class="bg-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -100,15 +105,7 @@ function getRoomTypeName($type) {
                                 <img class="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
                             </button>
                         </div>
-                        <div x-show="open" 
-                             @click.away="open = false"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="transform opacity-0 scale-95"
-                             x-transition:enter-end="transform opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-75"
-                             x-transition:leave-start="transform opacity-100 scale-100"
-                             x-transition:leave-end="transform opacity-0 scale-95"
-                             class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
+                        <div x-show="open" @click.away="open = false" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="transform opacity-100 scale-100" x-transition:leave-end="transform opacity-0 scale-95" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
                             <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Ihr Profil</a>
                             <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Einstellungen</a>
                             <a href="logout.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Abmelden</a>
@@ -121,13 +118,13 @@ function getRoomTypeName($type) {
 
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div class="px-4 py-6 sm:px-0">
-            <?php if (isset($error)): ?>
+            <?php if (isset($error)) : ?>
                 <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
                     <p><?php echo htmlspecialchars($error); ?></p>
                 </div>
-            <?php else: ?>
+            <?php else : ?>
                 <h1 class="text-3xl font-bold text-gray-900 mb-6"><?php echo htmlspecialchars($room['name']); ?></h1>
-                
+
                 <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
                     <div class="px-4 py-5 sm:px-6">
                         <h3 class="text-lg leading-6 font-medium text-gray-900">
@@ -157,7 +154,7 @@ function getRoomTypeName($type) {
                                     Ausstattung
                                 </dt>
                                 <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                                    <?php 
+                                    <?php
                                     $equipment = json_decode($room['equipment'], true);
                                     echo $equipment ? implode(', ', $equipment) : 'Keine spezielle Ausstattung';
                                     ?>
@@ -167,13 +164,25 @@ function getRoomTypeName($type) {
                     </div>
                 </div>
 
-                <h2 class="text-2xl font-bold text-gray-900 mb-4">Heutige Buchungen</h2>
-                <?php if (empty($bookings)): ?>
-                    <p class="text-gray-600">Keine Buchungen für heute.</p>
-                <?php else: ?>
+                <form method="GET" action="room_details.php" class="mb-6">
+                    <input type="hidden" name="id" value="<?php echo htmlspecialchars($room_id); ?>">
+                    <label for="date" class="block text-sm font-medium text-gray-700 mb-2">Datum auswählen</label>
+                    <input type="date" id="date" name="date" value="<?php echo htmlspecialchars($selected_date); ?>" class="w-full bg-white border border-gray-300 rounded-md p-2 mb-4">
+                    <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 text-white rounded-md p-2 transition-colors duration-200 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M9 17h6M9 11h6" />
+                        </svg>
+                        Filtern
+                    </button>
+                </form>
+
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Buchungen für den <?php echo htmlspecialchars($selected_date_formatted); ?></h2>
+                <?php if (empty($bookings)) : ?>
+                    <p class="text-gray-600">Keine Buchungen für das ausgewählte Datum.</p>
+                <?php else : ?>
                     <div class="bg-white shadow overflow-hidden sm:rounded-md">
                         <ul class="divide-y divide-gray-200">
-                            <?php foreach ($bookings as $booking): ?>
+                            <?php foreach ($bookings as $booking) : ?>
                                 <li>
                                     <div class="px-4 py-4 sm:px-6">
                                         <div class="flex items-center justify-between">
@@ -201,4 +210,5 @@ function getRoomTypeName($type) {
         </div>
     </div>
 </body>
+
 </html>
