@@ -26,7 +26,7 @@
             100% { transform: translateX(100%); }
         }
         .item { 
-            stroke: #000000;
+            stroke: #FFFFFF;
             stroke-width: 1.5;
             stroke-linecap: round; 
             stroke-linejoin: round;
@@ -75,8 +75,8 @@
     <!-- Kalender und Haken Gruppe -->
     <g id="calendar-group">
         <!-- Kalender -->
-        <rect x="245" y="17.5" width="25" height="25" fill="white" stroke="#000000" stroke-width="1.5" />
-        <line x1="245" y1="25" x2="270" y2="25" stroke="#000000" stroke-width="1.5" />
+        <rect x="245" y="17.5" width="25" height="25" fill="white" stroke="#FFFFFF" stroke-width="1.5" />
+        <line x1="245" y1="25" x2="270" y2="25" stroke="#FFFFFF" stroke-width="1.5" />
         <text x="251.5" y="37" font-family="Source Sans Pro, sans-serif" font-size="12" fill="#000000" font-weight="bold">15</text>
         
         <!-- Haken -->

@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="styles.css">
     <style>
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Source Sans 3', sans-serif;
         }
     </style>
 </head>
