@@ -6,6 +6,9 @@ if (!isLoggedIn()) {
     exit;
 }
 
+date_default_timezone_set('Europe/Berlin'); // Zeitzone setzen
+$current_page = basename($_SERVER['PHP_SELF']);
+
 $user_name = $_SESSION['user_name'] ?? 'Benutzer';
 $user_id = $_SESSION['user_id'] ?? null;
 
@@ -56,6 +59,39 @@ function formatGermanDate($date)
 {
     return date('d.m.Y', strtotime($date));
 }
+
+function generateICS($booking)
+{
+    $dtstart = new DateTime($booking['date'] . ' ' . $booking['start_time'], new DateTimeZone('Europe/Berlin'));
+    $dtend = new DateTime($booking['date'] . ' ' . $booking['end_time'], new DateTimeZone('Europe/Berlin'));
+
+    $ics = "BEGIN:VCALENDAR\r\n";
+    $ics .= "VERSION:2.0\r\n";
+    $ics .= "PRODID:-//Your Organization//NONSGML v1.0//EN\r\n";
+    $ics .= "BEGIN:VEVENT\r\n";
+    $ics .= "UID:" . uniqid() . "@yourdomain.com\r\n";
+    $ics .= "DTSTAMP:" . gmdate('Ymd\THis\Z') . "\r\n";
+    $ics .= "DTSTART:" . $dtstart->format('Ymd\THis') . "\r\n";
+    $ics .= "DTEND:" . $dtend->format('Ymd\THis') . "\r\n";
+    $ics .= "SUMMARY:" . htmlspecialchars($booking['room_name']) . "\r\n";
+    $ics .= "DESCRIPTION:" . htmlspecialchars($booking['user_name']) . "\r\n";
+    $ics .= "END:VEVENT\r\n";
+    $ics .= "END:VCALENDAR\r\n";
+    return $ics;
+}
+
+if (isset($_GET['download']) && isset($_GET['booking_id'])) {
+    $bookingId = $_GET['booking_id'];
+
+    foreach ($bookings as $booking) {
+        if ($booking['id'] == $bookingId && $booking['user_id'] == $user_id) {
+            header('Content-Type: text/calendar; charset=utf-8');
+            header('Content-Disposition: attachment; filename="booking_' . $bookingId . '.ics"');
+            echo generateICS($booking);
+            exit;
+        }
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -69,19 +105,7 @@ function formatGermanDate($date)
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <style>
-        body {
-            font-family: 'Source Sans 3', sans-serif;
-        }
-
-        .bg-custom-nav {
-            background-color: #3b3e4d;
-        }
-
-        .bg-custom-background {
-            background-color: #f5f5f5;
-        }
-    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">    
 </head>
 
 <body class="bg-custom-background">
@@ -90,21 +114,23 @@ function formatGermanDate($date)
             <div class="flex justify-between h-16">
                 <div class="flex">
                     <div class="flex-shrink-0 flex items-center">
-                        <img class="h-8 w-auto" src="test.svg" alt="Roomie Logo">
+                        <a href="index.php">
+                            <img class="h-8 w-auto" src="test.svg" alt="Roomie Logo">
+                        </a>
                     </div>
                     <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-                        <a href="index.php" class="border-transparent text-gray-100 hover:border-gray-300 hover:text-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            Dashboard
+                        <a href="index.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'index.php' ? 'active' : 'inactive'; ?>">
+                            <i class="fas fa-tachometer-alt"></i>&nbsp;Dashboard
                         </a>
-                        <a href="bookings.php" class="border-transparent text-gray-100 hover:border-gray-300 hover:text-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            Buchungen
+                        <a href="bookings.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'bookings.php' ? 'active' : 'inactive'; ?>">
+                            <i class="fas fa-calendar-alt"></i>&nbsp;Buchungen
                         </a>
-                        <a href="rooms.php" class="border-transparent text-gray-100 hover:border-gray-300 hover:text-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            Räume
+                        <a href="rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'rooms.php' ? 'active' : 'inactive'; ?>">
+                            <i class="fas fa-door-open"></i>&nbsp;Räume
                         </a>
                         <?php if (isAdmin()) : ?>
-                            <a href="admin_rooms.php" class="border-transparent text-gray-100 hover:border-gray-300 hover:text-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                                Raumverwaltung
+                            <a href="admin_rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'admin_rooms.php' ? 'active' : 'inactive'; ?>">
+                                <i class="fas fa-tools"></i>&nbsp;Raumverwaltung
                             </a>
                         <?php endif; ?>
                     </div>
@@ -118,9 +144,9 @@ function formatGermanDate($date)
                             </button>
                         </div>
                         <div x-show="open" @click.away="open = false" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="transform opacity-100 scale-100" x-transition:leave-end="transform opacity-0 scale-95" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
-                            <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Ihr Profil</a>
-                            <a href="settings.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Einstellungen</a>
-                            <a href="logout.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Abmelden</a>
+                            <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-user"></i>&nbsp;Ihr Profil</a>
+                            <a href="settings.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-cog"></i>&nbsp;Einstellungen</a>
+                            <a href="logout.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</a>
                         </div>
                     </div>
                 </div>
@@ -139,10 +165,10 @@ function formatGermanDate($date)
         </div>
 
         <div x-show="open" class="sm:hidden">
-        <div class="pt-2 pb-3 space-y-1">
-                <a href="index.php" class="bg-custom-nav border-yellow-500 text-yellow-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Dashboard</a>
-                <a href="bookings.php" class="border-transparent text-gray-100 hover:bg-gray-700 hover:border-gray-300 hover:text-gray-300 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Buchungen</a>
-                <a href="rooms.php" class="border-transparent text-gray-100 hover:bg-gray-700 hover:border-gray-300 hover:text-gray-300 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Räume</a>
+            <div class="pt-2 pb-3 space-y-1">
+                <a href="index.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium <?php echo $current_page == 'index.php' ? 'active' : 'inactive'; ?>"><i class="fas fa-tachometer-alt"></i>&nbsp;Dashboard</a>
+                <a href="bookings.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium <?php echo $current_page == 'bookings.php' ? 'active' : 'inactive'; ?>"><i class="fas fa-calendar-alt"></i>&nbsp;Buchungen</a>
+                <a href="rooms.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium <?php echo $current_page == 'rooms.php' ? 'active' : 'inactive'; ?>"><i class="fas fa-door-open"></i>&nbsp;Räume</a>
             </div>
             <div class="pt-4 pb-3 border-t border-gray-200">
                 <div class="flex items-center px-4">
@@ -155,9 +181,9 @@ function formatGermanDate($date)
                     </div>
                 </div>
                 <div class="mt-3 space-y-1">
-                    <a href="#" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700">Ihr Profil</a>
-                    <a href="settings.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700">Einstellungen</a>
-                    <a href="logout.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700">Abmelden</a>
+                    <a href="profile.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700"><i class="fas fa-user"></i>&nbsp;Ihr Profil</a>
+                    <a href="settings.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700"><i class="fas fa-cog"></i>&nbsp;Einstellungen</a>
+                    <a href="logout.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</a>
                 </div>
             </div>
         </div>
@@ -165,16 +191,16 @@ function formatGermanDate($date)
 
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div class="px-4 py-6 sm:px-0">
-            <div class="flex justify-between items-center mb-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
                 <h1 class="text-3xl font-bold text-gray-900">Buchungen</h1>
-                <form action="" method="GET" class="flex items-center space-x-2">
-                    <input type="date" name="date" value="<?php echo $filterDate; ?>" class="border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500">
-                    <input type="text" name="search" value="<?php echo htmlspecialchars($searchName); ?>" placeholder="Nach Namen suchen" class="border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500">
-                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
-                        Filtern
+                <form action="" method="GET" class="filter-container space-y-2 sm:space-y-0 sm:space-x-2">
+                    <input type="date" name="date" value="<?php echo $filterDate; ?>" class="border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 w-full sm:w-auto">
+                    <input type="text" name="search" value="<?php echo htmlspecialchars($searchName); ?>" placeholder="Namen suchen" class="border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 w-full sm:w-auto">
+                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 w-full sm:w-auto">
+                        <i class="fas fa-filter"></i>&nbsp;Filtern
                     </button>
-                    <a href="bookings.php" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
-                        Filter löschen
+                    <a href="bookings.php" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 w-full sm:w-auto">
+                        <i class="fas fa-times"></i>&nbsp;Löschen
                     </a>
                 </form>
             </div>
@@ -205,9 +231,7 @@ function formatGermanDate($date)
                                                 <?php if (!empty($booking['profile_image'])) : ?>
                                                     <img class="h-10 w-10 rounded-full" src="uploads/<?php echo htmlspecialchars($booking['profile_image']); ?>" alt="">
                                                 <?php else : ?>
-                                                    <svg class="h-10 w-10 rounded-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
-                                                        <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
-                                                    </svg>
+                                                    <i class="fas fa-user-circle fa-2x text-gray-300"></i>
                                                 <?php endif; ?>
                                             </div>
                                             <div class="ml-4">
@@ -228,26 +252,25 @@ function formatGermanDate($date)
                                     <div class="mt-2 sm:flex sm:justify-between">
                                         <div class="sm:flex">
                                             <p class="flex items-center text-sm text-gray-500">
-                                                <svg class="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                    <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
-                                                </svg>
+                                                <i class="fas fa-calendar-day mr-1.5"></i>
                                                 <?php echo formatGermanDate($booking['date']); ?>
                                             </p>
                                             <p class="mt-2 flex items-center text-sm text-gray-500 sm:mt-0 sm:ml-6">
-                                                <svg class="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-                                                </svg>
+                                                <i class="fas fa-clock mr-1.5"></i>
                                                 <?php echo htmlspecialchars($booking['start_time'] . ' - ' . $booking['end_time']); ?>
                                             </p>
                                         </div>
                                         <?php if ($booking['user_id'] == $user_id) : ?>
-                                            <div class="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
+                                            <div class="mt-2 flex items-center text-sm text-gray-500 sm:mt-0 space-x-2">
                                                 <form action="cancel_booking.php" method="POST" onsubmit="return confirm('Sind Sie sicher, dass Sie diese Buchung stornieren möchten?');">
                                                     <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
-                                                    <button type="submit" class="font-medium text-yellow-600 hover:text-yellow-500">
-                                                        Stornieren
+                                                    <button type="submit" class="icon-btn">
+                                                        <i class="fas fa-times icon"></i>
                                                     </button>
                                                 </form>
+                                                <a href="?download=calendar&booking_id=<?php echo $booking['id']; ?>" class="icon-btn">
+                                                    <i class="fas fa-download icon"></i>
+                                                </a>
                                             </div>
                                         <?php endif; ?>
                                     </div>

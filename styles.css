@@ -131,6 +131,65 @@
     gap: 1rem;
 }
 
+.active {
+    color: #ffcc33 !important;
+    border-color: #ffcc33 !important;
+}
+.inactive {
+    color: #fff !important;
+    border-color: transparent !important;
+}
+.inactive:hover {
+    color: #ffcc33 !important;
+    border-color: #ffcc33 !important;
+}
+
+body {
+    font-family: 'Source Sans 3', sans-serif;
+}
+
+.bg-custom-nav {
+    background-color: #3b3e4d;
+}
+
+.bg-custom-background {
+    background-color: #f5f5f5;
+}
+
+.filter-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+@media (min-width: 640px) {
+    .filter-container {
+        flex-direction: row;
+        width: auto;
+    }
+}
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background-color: #f3f4f6;
+    transition: background-color 0.2s;
+}
+
+.icon-btn:hover {
+    background-color: #e5e7eb;
+}
+
+.icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #4b5563;
+}
+
 /* Responsive adjustments */
 @media (max-width: 640px) {
     .bookings-popup-content {
