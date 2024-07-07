@@ -29,7 +29,7 @@ $currentDate = date('Y-m-d');
 try {
     $db = getDatabaseConnection();
 
-    $query = 'SELECT b.id, r.name as room_name, b.date, b.start_time, b.end_time, u.name as user_name, u.profile_image, u.id as user_id
+    $query = 'SELECT b.id, r.name as room_name, b.date, b.start_time, b.end_time, u.name as user_name, u.email as user_email, u.profile_image, u.id as user_id
               FROM bookings b 
               JOIN rooms r ON b.room_id = r.id 
               JOIN users u ON b.user_id = u.id
@@ -80,6 +80,44 @@ function generateICS($booking)
     return $ics;
 }
 
+function sendBookingEmail($booking, $recipientEmail) {
+    $icsContent = generateICS($booking);
+
+    $subject = "Ihre Buchung für " . $booking['room_name'];
+    $message = "Sehr geehrte/r " . $booking['user_name'] . ",\n\n" .
+               "Ihre Buchung für den Raum " . $booking['room_name'] . " am " .
+               formatGermanDate($booking['date']) . " von " . $booking['start_time'] . " bis " .
+               $booking['end_time'] . " wurde erfolgreich eingetragen.\n\n" .
+               "Die Kalenderdatei ist dieser E-Mail angehängt.\n\n" .
+               "Mit freundlichen Grüßen,\nIhr Roomie Team";
+
+    $separator = md5(time());
+    $eol = PHP_EOL;
+
+    // Kopfzeilen für die E-Mail
+    $headers = "From: Roomie Booking System <your-email@example.com>" . $eol;
+    $headers .= "MIME-Version: 1.0" . $eol;
+    $headers .= "Content-Type: multipart/mixed; boundary=\"" . $separator . "\"" . $eol;
+
+    // E-Mail-Body
+    $body = "--" . $separator . $eol;
+    $body .= "Content-Type: text/plain; charset=UTF-8" . $eol;
+    $body .= "Content-Transfer-Encoding: 8bit" . $eol;
+    $body .= $message . $eol;
+
+    // Anhängen der ICS-Datei
+    $body .= "--" . $separator . $eol;
+    $body .= "Content-Type: text/calendar; charset=UTF-8; name=\"booking.ics\"" . $eol;
+    $body .= "Content-Transfer-Encoding: base64" . $eol;
+    $body .= "Content-Disposition: attachment; filename=\"booking.ics\"" . $eol;
+    $body .= $eol;
+    $body .= chunk_split(base64_encode($icsContent)) . $eol;
+    $body .= "--" . $separator . "--";
+
+    // E-Mail senden
+    mail($recipientEmail, "=?UTF-8?B?".base64_encode($subject)."?=", $body, $headers);
+}
+
 if (isset($_GET['download']) && isset($_GET['booking_id'])) {
     $bookingId = $_GET['booking_id'];
 
@@ -89,6 +127,18 @@ if (isset($_GET['download']) && isset($_GET['booking_id'])) {
             header('Content-Disposition: attachment; filename="booking_' . $bookingId . '.ics"');
             echo generateICS($booking);
             exit;
+        }
+    }
+}
+
+if (isset($_GET['send_email']) && isset($_GET['booking_id'])) {
+    $bookingId = $_GET['booking_id'];
+
+    foreach ($bookings as $booking) {
+        if ($booking['id'] == $bookingId && $booking['user_id'] == $user_id) {
+            $recipientEmail = $booking['user_email'];
+            sendBookingEmail($booking, $recipientEmail);
+            break;
         }
     }
 }
@@ -272,6 +322,9 @@ if (isset($_GET['download']) && isset($_GET['booking_id'])) {
                                                 </form>
                                                 <a href="?download=calendar&booking_id=<?php echo $booking['id']; ?>" class="icon-btn">
                                                     <i class="fas fa-download icon"></i>
+                                                </a>
+                                                <a href="?send_email=1&booking_id=<?php echo $booking['id']; ?>" class="icon-btn">
+                                                    <i class="fas fa-envelope icon"></i>
                                                 </a>
                                             </div>
                                         <?php endif; ?>
