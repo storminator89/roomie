@@ -193,9 +193,11 @@ if (isset($_GET['download']) && isset($_GET['booking_id'])) {
         <div class="px-4 py-6 sm:px-0">
             <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
                 <h1 class="text-3xl font-bold text-gray-900">Buchungen</h1>
-                <form action="" method="GET" class="filter-container space-y-2 sm:space-y-0 sm:space-x-2">
-                    <input type="date" name="date" value="<?php echo $filterDate; ?>" class="border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 w-full sm:w-auto">
-                    <input type="text" name="search" value="<?php echo htmlspecialchars($searchName); ?>" placeholder="Namen suchen" class="border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 w-full sm:w-auto">
+                <form action="" method="GET" class="filter-container space-y-2 sm:space-y-0 sm:space-x-2 flex items-center">
+                    <label for="date" class="sr-only">Datum filtern</label>
+                    <input type="date" name="date" id="date" value="<?php echo $filterDate; ?>" class="border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 w-full sm:w-auto" placeholder="Datum">
+                    <label for="search" class="sr-only">Namen suchen</label>
+                    <input type="text" name="search" id="search" value="<?php echo htmlspecialchars($searchName); ?>" placeholder="Namen suchen" class="border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 w-full sm:w-auto">
                     <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 w-full sm:w-auto">
                         <i class="fas fa-filter"></i>&nbsp;Filtern
                     </button>

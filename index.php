@@ -51,8 +51,8 @@ function getMonthlyBookings($db, $year, $month, $roomId)
     <link rel="stylesheet" href="styles.css">    
 </head>
 
-<body class="bg-custom-background" x-data="roomieApp()">
-<nav class="bg-custom-nav shadow-lg" x-data="{ open: false }">
+<body class="bg-gray-100" x-data="roomieApp()">
+    <nav class="bg-gray-800 shadow-lg" x-data="{ open: false }">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex">
@@ -62,17 +62,17 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                         </a>
                     </div>
                     <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-                        <a href="index.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'index.php' ? 'active' : 'inactive'; ?>">
+                        <a href="index.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white <?php echo $current_page == 'index.php' ? 'border-yellow-400' : 'border-transparent'; ?>">
                             <i class="fas fa-tachometer-alt"></i>&nbsp;Dashboard
                         </a>
-                        <a href="bookings.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'bookings.php' ? 'active' : 'inactive'; ?>">
+                        <a href="bookings.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white <?php echo $current_page == 'bookings.php' ? 'border-yellow-400' : 'border-transparent'; ?>">
                             <i class="fas fa-calendar-alt"></i>&nbsp;Buchungen
                         </a>
-                        <a href="rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'rooms.php' ? 'active' : 'inactive'; ?>">
+                        <a href="rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white <?php echo $current_page == 'rooms.php' ? 'border-yellow-400' : 'border-transparent'; ?>">
                             <i class="fas fa-door-open"></i>&nbsp;Räume
                         </a>
                         <?php if (isAdmin()) : ?>
-                            <a href="admin_rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'admin_rooms.php' ? 'active' : 'inactive'; ?>">
+                            <a href="admin_rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white <?php echo $current_page == 'admin_rooms.php' ? 'border-yellow-400' : 'border-transparent'; ?>">
                                 <i class="fas fa-tools"></i>&nbsp;Raumverwaltung
                             </a>
                         <?php endif; ?>
@@ -94,7 +94,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                     </div>
                 </div>
                 <div class="-mr-2 flex items-center sm:hidden">
-                    <button @click="open = !open" class="inline-flex items-center justify-center p-2 rounded-md text-gray-100 hover:text-gray-300 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-yellow-500" aria-expanded="false">
+                    <button @click="open = !open" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-yellow-500" aria-expanded="false">
                         <span class="sr-only">Open main menu</span>
                         <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -109,9 +109,9 @@ function getMonthlyBookings($db, $year, $month, $roomId)
 
         <div x-show="open" class="sm:hidden">
             <div class="pt-2 pb-3 space-y-1">
-                <a href="index.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium <?php echo $current_page == 'index.php' ? 'active' : 'inactive'; ?>"><i class="fas fa-tachometer-alt"></i>&nbsp;Dashboard</a>
-                <a href="bookings.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium <?php echo $current_page == 'bookings.php' ? 'active' : 'inactive'; ?>"><i class="fas fa-calendar-alt"></i>&nbsp;Buchungen</a>
-                <a href="rooms.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium <?php echo $current_page == 'rooms.php' ? 'active' : 'inactive'; ?>"><i class="fas fa-door-open"></i>&nbsp;Räume</a>
+                <a href="index.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium text-white <?php echo $current_page == 'index.php' ? 'bg-gray-900 border-yellow-400' : 'border-transparent'; ?>"><i class="fas fa-tachometer-alt"></i>&nbsp;Dashboard</a>
+                <a href="bookings.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium text-white <?php echo $current_page == 'bookings.php' ? 'bg-gray-900 border-yellow-400' : 'border-transparent'; ?>"><i class="fas fa-calendar-alt"></i>&nbsp;Buchungen</a>
+                <a href="rooms.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium text-white <?php echo $current_page == 'rooms.php' ? 'bg-gray-900 border-yellow-400' : 'border-transparent'; ?>"><i class="fas fa-door-open"></i>&nbsp;Räume</a>
             </div>
             <div class="pt-4 pb-3 border-t border-gray-200">
                 <div class="flex items-center px-4">
@@ -119,14 +119,14 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                         <img class="h-10 w-10 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
                     </div>
                     <div class="ml-3">
-                        <div class="text-base font-medium text-gray-100"><?php echo htmlspecialchars($user_name); ?></div>
-                        <div class="text-sm font-medium text-gray-500">beispiel@email.com</div>
+                        <div class="text-base font-medium text-white"><?php echo htmlspecialchars($user_name); ?></div>
+                        <div class="text-sm font-medium text-gray-400">beispiel@email.com</div>
                     </div>
                 </div>
                 <div class="mt-3 space-y-1">
-                    <a href="profile.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700"><i class="fas fa-user"></i>&nbsp;Ihr Profil</a>
-                    <a href="settings.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700"><i class="fas fa-cog"></i>&nbsp;Einstellungen</a>
-                    <a href="logout.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</a>
+                    <a href="profile.php" class="block px-4 py-2 text-base font-medium text-white hover:text-white hover:bg-gray-700"><i class="fas fa-user"></i>&nbsp;Ihr Profil</a>
+                    <a href="settings.php" class="block px-4 py-2 text-base font-medium text-white hover:text-white hover:bg-gray-700"><i class="fas fa-cog"></i>&nbsp;Einstellungen</a>
+                    <a href="logout.php" class="block px-4 py-2 text-base font-medium text-white hover:text-white hover:bg-gray-700"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</a>
                 </div>
             </div>
         </div>
@@ -199,7 +199,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
             </div>
 
             <div class="mb-4">
-                <label for="selectedWorkspace" class="block text-sm font-medium text-gray-700">Raum</label>
+                <label for="selectedWorkspace" class="block text-sm font-medium text-gray-700"><i class="fas fa-door-open"></i>&nbsp;Raum</label>
                 <select id="selectedWorkspace" name="selectedWorkspace" class="w-full bg-white border border-gray-300 rounded-md p-2" x-model="selectedWorkspace" required @change="fetchBookings">
                     <option value="" disabled selected>Raum auswählen</option>
                     <?php while ($room = $rooms->fetch(PDO::FETCH_ASSOC)) : ?>
@@ -211,14 +211,14 @@ function getMonthlyBookings($db, $year, $month, $roomId)
             </div>
 
             <div class="mb-4" x-show="selectedWorkspace && startDate && endDate">
-                <h3 class="text-sm font-medium text-gray-700">Buchungen:</h3>
+                <h3 class="text-sm font-medium text-gray-700"><i class="fas fa-calendar-check"></i>&nbsp;Buchungen:</h3>
                 <table class="min-w-full bg-white">
                     <thead>
                         <tr>
-                            <th class="py-2 text-left px-4">Datum</th>
-                            <th class="py-2 text-left px-4">Startzeit</th>
-                            <th class="py-2 text-left px-4">Endzeit</th>
-                            <th class="py-2 text-left px-4">Name</th>
+                            <th class="py-2 text-left px-4"><i class="fas fa-calendar-day"></i>&nbsp;Datum</th>
+                            <th class="py-2 text-left px-4"><i class="fas fa-clock"></i>&nbsp;Startzeit</th>
+                            <th class="py-2 text-left px-4"><i class="fas fa-clock"></i>&nbsp;Endzeit</th>
+                            <th class="py-2 text-left px-4"><i class="fas fa-user"></i>&nbsp;Name</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -244,7 +244,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                     <input type="hidden" name="selectedWorkspace" x-bind:value="selectedWorkspace">
 
                     <div class="mb-4">
-                        <label for="time_period" class="block text-sm font-medium text-gray-700">Zeitspanne</label>
+                        <label for="time_period" class="block text-sm font-medium text-gray-700"><i class="fas fa-clock"></i>&nbsp;Zeitspanne</label>
                         <select id="time_period" name="time_period" x-model="selectedTimePeriod" class="w-full bg-white border border-gray-300 rounded-md p-2" required>
                             <option value="">Zeitspanne auswählen</option>
                             <option value="ganzerTag">Ganzer Tag (09:00 - 17:00)</option>
@@ -254,10 +254,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                     </div>
 
                     <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 text-white rounded-md p-2 transition-colors duration-200 flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M9 17h6M9 11h6" />
-                        </svg>
-                        Buchen
+                        <i class="fas fa-book"></i>&nbsp;Buchen
                     </button>
                 </form>
             </div>
@@ -340,3 +337,4 @@ function getMonthlyBookings($db, $year, $month, $roomId)
 </body>
 
 </html>
+

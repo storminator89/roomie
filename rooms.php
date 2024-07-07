@@ -51,11 +51,12 @@ function getRoomTypeName($type)
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">   
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body class="bg-custom-background">
-<nav class="bg-custom-nav shadow-lg" x-data="{ open: false }">
+    <nav class="bg-custom-nav shadow-lg" x-data="{ open: false }">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex">
@@ -137,61 +138,50 @@ function getRoomTypeName($type)
 
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div class="px-4 py-6 sm:px-0">
-            <h1 class="text-3xl font-bold text-gray-900 mb-6">Verfügbare Räume</h1>
+            <h1 class="text-3xl font-bold text-gray-900 mb-6">
+                <i class="fas fa-door-open text-yellow-500 mr-2"></i>Verfügbare Räume
+            </h1>
 
             <?php if (isset($error)) : ?>
                 <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
-                    <p><?php echo htmlspecialchars($error); ?></p>
+                    <p><i class="fas fa-exclamation-circle mr-2"></i><?php echo htmlspecialchars($error); ?></p>
                 </div>
             <?php endif; ?>
 
-            <div class="bg-white shadow overflow-hidden sm:rounded-md">
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg">
                 <ul class="divide-y divide-gray-200">
                     <?php foreach ($rooms as $room) : ?>
-                        <li class="flex justify-between items-center px-4 py-4 sm:px-6">
-                            <div class="flex items-center">
-                                <a href="room_details.php?id=<?php echo $room['id']; ?>" class="block hover:bg-gray-50">
+                        <li class="hover:bg-gray-50 transition duration-150 ease-in-out">
+                            <div class="px-4 py-4 sm:px-6 flex justify-between items-center">
+                                <div class="flex-1 min-w-0">
                                     <div class="flex items-center">
-                                        <p class="text-sm font-medium text-yellow-600 truncate">
+                                        <a href="room_details.php?id=<?php echo $room['id']; ?>" class="text-lg font-medium text-yellow-600 truncate hover:underline">
                                             <?php echo htmlspecialchars($room['name']); ?>
-                                        </p>
+                                        </a>
                                         <form method="POST" action="rooms.php" class="ml-2">
                                             <input type="hidden" name="favorite_room_id" value="<?php echo $room['id']; ?>">
                                             <button type="submit" class="focus:outline-none">
-                                                <?php if ($room['is_favorite']) : ?>
-                                                    <svg class="h-6 w-6 text-yellow-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17l-5.2 2.9 1-5.8L2.7 9.6l5.9-.9L12 3l2.4 5.7 5.9.9-4.1 4.5 1 5.8z" />
-                                                    </svg>
-                                                <?php else : ?>
-                                                    <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17l-5.2 2.9 1-5.8L2.7 9.6l5.9-.9L12 3l2.4 5.7 5.9.9-4.1 4.5 1 5.8z" />
-                                                    </svg>
-                                                <?php endif; ?>
+                                                <i class="<?php echo $room['is_favorite'] ? 'fas' : 'far'; ?> fa-star text-yellow-400 hover:text-yellow-500 transition duration-150 ease-in-out"></i>
                                             </button>
                                         </form>
                                     </div>
-                                    <div class="mt-2 sm:flex sm:justify-between">
-                                        <div class="sm:flex">
-                                            <p class="flex items-center text-sm text-gray-500">
-                                                <svg class="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd" />
-                                                </svg>
-                                                <?php echo htmlspecialchars(getRoomTypeName($room['type'])); ?>
-                                            </p>
-                                        </div>
+                                    <div class="mt-2 flex items-center text-sm text-gray-500">
+                                        <i class="fas fa-building mr-2"></i>
+                                        <?php echo htmlspecialchars(getRoomTypeName($room['type'])); ?>
                                     </div>
-                                    <div class="mt-2 text-sm text-gray-500">
-                                        <p>Ausstattung: <?php echo htmlspecialchars(implode(', ', json_decode($room['equipment'], true) ?? [])); ?></p>
+                                    <div class="mt-2 flex items-center text-sm text-gray-500">
+                                        <i class="fas fa-tools mr-2"></i>
+                                        <?php echo htmlspecialchars(implode(', ', json_decode($room['equipment'], true) ?? [])); ?>
                                     </div>
-                                </a>
-                            </div>
-                            <div class="ml-4 flex-shrink-0 flex flex-col items-end">
-                                <p class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                    <?php echo $room['capacity']; ?> Plätze
-                                </p>
-                                <a href="room_details.php?id=<?php echo $room['id']; ?>" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
-                                    Details anzeigen
-                                </a>
+                                </div>
+                                <div class="ml-4 flex-shrink-0 flex flex-col items-end">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                        <i class="fas fa-users mr-1"></i><?php echo $room['capacity']; ?> Plätze
+                                    </span>
+                                    <a href="room_details.php?id=<?php echo $room['id']; ?>" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                        <i class="fas fa-info-circle mr-1"></i>Details anzeigen
+                                    </a>
+                                </div>
                             </div>
                         </li>
                     <?php endforeach; ?>
