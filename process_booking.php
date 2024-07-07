@@ -119,8 +119,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $startDate->modify('+1 day');
             }
         }
-        
-        $_SESSION['success'] = "Buchung erfolgreich erstellt.";
+
+        // E-Mail-Benachrichtigung
+        $booking_id = $db->lastInsertId();
+        $booking = [
+            'id' => $booking_id,
+            'room_name' => $room['name'],
+            'date' => $startDate->format('Y-m-d'),
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+            'user_name' => $_SESSION['user_name'],
+            'user_email' => $db->query("SELECT email FROM users WHERE id = " . $_SESSION['user_id'])->fetchColumn()
+        ];
+        sendBookingEmail($booking, $booking['user_email']);
+
+        $_SESSION['success'] = "Buchung erfolgreich erstellt und die Bestätigungs-E-Mail wurde gesendet.";
         header("Location: bookings.php?success=1");
         exit;
     } catch (PDOException $e) {
@@ -131,5 +144,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 } else {
     header("Location: index.php");
     exit;
+}
+
+function sendBookingEmail($booking, $recipientEmail) {
+    $icsContent = generateICS($booking);
+
+    $subject = "Ihre Buchung für " . $booking['room_name'];
+    $message = "Sehr geehrte/r " . $booking['user_name'] . ",\n\n" .
+               "Ihre Buchung für den Raum " . $booking['room_name'] . " am " .
+               formatGermanDate($booking['date']) . " von " . $booking['start_time'] . " bis " .
+               $booking['end_time'] . " wurde erfolgreich eingetragen.\n\n" .
+               "Die Kalenderdatei ist dieser E-Mail angehängt.\n\n" .
+               "Mit freundlichen Grüßen,\nIhr Roomie Team";
+
+    $separator = md5(time());
+    $eol = PHP_EOL;
+
+    // Kopfzeilen für die E-Mail
+    $headers = "From: Roomie Booking System <your-email@example.com>" . $eol;
+    $headers .= "MIME-Version: 1.0" . $eol;
+    $headers .= "Content-Type: multipart/mixed; boundary=\"" . $separator . "\"" . $eol;
+
+    // E-Mail-Body
+    $body = "--" . $separator . $eol;
+    $body .= "Content-Type: text/plain; charset=UTF-8" . $eol;
+    $body .= "Content-Transfer-Encoding: 8bit" . $eol;
+    $body .= $message . $eol;
+
+    // Anhängen der ICS-Datei
+    $body .= "--" . $separator . $eol;
+    $body .= "Content-Type: text/calendar; charset=UTF-8; name=\"booking.ics\"" . $eol;
+    $body .= "Content-Transfer-Encoding: base64" . $eol;
+    $body .= "Content-Disposition: attachment; filename=\"booking.ics\"" . $eol;
+    $body .= $eol;
+    $body .= chunk_split(base64_encode($icsContent)) . $eol;
+    $body .= "--" . $separator . "--";
+
+    // E-Mail senden
+    mail($recipientEmail, "=?UTF-8?B?".base64_encode($subject)."?=", $body, $headers);
+}
+
+function generateICS($booking)
+{
+    $dtstart = new DateTime($booking['date'] . ' ' . $booking['start_time'], new DateTimeZone('Europe/Berlin'));
+    $dtend = new DateTime($booking['date'] . ' ' . $booking['end_time'], new DateTimeZone('Europe/Berlin'));
+
+    $ics = "BEGIN:VCALENDAR\r\n";
+    $ics .= "VERSION:2.0\r\n";
+    $ics .= "PRODID:-//Your Organization//NONSGML v1.0//EN\r\n";
+    $ics .= "BEGIN:VEVENT\r\n";
+    $ics .= "UID:" . uniqid() . "@yourdomain.com\r\n";
+    $ics .= "DTSTAMP:" . gmdate('Ymd\THis\Z') . "\r\n";
+    $ics .= "DTSTART:" . $dtstart->format('Ymd\THis') . "\r\n";
+    $ics .= "DTEND:" . $dtend->format('Ymd\THis') . "\r\n";
+    $ics .= "SUMMARY:" . htmlspecialchars($booking['room_name']) . "\r\n";
+    $ics .= "DESCRIPTION:" . htmlspecialchars($booking['user_name']) . "\r\n";
+    $ics .= "END:VEVENT\r\n";
+    $ics .= "END:VCALENDAR\r\n";
+    return $ics;
+}
+
+function formatGermanDate($date)
+{
+    return date('d.m.Y', strtotime($date));
 }
 ?>
