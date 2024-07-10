@@ -1,185 +1,635 @@
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interaktiver Raumplan 2. OG</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .room {
             transition: all 0.3s ease;
+            cursor: move;
         }
+
         .room:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        .seat {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .seat:hover {
-            transform: scale(1.2);
-        }
-        .seat.available {
-            background-color: #10B981;
-        }
-        .seat.occupied {
-            background-color: #EF4444;
+
+        .grid-item {
+            border: 1px dashed #e2e8f0;
+            min-height: 80px;
         }
     </style>
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-6xl mx-auto bg-white rounded-lg shadow-lg p-8">
-        <h1 class="text-3xl font-bold mb-4">Interaktiver Raumplan 2. OG</h1>
-        <p class="mb-6 text-gray-600">Klicken Sie auf einen Raum, um Details anzuzeigen und Sitzplätze auszuwählen.</p>
-        
-        <div id="floorplan" class="grid grid-cols-12 gap-2 bg-gray-200 p-4 rounded-lg aspect-[16/9]">
-            <!-- Räume werden hier dynamisch eingefügt -->
+
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold mb-8 text-center text-gray-800">Interaktiver Raumplan 2. OG</h1>
+
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8 admin-only">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Verfügbare Räume</h2>
+            <div id="availableRooms" class="flex flex-wrap gap-4 mb-6">
+                <!-- Verfügbare Räume werden hier dynamisch hinzugefügt -->
+            </div>
+            <button id="addRoomBtn"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full transition duration-300 ease-in-out transform hover:scale-105">
+                <i class="fas fa-plus mr-2"></i>Raum hinzufügen
+            </button>
         </div>
 
-        <div class="mt-8">
-            <h2 class="text-xl font-semibold mb-2">Legende</h2>
-            <div class="flex flex-wrap gap-4">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Raumplan</h2>
+            <div class="mb-4 flex items-center admin-only">
+                <label for="gridRows" class="mr-2">Zeilen:</label>
+                <input type="number" id="gridRows" min="1" max="20" value="4"
+                    class="border rounded px-2 py-1 w-16 mr-4">
+                <label for="gridCols" class="mr-2">Spalten:</label>
+                <input type="number" id="gridCols" min="1" max="20" value="6"
+                    class="border rounded px-2 py-1 w-16 mr-4">
+                <button id="updateGridBtn"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded transition duration-300">
+                    Grid aktualisieren
+                </button>
+                <button id="saveGridBtn"
+                    class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded transition duration-300 ml-4">
+                    Grid speichern
+                </button>
+            </div>
+            <div id="floorplan" class="grid gap-4 bg-gray-50 p-4 rounded-lg">
+                <!-- Grid für den Raumplan -->
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6 admin-only">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Legende</h2>
+            <div class="flex flex-wrap gap-6">
                 <div class="flex items-center">
-                    <div class="w-4 h-4 bg-yellow-400 mr-2 rounded"></div>
-                    <span>Shared Desk Büro</span>
+                    <div class="w-6 h-6 bg-blue-300 mr-3 rounded"></div>
+                    <span class="text-gray-700">Mediaraum</span>
                 </div>
                 <div class="flex items-center">
-                    <div class="w-4 h-4 bg-purple-400 mr-2 rounded"></div>
-                    <span>FK-Büro</span>
+                    <div class="w-6 h-6 bg-green-300 mr-3 rounded"></div>
+                    <span class="text-gray-700">Büro</span>
                 </div>
                 <div class="flex items-center">
-                    <div class="w-4 h-4 bg-blue-300 mr-2 rounded"></div>
-                    <span>Spez. Abt-Büro</span>
+                    <div class="w-6 h-6 bg-yellow-300 mr-3 rounded"></div>
+                    <span class="text-gray-700">Großraumbüro</span>
                 </div>
                 <div class="flex items-center">
-                    <div class="w-4 h-4 bg-gray-300 mr-2 rounded"></div>
-                    <span>Sonstige Räume</span>
+                    <div class="w-6 h-6 bg-purple-300 mr-3 rounded"></div>
+                    <span class="text-gray-700">Spez. Abt. Büro</span>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Modal für Raumdetails -->
     <div id="roomModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
-        <div class="bg-white p-8 rounded-lg max-w-2xl w-full">
-            <div class="flex justify-between items-center mb-4">
-                <h2 id="modalTitle" class="text-2xl font-bold"></h2>
-                <button id="closeModal" class="text-gray-500 hover:text-gray-700">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            <div id="modalContent" class="mb-4"></div>
-            <div id="roomAmenities" class="mb-4"></div>
-            <div id="seatMap" class="bg-gray-200 p-4 rounded-lg relative" style="height: 200px;"></div>
+        <div class="bg-white p-8 rounded-lg max-w-md w-full">
+            <h2 id="modalTitle" class="text-2xl font-bold mb-6 text-gray-800"></h2>
+            <form id="roomForm">
+                <div class="mb-4">
+                    <label for="roomName" class="block mb-2 text-sm font-medium text-gray-700">Raumname:</label>
+                    <input type="text" id="roomName"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="roomNumber" class="block mb-2 text-sm font-medium text-gray-700">Raumnummer:</label>
+                    <input type="text" id="roomNumber"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="roomType" class="block mb-2 text-sm font-medium text-gray-700">Raumtyp:</label>
+                    <select id="roomType"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="mediaroom">Mediaraum</option>
+                        <option value="office">Büro</option>
+                        <option value="open-office">Großraumbüro</option>
+                        <option value="spez-abt-buero">Spez. Abt. Büro</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="roomCapacity" class="block mb-2 text-sm font-medium text-gray-700">Kapazität:</label>
+                    <input type="number" id="roomCapacity"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        min="1">
+                </div>
+                <div class="mb-6">
+                    <label class="block mb-2 text-sm font-medium text-gray-700">Ausstattung:</label>
+                    <div class="flex flex-wrap gap-4">
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="form-checkbox text-indigo-600" name="amenities" value="wifi">
+                            <span class="ml-2 text-gray-700">WLAN</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="form-checkbox text-indigo-600" name="amenities"
+                                value="projector">
+                            <span class="ml-2 text-gray-700">Projektor</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="form-checkbox text-indigo-600" name="amenities"
+                                value="whiteboard">
+                            <span class="ml-2 text-gray-700">Whiteboard</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="form-checkbox text-indigo-600" name="amenities" value="ac">
+                            <span class="ml-2 text-gray-700">Klimaanlage</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-4">
+                    <button type="button" id="cancelBtn"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition duration-300">Abbrechen</button>
+                    <button type="submit"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition duration-300">Speichern</button>
+                </div>
+            </form>
         </div>
     </div>
 
     <script>
         const floorplan = document.getElementById('floorplan');
-        const modal = document.getElementById('roomModal');
-        const modalTitle = document.getElementById('modalTitle');
-        const modalContent = document.getElementById('modalContent');
-        const seatMap = document.getElementById('seatMap');
-        const closeModal = document.getElementById('closeModal');
+        const availableRooms = document.getElementById('availableRooms');
+        const addRoomBtn = document.getElementById('addRoomBtn');
+        const roomModal = document.getElementById('roomModal');
+        const roomForm = document.getElementById('roomForm');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const gridRowsInput = document.getElementById('gridRows');
+        const gridColsInput = document.getElementById('gridCols');
+        const updateGridBtn = document.getElementById('updateGridBtn');
+        const saveGridBtn = document.getElementById('saveGridBtn');
 
-        function generateRandomAmenities() {
-            const amenities = ['fa-wifi', 'fa-tv', 'fa-print', 'fa-coffee', 'fa-phone', 'fa-projector'];
-            return amenities.filter(() => Math.random() > 0.5);
+        let isAdmin = false;
+        let isLoggedIn = false;
+        let rooms = [];
+        let gridConfig = null;
+
+        const roomTypes = {
+            'mediaroom': { name: 'Mediaraum', classes: 'bg-blue-300 text-blue-800' },
+            'office': { name: 'Büro', classes: 'bg-green-300 text-green-800' },
+            'open-office': { name: 'Großraumbüro', classes: 'bg-yellow-300 text-yellow-800' },
+            'spez-abt-buero': { name: 'Spez. Abt. Büro', classes: 'bg-purple-300 text-purple-800' },
+            'default': { name: 'Sonstiger Raum', classes: 'bg-gray-300 text-gray-800' }
+        };
+
+        function checkUserStatus() {
+            fetch('check_admin.php')
+                .then(response => response.json())
+                .then(data => {
+                    isAdmin = data.isAdmin;
+                    isLoggedIn = data.isLoggedIn;
+                    updateUIForUserRole();
+                    loadInitialData();
+                })
+                .catch(error => console.error('Error:', error));
         }
 
-        fetch('get_rooms.php')
-            .then(response => response.json())
-            .then(rooms => {
-                rooms.forEach((room) => {
-                    room.amenities = generateRandomAmenities();
-                    const div = document.createElement('div');
-                    div.className = `room text-xs font-bold cursor-pointer rounded-md flex items-center justify-center p-2`;
-                    div.style.gridArea = room.grid_area;
+        function updateUIForUserRole() {
+            const adminElements = document.querySelectorAll('.admin-only');
+            adminElements.forEach(el => {
+                el.style.display = isAdmin ? '' : 'none';
+            });
 
-                    const nameSpan = document.createElement('span');
-                    nameSpan.textContent = room.name;
-                    nameSpan.className = 'text-center';
-                    div.appendChild(nameSpan);
+            const roomElements = document.querySelectorAll('.room');
+            roomElements.forEach(el => {
+                el.draggable = isAdmin;
+            });
+        }
 
-                    switch(room.type) {
-                        case 'shared-desk':
-                            div.classList.add('bg-yellow-400', 'text-yellow-800');
-                            break;
-                        case 'fk-buro':
-                            div.classList.add('bg-purple-400', 'text-purple-800');
-                            break;
-                        case 'spez-abt-buro':
-                            div.classList.add('bg-blue-300', 'text-blue-800');
-                            break;
-                        default:
-                            div.classList.add('bg-gray-300', 'text-gray-800');
+        function loadInitialData() {
+            fetch('load_grid.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Loaded data:', data);
+                        gridConfig = data.data.gridConfig;
+                        rooms = data.data.rooms.map(room => ({
+                            ...room,
+                            amenities: room.equipment ? JSON.parse(room.equipment) : []
+                        }));
+
+                        console.log('Loaded rooms:', rooms);
+
+                        if (gridConfig) {
+                            gridRowsInput.value = gridConfig.rows;
+                            gridColsInput.value = gridConfig.cols;
+                            updateGrid();
+
+                            let roomLayout;
+                            try {
+                                roomLayout = JSON.parse(gridConfig.room_layout);
+                                console.log('Parsed room layout:', roomLayout);
+                            } catch (error) {
+                                console.error('Error parsing room_layout:', error);
+                                roomLayout = [];
+                            }
+
+                            roomLayout.forEach((roomId, index) => {
+                                if (roomId) {
+                                    const room = rooms.find(r => r.id.toString() === roomId.toString());
+                                    if (room) {
+                                        console.log('Placing room:', room, 'at index:', index);
+                                        const roomElement = createRoomElement(room);
+                                        if (floorplan.children[index]) {
+                                            floorplan.children[index].innerHTML = '';
+                                            floorplan.children[index].appendChild(roomElement);
+                                            console.log('Room placed successfully');
+                                        } else {
+                                            console.error('Grid cell not found at index:', index);
+                                        }
+                                    } else {
+                                        console.log('Room not found for id:', roomId);
+                                    }
+                                }
+                            });
+                        } else {
+                            updateGrid();
+                        }
+
+                        initializeRooms();
+                        updateGridVisual();
+                        logGridState();
+                    } else {
+                        console.log('Failed to load data:', data.message);
+                        updateGrid();
                     }
-
-                    div.addEventListener('click', () => showRoomDetails(room));
-                    floorplan.appendChild(div);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    updateGrid();
                 });
-            })
-            .catch(error => console.error('Error:', error));
-
-        function showRoomDetails(room) {
-            modalTitle.textContent = room.name;
-            modalContent.innerHTML = `
-                <p>Typ: ${getRoomTypeName(room.type)}</p>
-                <p>Anzahl der Sitzplätze: ${room.seats.length}</p>
-                <p class="mt-2">Klicken Sie auf einen Sitzplatz, um ihn auszuwählen:</p>
-            `;
-
-            const amenitiesDiv = document.getElementById('roomAmenities');
-            amenitiesDiv.innerHTML = '<h3 class="font-bold mb-2">Raumausstattung:</h3>';
-            room.amenities.forEach(amenity => {
-                const icon = document.createElement('i');
-                icon.className = `fas ${amenity} mr-2 text-xl`;
-                amenitiesDiv.appendChild(icon);
-            });
-
-            seatMap.innerHTML = '';
-            room.seats.forEach((seat) => {
-                const seatDiv = document.createElement('div');
-                seatDiv.className = 'seat absolute available';
-                seatDiv.style.top = seat.top;
-                seatDiv.style.left = seat.left;
-                seatDiv.addEventListener('click', () => toggleSeat(seatDiv));
-                seatMap.appendChild(seatDiv);
-            });
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
         }
 
-        function getRoomTypeName(type) {
-            switch(type) {
-                case 'shared-desk': return 'Shared Desk Büro';
-                case 'fk-buro': return 'FK-Büro';
-                case 'spez-abt-buro': return 'Spez. Abt-Büro';
-                default: return 'Sonstiger Raum';
+        function createRoomElement(room) {
+            console.log('Creating room element:', room); // Debugging
+            const roomTypeInfo = roomTypes[room.type] || roomTypes['default'];
+            const div = document.createElement('div');
+            div.className = `room text-sm rounded-lg flex flex-col items-center justify-center p-4 ${roomTypeInfo.classes} shadow-md relative`;
+            div.draggable = isAdmin;
+            div.dataset.roomName = room.name;
+            div.dataset.roomId = room.id;
+            div.dataset.roomType = room.type;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = room.name;
+            nameSpan.className = 'font-bold mb-1';
+            div.appendChild(nameSpan);
+
+            const numberSpan = document.createElement('span');
+            numberSpan.textContent = room.number || 'Keine Nummer';
+            numberSpan.className = 'text-xs mb-1';
+            div.appendChild(numberSpan);
+
+            const capacitySpan = document.createElement('span');
+            capacitySpan.textContent = `Kapazität: ${room.capacity}`;
+            capacitySpan.className = 'text-xs mb-1';
+            div.appendChild(capacitySpan);
+
+            const amenitiesSpan = document.createElement('span');
+            amenitiesSpan.textContent = 'Ausstattung';
+            amenitiesSpan.className = 'text-xs mb-2 cursor-pointer underline';
+            amenitiesSpan.addEventListener('mouseenter', (e) => {
+                const tooltip = document.createElement('div');
+                tooltip.className = 'absolute bg-white border border-gray-300 rounded p-2 z-10 text-xs';
+                tooltip.style.bottom = '100%';
+                tooltip.style.left = '50%';
+                tooltip.style.transform = 'translateX(-50%)';
+                tooltip.innerHTML = room.amenities.map(getAmenityName).join('<br>');
+                div.appendChild(tooltip);
+            });
+            amenitiesSpan.addEventListener('mouseleave', () => {
+                const tooltip = div.querySelector('.absolute');
+
+                if (tooltip) tooltip.remove();
+            });
+            div.appendChild(amenitiesSpan);
+
+            if (isAdmin) {
+                const buttonsDiv = document.createElement('div');
+                buttonsDiv.className = 'flex gap-2 mt-2';
+
+                const editBtn = document.createElement('button');
+                editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+                editBtn.className = 'bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600 transition duration-300';
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showRoomModal(room);
+                });
+                buttonsDiv.appendChild(editBtn);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+                deleteBtn.className = 'bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600 transition duration-300';
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteRoom(room);
+                });
+                buttonsDiv.appendChild(deleteBtn);
+
+                div.appendChild(buttonsDiv);
+            }
+
+            if (isAdmin) {
+                div.addEventListener('dragstart', dragStart);
+            }
+
+            return div;
+        }
+
+        function getAmenityName(amenity) {
+            const amenityNames = {
+                'wifi': 'WLAN',
+                'projector': 'Projektor',
+                'whiteboard': 'Whiteboard',
+                'ac': 'Klimaanlage'
+            };
+            return amenityNames[amenity] || amenity;
+        }
+
+        function updateGrid() {
+            const rows = parseInt(gridRowsInput.value);
+            const cols = parseInt(gridColsInput.value);
+
+            floorplan.innerHTML = '';
+            floorplan.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+            floorplan.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+
+            for (let i = 0; i < rows * cols; i++) {
+                const gridItem = document.createElement('div');
+                gridItem.className = 'grid-item';
+                gridItem.addEventListener('dragover', dragOver);
+                gridItem.addEventListener('drop', drop);
+                floorplan.appendChild(gridItem);
+            }
+
+            updateGridVisual();
+        }
+
+
+        function logGridState() {
+            console.log('Current grid state:');
+            Array.from(floorplan.children).forEach((cell, index) => {
+                const roomElement = cell.querySelector('.room');
+                if (roomElement) {
+                    console.log(`Cell ${index}: Room ${roomElement.dataset.roomName} (ID: ${roomElement.dataset.roomId})`);
+                } else {
+                    console.log(`Cell ${index}: Empty`);
+                }
+            });
+        }
+
+        function updateGridLayout() {
+            const layout = Array.from(floorplan.children).map(item => {
+                const roomElement = item.firstElementChild;
+                return roomElement ? roomElement.dataset.roomId : null;
+            });
+
+            fetch('update_grid_layout.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    layout,
+                    rows: parseInt(gridRowsInput.value),
+                    cols: parseInt(gridColsInput.value)
+                }),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        console.error('Failed to update grid layout:', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating grid layout:', error);
+                });
+        }
+
+        function dragStart(e) {
+            e.dataTransfer.setData('text/plain', e.target.dataset.roomId);
+        }
+
+        function dragOver(e) {
+            e.preventDefault();
+        }
+
+        function drop(e) {
+            e.preventDefault();
+            const roomId = e.dataTransfer.getData('text');
+            const roomElement = document.querySelector(`[data-room-id="${roomId}"]`);
+
+            if (roomElement && e.target.classList.contains('grid-item')) {
+                // Entfernen Sie den Raum aus seinem vorherigen Container
+                if (roomElement.parentElement) {
+                    roomElement.parentElement.removeChild(roomElement);
+                }
+
+                // Fügen Sie den Raum zum neuen Grid-Item hinzu
+                e.target.innerHTML = '';
+                e.target.appendChild(roomElement);
+                roomElement.style.width = '100%';
+                roomElement.style.height = '100%';
+
+                updateGridLayout();
             }
         }
 
-        function toggleSeat(seatElement) {
-            const allSeats = seatMap.querySelectorAll('.seat');
-            allSeats.forEach(seat => {
-                seat.classList.remove('occupied');
-                seat.classList.add('available');
-            });
-
-            seatElement.classList.remove('available');
-            seatElement.classList.add('occupied');
+        function initializeRooms() {
+            console.log('Initializing rooms');
+            if (isAdmin) {
+                availableRooms.innerHTML = '';
+                rooms.forEach(room => {
+                    if (!document.querySelector(`[data-room-id="${room.id}"]`)) {
+                        console.log('Adding room to available rooms:', room);
+                        const roomElement = createRoomElement(room);
+                        availableRooms.appendChild(roomElement);
+                    }
+                });
+            }
+            console.log('Available rooms after initialization:', availableRooms.children.length);
         }
 
-        closeModal.addEventListener('click', () => {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
+        function showRoomModal(room = null) {
+            const modalTitle = document.getElementById('modalTitle');
+            const roomNameInput = document.getElementById('roomName');
+            const roomNumberInput = document.getElementById('roomNumber');
+            const roomTypeSelect = document.getElementById('roomType');
+            const roomCapacityInput = document.getElementById('roomCapacity');
+            const amenitiesCheckboxes = document.querySelectorAll('input[name="amenities"]');
+
+            if (room) {
+                modalTitle.textContent = 'Raum bearbeiten';
+                roomNameInput.value = room.name;
+                roomNumberInput.value = room.number;
+                roomTypeSelect.value = room.type;
+                roomCapacityInput.value = room.capacity;
+                amenitiesCheckboxes.forEach(checkbox => {
+                    checkbox.checked = room.amenities.includes(checkbox.value);
+                });
+            } else {
+                modalTitle.textContent = 'Neuen Raum hinzufügen';
+                roomNameInput.value = '';
+                roomNumberInput.value = '';
+                roomTypeSelect.value = 'office';
+                roomCapacityInput.value = '';
+                amenitiesCheckboxes.forEach(checkbox => checkbox.checked = false);
+            }
+
+            roomModal.classList.remove('hidden');
+            roomModal.classList.add('flex');
+        }
+
+        function hideRoomModal() {
+            roomModal.classList.add('hidden');
+            roomModal.classList.remove('flex');
+        }
+
+        function addOrUpdateRoom(e) {
+            e.preventDefault();
+            const roomName = document.getElementById('roomName').value;
+            const roomNumber = document.getElementById('roomNumber').value;
+            const roomType = document.getElementById('roomType').value;
+            const roomCapacity = parseInt(document.getElementById('roomCapacity').value);
+            const amenities = Array.from(document.querySelectorAll('input[name="amenities"]:checked')).map(cb => cb.value);
+
+            const newRoom = {
+                id: Date.now().toString(), // Temporäre ID für neue Räume
+                name: roomName,
+                number: roomNumber,
+                type: roomType,
+                capacity: roomCapacity,
+                amenities: amenities,
+                grid_position: null // Neue Räume haben zunächst keine Grid-Position
+            };
+
+            // Senden Sie den neuen Raum an den Server
+            fetch('add_room.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(newRoom),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Aktualisieren Sie die ID mit der vom Server zurückgegebenen ID
+                        newRoom.id = data.roomId;
+                        rooms.push(newRoom);
+                        const roomElement = createRoomElement(newRoom);
+                        availableRooms.appendChild(roomElement);
+                        hideRoomModal();
+                    } else {
+                        alert('Fehler beim Hinzufügen des Raums: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Fehler beim Hinzufügen des Raums');
+                });
+        }
+
+        function deleteRoom(room) {
+            if (confirm(`Sind Sie sicher, dass Sie den Raum ${room.name} löschen möchten?`)) {
+                fetch('delete_room.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ roomId: room.id }),
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            rooms = rooms.filter(r => r.id !== room.id);
+
+                            // Entfernen Sie den Raum aus dem Grid
+                            const roomElement = document.querySelector(`[data-room-id="${room.id}"]`);
+                            if (roomElement && roomElement.parentElement) {
+                                roomElement.parentElement.removeChild(roomElement);
+                            }
+
+                            updateGridLayout();
+                            initializeRooms();
+                        } else {
+                            alert('Fehler beim Löschen des Raums: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Fehler beim Löschen des Raums');
+                    });
+            }
+        }
+
+        function updateGridVisual() {
+            floorplan.querySelectorAll('.grid-item').forEach((cell) => {                
+                const existingCellNumber = cell.querySelector('.cell-number');
+                if (existingCellNumber) {
+                    existingCellNumber.remove();
+                }
+               
+                cell.style.border = '1px solid #ccc';
+                cell.style.position = 'relative';
+                cell.style.minHeight = '100px';
+            });
+        }
+
+        function saveGrid() {
+            const layout = Array.from(floorplan.children).map(item => {
+                const roomElement = item.firstElementChild;
+                return roomElement ? roomElement.dataset.roomId : null;
+            });
+
+            fetch('save_grid.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    layout,
+                    rows: parseInt(gridRowsInput.value),
+                    cols: parseInt(gridColsInput.value)
+                }),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Grid-Layout erfolgreich gespeichert');
+                    } else {
+                        console.error('Failed to save grid layout:', data.message);
+                        alert('Fehler beim Speichern des Grid-Layouts');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error saving grid layout:', error);
+                    alert('Fehler beim Speichern des Grid-Layouts');
+                });
+        }
+
+        addRoomBtn.addEventListener('click', () => showRoomModal());
+        roomForm.addEventListener('submit', addOrUpdateRoom);
+        cancelBtn.addEventListener('click', hideRoomModal);
+        updateGridBtn.addEventListener('click', updateGrid);
+        saveGridBtn.addEventListener('click', saveGrid);
+
+        gridRowsInput.addEventListener('change', () => {
+            if (parseInt(gridRowsInput.value) < 1) gridRowsInput.value = 1;
+            if (parseInt(gridRowsInput.value) > 20) gridRowsInput.value = 20;
         });
+
+        gridColsInput.addEventListener('change', () => {
+            if (parseInt(gridColsInput.value) < 1) gridColsInput.value = 1;
+            if (parseInt(gridColsInput.value) > 20) gridColsInput.value = 20;
+        });
+
+        // Initialisierung
+        checkUserStatus();
     </script>
 </body>
+
 </html>

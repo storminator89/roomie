@@ -19,10 +19,12 @@ try {
     $db->exec("CREATE TABLE IF NOT EXISTS rooms (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
+        number TEXT,
         type TEXT NOT NULL,
         capacity INTEGER DEFAULT 0,
         is_favorite INTEGER DEFAULT 0,
-        equipment TEXT
+        equipment TEXT,
+        grid_position INTEGER
     )");
 
     // Tabelle für Sitzplätze
@@ -56,14 +58,13 @@ try {
     FOREIGN KEY (room_id) REFERENCES rooms(id)
 )");
 
-    // Beispieldaten einfügen
-    $db->exec("INSERT OR IGNORE INTO rooms (name, type, capacity, equipment) VALUES 
-        ('2. OG R15 Academy', 'spez-abt-buero', 4, '[\"wifi\",\"docking-station\"]'),
-        ('2. OG Warschau', 'meeting', 10, '[\"wifi\"]'),     
-        ('2. OG Casablanca', 'meeting', 8, '[\"wifi\",\"whiteboard\",\"projector\"]'),
-        ('2. OG R11', 'shared-desk', 4, '[\"wifi\",\"docking-station\"]'),
-        ('2. OG R12', 'fk-office', 4, '[\"wifi\",\"docking-station\"]'),
-        ('3. OG Mannheim', 'shared-desk', 12, '[\"wifi\",\"docking-station\"]')");
+    $db->exec("CREATE TABLE IF NOT EXISTS grid_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rows INTEGER NOT NULL,
+    cols INTEGER NOT NULL,
+    room_layout TEXT
+)");
+   
 
     $db->exec("INSERT OR IGNORE INTO seats (room_id, top, left_pos) VALUES 
         (5, '20%', '20%'),
