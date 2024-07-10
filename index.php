@@ -48,11 +48,11 @@ function getMonthlyBookings($db, $year, $month, $roomId)
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">    
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body class="bg-gray-100" x-data="roomieApp()">
-    <nav class="bg-gray-800 shadow-lg" x-data="{ open: false }">
+    <nav class="bg-custom-nav shadow-lg" x-data="{ open: false }">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex">
@@ -74,6 +74,9 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                         <?php if (isAdmin()) : ?>
                             <a href="admin_rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white <?php echo $current_page == 'admin_rooms.php' ? 'border-yellow-400' : 'border-transparent'; ?>">
                                 <i class="fas fa-tools"></i>&nbsp;Raumverwaltung
+                            </a>
+                            <a href="admin_permissions.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white border-yellow-400">
+                                <i class="fas fa-tools"></i>&nbsp;Berechtigungen
                             </a>
                         <?php endif; ?>
                     </div>
@@ -337,4 +340,3 @@ function getMonthlyBookings($db, $year, $month, $roomId)
 </body>
 
 </html>
-

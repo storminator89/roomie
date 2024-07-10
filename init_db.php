@@ -48,6 +48,14 @@ try {
         FOREIGN KEY (seat_id) REFERENCES seats(id)
     )");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS permissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    room_id INTEGER,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (room_id) REFERENCES rooms(id)
+)");
+
     // Beispieldaten einfügen
     $db->exec("INSERT OR IGNORE INTO rooms (name, type, capacity, equipment) VALUES 
         ('2. OG R15 Academy', 'spez-abt-buero', 4, '[\"wifi\",\"docking-station\"]'),
@@ -80,7 +88,6 @@ try {
         (2, 6, 5, '2024-07-11', '10:00', '16:00')");
 
     echo "Datenbank wurde initialisiert und mit Beispieldaten gefüllt.";
-} catch(PDOException $e) {
+} catch (PDOException $e) {
     echo "Fehler bei der Datenbankinitialisierung: " . $e->getMessage();
 }
-?>

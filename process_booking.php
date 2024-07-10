@@ -9,6 +9,33 @@ if (!isLoggedIn()) {
 
 date_default_timezone_set('Europe/Berlin');
 
+try {
+    $db = new PDO('sqlite:roomie.db');
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    echo "Connection failed: " . $e->getMessage();
+    exit;
+}
+
+function isAuthorizedToBook($db, $userId, $roomId)
+{
+    // Prüfen, ob der Raum ein spezielles Abteilungsbüro ist
+    $stmt = $db->prepare("SELECT type FROM rooms WHERE id = :room_id");
+    $stmt->execute(['room_id' => $roomId]);
+    $roomType = $stmt->fetchColumn();
+
+    if ($roomType != 'spez-abt-buero') {
+        return true; // Für andere Räume keine spezielle Berechtigung erforderlich
+    }
+
+    // Berechtigung des Benutzers prüfen
+    $stmt = $db->prepare("SELECT COUNT(*) FROM permissions WHERE user_id = :user_id AND room_id = :room_id");
+    $stmt->execute(['user_id' => $userId, 'room_id' => $roomId]);
+    $permissionCount = $stmt->fetchColumn();
+
+    return $permissionCount > 0;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $startDate = DateTime::createFromFormat('Y-m-d', $_POST['start_date'] ?? '');
     $endDate = DateTime::createFromFormat('Y-m-d', $_POST['end_date'] ?? '');
@@ -44,10 +71,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     $roomId = $workspace;
 
+    if (!isAuthorizedToBook($db, $_SESSION['user_id'], $roomId)) {
+        $_SESSION['error'] = "Sie sind nicht berechtigt, diesen Raum zu buchen.";
+        header("Location: index.php");
+        exit;
+    }
+
     try {
-        $db = new PDO('sqlite:roomie.db');
-        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        
         // Überprüfen, ob der Raum existiert und seine Kapazität abrufen
         $stmt = $db->prepare("SELECT id, capacity FROM rooms WHERE id = :id");
         $stmt->execute(['id' => $roomId]);
