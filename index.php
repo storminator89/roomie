@@ -75,7 +75,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                             <a href="admin_rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white <?php echo $current_page == 'admin_rooms.php' ? 'border-yellow-400' : 'border-transparent'; ?>">
                                 <i class="fas fa-tools"></i>&nbsp;Raumverwaltung
                             </a>
-                            <a href="admin_permissions.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white border-yellow-400">
+                            <a href="admin_permissions.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white <?php echo $current_page == 'admin_permissions.php' ? 'border-yellow-400' : 'border-transparent'; ?>">
                                 <i class="fas fa-tools"></i>&nbsp;Berechtigungen
                             </a>
                         <?php endif; ?>
@@ -115,6 +115,8 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                 <a href="index.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium text-white <?php echo $current_page == 'index.php' ? 'bg-gray-900 border-yellow-400' : 'border-transparent'; ?>"><i class="fas fa-tachometer-alt"></i>&nbsp;Dashboard</a>
                 <a href="bookings.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium text-white <?php echo $current_page == 'bookings.php' ? 'bg-gray-900 border-yellow-400' : 'border-transparent'; ?>"><i class="fas fa-calendar-alt"></i>&nbsp;Buchungen</a>
                 <a href="rooms.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium text-white <?php echo $current_page == 'rooms.php' ? 'bg-gray-900 border-yellow-400' : 'border-transparent'; ?>"><i class="fas fa-door-open"></i>&nbsp;Räume</a>
+                <a href="admin_rooms.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium text-white <?php echo $current_page == 'rooms.php' ? 'bg-gray-900 border-yellow-400' : 'border-transparent'; ?>"><i class="fas fa-door-open"></i>&nbsp;Raumverwaltung</a>
+                <a href="admin_permissions.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium text-white <?php echo $current_page == 'rooms.php' ? 'bg-gray-900 border-yellow-400' : 'border-transparent'; ?>"><i class="fas fa-tools"></i>&nbsp;Berechtigungen</a>
             </div>
             <div class="pt-4 pb-3 border-t border-gray-200">
                 <div class="flex items-center px-4">
