@@ -34,7 +34,6 @@ function getMonthlyBookings($db, $year, $month, $roomId)
     $stmt->execute(['year' => $year, 'month' => sprintf('%02d', $month), 'room_id' => $roomId]);
     return $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
 }
-
 ?>
 
 <!DOCTYPE html>
@@ -154,40 +153,55 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                 </div>
             <?php endif; ?>
 
-            <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300 mb-8">
-                <div class="flex flex-row items-center justify-between p-4 bg-yellow-50 text-gray-800 border-b border-yellow-300">
-                    <h2 class="text-xl font-semibold" x-text="currentMonthYear"></h2>
-                    <div class="space-x-2">
-                        <button @click="previousMonth" class="text-gray-600 hover:text-gray-800">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="15 18 9 12 15 6"></polyline>
-                            </svg>
-                        </button>
-                        <button @click="nextMonth" class="text-gray-600 hover:text-gray-800">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="9 18 15 12 9 6"></polyline>
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300 col-span-1">
+                    <div class="flex flex-row items-center justify-between p-4 bg-yellow-50 text-gray-800 border-b border-yellow-300">
+                        <h3 class="text-xl font-semibold">Raumplan</h3>
+                    </div>
+                    <div class="p-4">
+                        <button onclick="openPopup('2OG')" class="w-full h-32 flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors duration-200 rounded-md">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                             </svg>
                         </button>
                     </div>
                 </div>
-                <div class="p-4">
-                    <div class="grid grid-cols-7 gap-1 text-center text-gray-600">
-                        <template x-for="day in ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']">
-                            <div class="font-bold text-sm" x-text="day"></div>
-                        </template>
-                        <template x-for="blankday in blankDays">
-                            <div class="p-2"></div>
-                        </template>
-                        <template x-for="date in daysInMonth">
-                            <div @click="selectDate(date)" :class="{
-                        'text-blue-600': isToday(date),
-                        'bg-yellow-100': isInSelectedRange(date),
-                        'bg-red-200': isBooked(date),
-                        'hover:bg-yellow-50': !isInSelectedRange(date) && !isBooked(date)
-                    }" class="p-2 text-center cursor-pointer transition-colors duration-200">
-                                <span x-text="date"></span>
-                            </div>
-                        </template>
+
+                <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300 col-span-1">
+                    <div class="flex flex-row items-center justify-between p-4 bg-yellow-50 text-gray-800 border-b border-yellow-300">
+                        <h2 class="text-xl font-semibold" x-text="currentMonthYear"></h2>
+                        <div class="space-x-2">
+                            <button @click="previousMonth" class="text-gray-600 hover:text-gray-800">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                            </button>
+                            <button @click="nextMonth" class="text-gray-600 hover:text-gray-800">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <div class="grid grid-cols-7 gap-1 text-center text-gray-600">
+                            <template x-for="day in ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']">
+                                <div class="font-bold text-sm" x-text="day"></div>
+                            </template>
+                            <template x-for="blankday in blankDays">
+                                <div class="p-2"></div>
+                            </template>
+                            <template x-for="date in daysInMonth">
+                                <div @click="selectDate(date)" :class="{
+                'text-blue-600': isToday(date),
+                'bg-yellow-100': isInSelectedRange(date),
+                'bg-red-200': isBooked(date),
+                'hover:bg-yellow-50': !isInSelectedRange(date) && !isBooked(date)
+            }" class="p-2 text-center cursor-pointer transition-colors duration-200">
+                                    <span x-text="date"></span>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -264,44 +278,6 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                 </form>
             </div>
 
-            <div class="grid grid-cols-2 gap-4 mb-8">
-                <div class="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200">
-                    <div class="p-3 bg-gray-50 border-b border-gray-200">
-                        <h3 class="text-sm font-medium text-gray-700 flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-yellow-500">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                                <circle cx="12" cy="10" r="3"></circle>
-                            </svg>
-                            Grundriss 2. OG
-                        </h3>
-                    </div>
-                    <div class="p-3">
-                        <button @click="openFloorPlan('2OG')" class="w-full h-32 flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors duration-200 rounded-md">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-                <div class="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200">
-                    <div class="p-3 bg-gray-50 border-b border-gray-200">
-                        <h3 class="text-sm font-medium text-gray-700 flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-yellow-500">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                                <circle cx="12" cy="10" r="3"></circle>
-                            </svg>
-                            Grundriss 3. OG
-                        </h3>
-                    </div>
-                    <div class="p-3">
-                        <button @click="openFloorPlan('3OG')" class="w-full h-32 flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors duration-200 rounded-md">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </div>
 
             <div x-show="showFloorPlanPopup" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center" x-cloak>
                 <div class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full m-4" @click.away="showFloorPlanPopup = false">
@@ -314,7 +290,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                         </button>
                     </div>
                     <div class="p-6">
-                        <iframe :src="'raumplan.html'" class="w-full h-[80vh] border-none"></iframe>
+                        <iframe id="floorPlanIframe" class="w-full h-[80vh] border-none"></iframe>
                     </div>
                 </div>
             </div>
@@ -340,34 +316,22 @@ function getMonthlyBookings($db, $year, $month, $roomId)
 
         let popup = null;
 
+        function openPopup(floor) {
+            const width = screen.width * 0.9;
+            const height = screen.height * 0.9;
+            const left = (screen.width - width) / 2;
+            const top = (screen.height - height) / 2;
+
+            popup = window.open('raumplan.html?floor=' + floor, 'PopupWindow', `width=${width},height=${height},top=${top},left=${left}`);
+        }
 
         window.addEventListener('message', function(event) {
             if (event.data.type === 'roomSelected') {
                 const selectedWorkspace = document.getElementById('selectedWorkspace');
-                if (selectedWorkspace) {
-                    selectedWorkspace.value = event.data.roomId;
-
-                    // Finden und aktualisieren Sie die ausgewählte Option
-                    const selectedOption = Array.from(selectedWorkspace.options).find(option => option.value == event.data.roomId);
-                    if (selectedOption) {
-                        selectedOption.selected = true;
-                    } else {
-                        console.warn('Selected room option not found in dropdown');
-                    }
-
-                    // Trigger the change event to update any dependent logic
-                    const changeEvent = new Event('change');
-                    selectedWorkspace.dispatchEvent(changeEvent);
-
-                    // Informieren Sie den Benutzer
-                    alert(`Raum "${event.data.roomName}" wurde für die Buchung ausgewählt.`);
-
-                    // Schließen Sie das Popup, falls es noch offen ist
-                    if (popup && !popup.closed) {
-                        popup.close();
-                    }
-                } else {
-                    console.error('selectedWorkspace element not found');
+                selectedWorkspace.value = event.data.roomId;
+                selectedWorkspace.dispatchEvent(new Event('change'));
+                if (popup) {
+                    popup.close();
                 }
             }
         });
