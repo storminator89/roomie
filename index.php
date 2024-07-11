@@ -153,131 +153,132 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                 </div>
             <?php endif; ?>
 
-            <div class="grid grid-cols-2 gap-4 mb-8">
-                <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300 col-span-1">
-                    <div class="flex flex-row items-center justify-between p-4 bg-yellow-50 text-gray-800 border-b border-yellow-300">
-                        <h3 class="text-xl font-semibold">Raumplan</h3>
-                    </div>
-                    <div class="p-4">
-                        <button onclick="openPopup('2OG')" class="w-full h-32 flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors duration-200 rounded-md">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300 col-span-1">
-                    <div class="flex flex-row items-center justify-between p-4 bg-yellow-50 text-gray-800 border-b border-yellow-300">
-                        <h2 class="text-xl font-semibold" x-text="currentMonthYear"></h2>
-                        <div class="space-x-2">
-                            <button @click="previousMonth" class="text-gray-600 hover:text-gray-800">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                            </button>
-                            <button @click="nextMonth" class="text-gray-600 hover:text-gray-800">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="9 18 15 12 9 6"></polyline>
+            <div class="container mx-auto px-4 py-8">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+                    <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300">
+                        <div class="flex flex-row items-center justify-between p-4 bg-yellow-50 text-gray-800 border-b border-yellow-300">
+                            <h3 class="text-xl font-semibold">Raumplan</h3>
+                        </div>
+                        <div class="p-4">
+                            <button onclick="openPopup('2OG')" class="w-full h-32 flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors duration-200 rounded-md">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                                 </svg>
                             </button>
                         </div>
                     </div>
-                    <div class="p-4">
-                        <div class="grid grid-cols-7 gap-1 text-center text-gray-600">
-                            <template x-for="day in ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']">
-                                <div class="font-bold text-sm" x-text="day"></div>
-                            </template>
-                            <template x-for="blankday in blankDays">
-                                <div class="p-2"></div>
-                            </template>
-                            <template x-for="date in daysInMonth">
-                                <div @click="selectDate(date)" :class="{
-                'text-blue-600': isToday(date),
-                'bg-yellow-100': isInSelectedRange(date),
-                'bg-red-200': isBooked(date),
-                'hover:bg-yellow-50': !isInSelectedRange(date) && !isBooked(date)
-            }" class="p-2 text-center cursor-pointer transition-colors duration-200">
-                                    <span x-text="date"></span>
-                                </div>
-                            </template>
+
+                    <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300">
+                        <div class="flex flex-row items-center justify-between p-4 bg-yellow-50 text-gray-800 border-b border-yellow-300">
+                            <h2 class="text-xl font-semibold" x-text="currentMonthYear"></h2>
+                            <div class="space-x-2">
+                                <button @click="previousMonth" class="text-gray-600 hover:text-gray-800">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="15 18 9 12 15 6"></polyline>
+                                    </svg>
+                                </button>
+                                <button @click="nextMonth" class="text-gray-600 hover:text-gray-800">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="p-4">
+                            <div class="grid grid-cols-7 gap-1 text-center text-gray-600">
+                                <template x-for="day in ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']">
+                                    <div class="font-bold text-sm" x-text="day"></div>
+                                </template>
+                                <template x-for="blankday in blankDays">
+                                    <div class="p-2"></div>
+                                </template>
+                                <template x-for="date in daysInMonth">
+                                    <div @click="selectDate(date)" :class="{
+                    'text-blue-600': isToday(date),
+                    'bg-yellow-100': isInSelectedRange(date),
+                    'bg-red-200': isBooked(date),
+                    'hover:bg-yellow-50': !isInSelectedRange(date) && !isBooked(date)
+                }" class="p-2 text-center cursor-pointer transition-colors duration-200">
+                                        <span x-text="date"></span>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Hervorgehobener Hinweis für den Benutzer -->
-            <div class="mb-4 p-4 bg-yellow-100 border-l-4 border-yellow-500">
-                <p class="text-lg font-semibold text-yellow-800">Hinweis:</p>
-                <p class="text-yellow-700">Bitte wählen Sie einen Zeitraum im Kalender aus, indem Sie den Start- und Endtermin anklicken.</p>
-            </div>
+                <!-- Hervorgehobener Hinweis für den Benutzer -->
+                <div class="mb-4 p-4 bg-yellow-100 border-l-4 border-yellow-500">
+                    <p class="text-lg font-semibold text-yellow-800">Hinweis:</p>
+                    <p class="text-yellow-700">Bitte wählen Sie einen Zeitraum im Kalender aus, indem Sie den Start- und Endtermin anklicken.</p>
+                </div>
 
-            <div class="mb-4">
-                <p class="text-sm text-gray-600">Ausgewählter Zeitraum:</p>
-                <p class="font-semibold" x-text="selectedDateRange"></p>
-            </div>
+                <div class="mb-4">
+                    <p class="text-sm text-gray-600">Ausgewählter Zeitraum:</p>
+                    <p class="font-semibold" x-text="selectedDateRange"></p>
+                </div>
 
-            <div class="mb-4">
-                <label for="selectedWorkspace" class="block text-sm font-medium text-gray-700"><i class="fas fa-door-open"></i>&nbsp;Raum</label>
-                <select id="selectedWorkspace" name="selectedWorkspace" class="w-full bg-white border border-gray-300 rounded-md p-2" x-model="selectedWorkspace" required @change="fetchBookings">
-                    <option value="" disabled selected>Raum auswählen</option>
-                    <?php while ($room = $rooms->fetch(PDO::FETCH_ASSOC)) : ?>
-                        <option value="<?= htmlspecialchars($room['id']) ?>">
-                            <?= htmlspecialchars($room['name'] . ' (' . $room['type'] . ', Kapazität: ' . $room['capacity'] . ')') ?>
-                        </option>
-                    <?php endwhile; ?>
-                </select>
-            </div>
+                <div class="mb-4">
+                    <label for="selectedWorkspace" class="block text-sm font-medium text-gray-700"><i class="fas fa-door-open"></i>&nbsp;Raum</label>
+                    <select id="selectedWorkspace" name="selectedWorkspace" class="w-full bg-white border border-gray-300 rounded-md p-2" x-model="selectedWorkspace" required @change="fetchBookings">
+                        <option value="" disabled selected>Raum auswählen</option>
+                        <?php while ($room = $rooms->fetch(PDO::FETCH_ASSOC)) : ?>
+                            <option value="<?= htmlspecialchars($room['id']) ?>">
+                                <?= htmlspecialchars($room['name'] . ' (' . $room['type'] . ', Kapazität: ' . $room['capacity'] . ')') ?>
+                            </option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
 
-            <div class="mb-4" x-show="selectedWorkspace && startDate && endDate">
-                <h3 class="text-sm font-medium text-gray-700"><i class="fas fa-calendar-check"></i>&nbsp;Buchungen:</h3>
-                <table class="min-w-full bg-white">
-                    <thead>
-                        <tr>
-                            <th class="py-2 text-left px-4"><i class="fas fa-calendar-day"></i>&nbsp;Datum</th>
-                            <th class="py-2 text-left px-4"><i class="fas fa-clock"></i>&nbsp;Startzeit</th>
-                            <th class="py-2 text-left px-4"><i class="fas fa-clock"></i>&nbsp;Endzeit</th>
-                            <th class="py-2 text-left px-4"><i class="fas fa-user"></i>&nbsp;Name</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="(booking, index) in filteredBookings" :key="index">
+                <div class="mb-4" x-show="selectedWorkspace && startDate && endDate">
+                    <h3 class="text-sm font-medium text-gray-700"><i class="fas fa-calendar-check"></i>&nbsp;Buchungen:</h3>
+                    <table class="min-w-full bg-white">
+                        <thead>
                             <tr>
-                                <td class="border px-4 py-2" x-text="formatDateToGerman(booking.date)"></td>
-                                <td class="border px-4 py-2" x-text="booking.start_time"></td>
-                                <td class="border px-4 py-2" x-text="booking.end_time"></td>
-                                <td class="border px-4 py-2" x-text="booking.user_name"></td>
+                                <th class="py-2 text-left px-4"><i class="fas fa-calendar-day"></i>&nbsp;Datum</th>
+                                <th class="py-2 text-left px-4"><i class="fas fa-clock"></i>&nbsp;Startzeit</th>
+                                <th class="py-2 text-left px-4"><i class="fas fa-clock"></i>&nbsp;Endzeit</th>
+                                <th class="py-2 text-left px-4"><i class="fas fa-user"></i>&nbsp;Name</th>
                             </tr>
-                        </template>
-                        <tr x-show="filteredBookings.length === 0">
-                            <td colspan="4" class="border px-4 py-2 text-center">Keine Buchungen für den ausgewählten Zeitraum.</td>
-                        </tr>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            <template x-for="(booking, index) in filteredBookings" :key="index">
+                                <tr>
+                                    <td class="border px-4 py-2" x-text="formatDateToGerman(booking.date)"></td>
+                                    <td class="border px-4 py-2" x-text="booking.start_time"></td>
+                                    <td class="border px-4 py-2" x-text="booking.end_time"></td>
+                                    <td class="border px-4 py-2" x-text="booking.user_name"></td>
+                                </tr>
+                            </template>
+                            <tr x-show="filteredBookings.length === 0">
+                                <td colspan="4" class="border px-4 py-2 text-center">Keine Buchungen für den ausgewählten Zeitraum.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex space-x-3 mb-8">
+                    <form id="bookingForm" action="process_booking.php" method="POST" class="flex-1">
+                        <input type="hidden" name="start_date" x-bind:value="startDate ? formatDateToUTC(startDate) : ''">
+                        <input type="hidden" name="end_date" x-bind:value="endDate ? formatDateToUTC(endDate) : ''">
+                        <input type="hidden" name="selectedWorkspace" x-bind:value="selectedWorkspace">
+
+                        <div class="mb-4">
+                            <label for="time_period" class="block text-sm font-medium text-gray-700"><i class="fas fa-clock"></i>&nbsp;Zeitspanne</label>
+                            <select id="time_period" name="time_period" x-model="selectedTimePeriod" class="w-full bg-white border border-gray-300 rounded-md p-2" required>
+                                <option value="">Zeitspanne auswählen</option>
+                                <option value="ganzerTag">Ganzer Tag (09:00 - 17:00)</option>
+                                <option value="vormittags">Vormittags (09:00 - 12:00)</option>
+                                <option value="nachmittags">Nachmittags (13:00 - 17:00)</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 text-white rounded-md p-2 transition-colors duration-200 flex items-center justify-center">
+                            <i class="fas fa-book"></i>&nbsp;Buchen
+                        </button>
+                    </form>
+                </div>
             </div>
-
-            <div class="flex space-x-3 mb-8">
-                <form id="bookingForm" action="process_booking.php" method="POST" class="flex-1">
-                    <input type="hidden" name="start_date" x-bind:value="startDate ? formatDateToUTC(startDate) : ''">
-                    <input type="hidden" name="end_date" x-bind:value="endDate ? formatDateToUTC(endDate) : ''">
-                    <input type="hidden" name="selectedWorkspace" x-bind:value="selectedWorkspace">
-
-                    <div class="mb-4">
-                        <label for="time_period" class="block text-sm font-medium text-gray-700"><i class="fas fa-clock"></i>&nbsp;Zeitspanne</label>
-                        <select id="time_period" name="time_period" x-model="selectedTimePeriod" class="w-full bg-white border border-gray-300 rounded-md p-2" required>
-                            <option value="">Zeitspanne auswählen</option>
-                            <option value="ganzerTag">Ganzer Tag (09:00 - 17:00)</option>
-                            <option value="vormittags">Vormittags (09:00 - 12:00)</option>
-                            <option value="nachmittags">Nachmittags (13:00 - 17:00)</option>
-                        </select>
-                    </div>
-
-                    <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 text-white rounded-md p-2 transition-colors duration-200 flex items-center justify-center">
-                        <i class="fas fa-book"></i>&nbsp;Buchen
-                    </button>
-                </form>
-            </div>
-
 
             <div x-show="showFloorPlanPopup" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center" x-cloak>
                 <div class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full m-4" @click.away="showFloorPlanPopup = false">
