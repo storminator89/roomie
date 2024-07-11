@@ -42,6 +42,15 @@
 
         <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
             <h2 class="text-2xl font-semibold mb-4 text-gray-700">Raumplan</h2>
+            <div class="mb-4">
+                <label for="dateInput" class="mr-2">Datum:</label>
+                <input type="date" id="dateInput" class="border rounded px-2 py-1">
+                <button id="refreshDate"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded ml-2">
+                    Aktualisieren
+                </button>
+            </div>
+            <input type="hidden" id="roomId" name="roomId">
             <div class="mb-4 flex items-center admin-only">
                 <label for="gridRows" class="mr-2">Zeilen:</label>
                 <input type="number" id="gridRows" min="1" max="20" value="4"
@@ -126,17 +135,17 @@
                         </label>
                         <label class="inline-flex items-center">
                             <input type="checkbox" class="form-checkbox text-indigo-600" name="amenities"
-                                value="projector">
-                            <span class="ml-2 text-gray-700">Projektor</span>
+                                value="docking-station">
+                            <span class="ml-2 text-gray-700">Docking Station</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="form-checkbox text-indigo-600" name="amenities" value="desk">
+                            <span class="ml-2 text-gray-700">Schreibtisch</span>
                         </label>
                         <label class="inline-flex items-center">
                             <input type="checkbox" class="form-checkbox text-indigo-600" name="amenities"
-                                value="whiteboard">
-                            <span class="ml-2 text-gray-700">Whiteboard</span>
-                        </label>
-                        <label class="inline-flex items-center">
-                            <input type="checkbox" class="form-checkbox text-indigo-600" name="amenities" value="ac">
-                            <span class="ml-2 text-gray-700">Klimaanlage</span>
+                                value="webcam">
+                            <span class="ml-2 text-gray-700">Webcam</span>
                         </label>
                     </div>
                 </div>
@@ -168,11 +177,11 @@
         let gridConfig = null;
 
         const roomTypes = {
-            'mediaroom': { name: 'Mediaraum', classes: 'bg-blue-300 text-blue-800' },
-            'office': { name: 'Büro', classes: 'bg-green-300 text-green-800' },
-            'open-office': { name: 'Großraumbüro', classes: 'bg-yellow-300 text-yellow-800' },
-            'spez-abt-buero': { name: 'Spez. Abt. Büro', classes: 'bg-purple-300 text-purple-800' },
-            'default': { name: 'Sonstiger Raum', classes: 'bg-gray-300 text-gray-800' }
+            'mediaroom': { name: 'Mediaraum', classes: 'bg-blue-100 text-blue-800 border border-blue-300' },
+            'office': { name: 'Büro', classes: 'bg-green-100 text-green-800 border border-green-300' },
+            'open-office': { name: 'Großraumbüro', classes: 'bg-yellow-100 text-yellow-800 border border-yellow-300' },
+            'spez-abt-buero': { name: 'Spez. Abt. Büro', classes: 'bg-purple-100 text-purple-800 border border-purple-300' },
+            'default': { name: 'Sonstiger Raum', classes: 'bg-gray-100 text-gray-800 border border-gray-300' }
         };
 
         function checkUserStatus() {
@@ -199,117 +208,147 @@
             });
         }
 
-        function loadInitialData() {
-            fetch('load_grid.php')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        console.log('Loaded data:', data);
-                        gridConfig = data.data.gridConfig;
-                        rooms = data.data.rooms.map(room => ({
-                            ...room,
-                            amenities: room.equipment ? JSON.parse(room.equipment) : []
-                        }));
+        async function loadInitialData() {
+            try {
+                const response = await fetch('load_grid.php');
+                const data = await response.json();
 
-                        console.log('Loaded rooms:', rooms);
+                if (data.success) {
+                    console.log('Loaded data:', data);
+                    gridConfig = data.data.gridConfig;
+                    rooms = data.data.rooms.map(room => ({
+                        ...room,
+                        amenities: room.equipment ? JSON.parse(room.equipment) : []
+                    }));
 
-                        if (gridConfig) {
-                            gridRowsInput.value = gridConfig.rows;
-                            gridColsInput.value = gridConfig.cols;
-                            updateGrid();
+                    console.log('Loaded rooms:', rooms);
 
-                            let roomLayout;
-                            try {
-                                roomLayout = JSON.parse(gridConfig.room_layout);
-                                console.log('Parsed room layout:', roomLayout);
-                            } catch (error) {
-                                console.error('Error parsing room_layout:', error);
-                                roomLayout = [];
-                            }
+                    if (gridConfig) {
+                        gridRowsInput.value = gridConfig.rows;
+                        gridColsInput.value = gridConfig.cols;
+                        updateGrid();
 
-                            roomLayout.forEach((roomId, index) => {
-                                if (roomId) {
-                                    const room = rooms.find(r => r.id.toString() === roomId.toString());
-                                    if (room) {
-                                        console.log('Placing room:', room, 'at index:', index);
-                                        const roomElement = createRoomElement(room);
-                                        if (floorplan.children[index]) {
-                                            floorplan.children[index].innerHTML = '';
-                                            floorplan.children[index].appendChild(roomElement);
-                                            console.log('Room placed successfully');
-                                        } else {
-                                            console.error('Grid cell not found at index:', index);
-                                        }
-                                    } else {
-                                        console.log('Room not found for id:', roomId);
-                                    }
-                                }
-                            });
-                        } else {
-                            updateGrid();
+                        let roomLayout;
+                        try {
+                            roomLayout = JSON.parse(gridConfig.room_layout);
+                            console.log('Parsed room layout:', roomLayout);
+                        } catch (error) {
+                            console.error('Error parsing room_layout:', error);
+                            roomLayout = [];
                         }
 
-                        initializeRooms();
-                        updateGridVisual();
-                        logGridState();
+                        // Laden Sie Buchungen für das aktuelle Datum
+                        const currentDate = new Date().toISOString().split('T')[0];
+                        const bookings = await loadBookingsForDate(currentDate);
+                        console.log('Loaded bookings:', bookings);
+
+                        roomLayout.forEach((roomId, index) => {
+                            if (roomId) {
+                                const room = rooms.find(r => r.id.toString() === roomId.toString());
+                                if (room) {
+                                    console.log('Placing room:', room, 'at index:', index);
+                                    const roomElement = createRoomElement(room, bookings);
+                                    if (floorplan.children[index]) {
+                                        floorplan.children[index].innerHTML = '';
+                                        floorplan.children[index].appendChild(roomElement);
+                                        console.log('Room placed successfully');
+                                    } else {
+                                        console.error('Grid cell not found at index:', index);
+                                    }
+                                } else {
+                                    console.log('Room not found for id:', roomId);
+                                }
+                            }
+                        });
                     } else {
-                        console.log('Failed to load data:', data.message);
                         updateGrid();
                     }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
+
+                    initializeRooms();
+                    updateGridVisual();
+                    logGridState();
+                } else {
+                    console.log('Failed to load data:', data.message);
                     updateGrid();
-                });
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                updateGrid();
+            }
         }
 
-        function createRoomElement(room) {
-            console.log('Creating room element:', room); // Debugging
+        function createRoomElement(room, bookings = []) {
             const roomTypeInfo = roomTypes[room.type] || roomTypes['default'];
             const div = document.createElement('div');
-            div.className = `room text-sm rounded-lg flex flex-col items-center justify-center p-4 ${roomTypeInfo.classes} shadow-md relative`;
+            div.className = `room rounded-lg flex flex-col p-4 ${roomTypeInfo.classes} shadow-md relative overflow-hidden transition-all duration-300 hover:shadow-lg`;
+            div.style.minHeight = '180px';
             div.draggable = isAdmin;
             div.dataset.roomName = room.name;
             div.dataset.roomId = room.id;
             div.dataset.roomType = room.type;
 
+            // Raumname und Nummer
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'mb-2 text-center';
+
             const nameSpan = document.createElement('span');
             nameSpan.textContent = room.name;
-            nameSpan.className = 'font-bold mb-1';
-            div.appendChild(nameSpan);
+            nameSpan.className = 'font-bold text-lg';
+            headerDiv.appendChild(nameSpan);
 
             const numberSpan = document.createElement('span');
-            numberSpan.textContent = room.number || 'Keine Nummer';
-            numberSpan.className = 'text-xs mb-1';
-            div.appendChild(numberSpan);
+            numberSpan.textContent = room.number ? ` (${room.number})` : '';
+            numberSpan.className = 'text-sm text-gray-600 ml-1';
+            headerDiv.appendChild(numberSpan);
 
+            div.appendChild(headerDiv);
+
+            // Kapazität
             const capacitySpan = document.createElement('span');
             capacitySpan.textContent = `Kapazität: ${room.capacity}`;
-            capacitySpan.className = 'text-xs mb-1';
+            capacitySpan.className = 'text-sm mb-2 text-center';
             div.appendChild(capacitySpan);
 
-            const amenitiesSpan = document.createElement('span');
-            amenitiesSpan.textContent = 'Ausstattung';
-            amenitiesSpan.className = 'text-xs mb-2 cursor-pointer underline';
-            amenitiesSpan.addEventListener('mouseenter', (e) => {
-                const tooltip = document.createElement('div');
-                tooltip.className = 'absolute bg-white border border-gray-300 rounded p-2 z-10 text-xs';
-                tooltip.style.bottom = '100%';
-                tooltip.style.left = '50%';
-                tooltip.style.transform = 'translateX(-50%)';
-                tooltip.innerHTML = room.amenities.map(getAmenityName).join('<br>');
-                div.appendChild(tooltip);
-            });
-            amenitiesSpan.addEventListener('mouseleave', () => {
-                const tooltip = div.querySelector('.absolute');
+            // Buchungsinformationen
+            const roomBookings = bookings.filter(booking => booking.room === room.name);
+            if (roomBookings.length > 0) {
+                const bookingInfo = document.createElement('div');
+                bookingInfo.className = 'text-xs mt-2 bg-yellow-100 p-2 rounded';
+                bookingInfo.innerHTML = '<span class="font-semibold block mb-1">Buchungen:</span>' +
+                    roomBookings.map(b =>
+                        `<span class="font-bold">${b.user_name}</span>: ${b.start_time.substr(0, 5)}-${b.end_time.substr(0, 5)}`
+                    ).join('<br>');
+                div.appendChild(bookingInfo);
+            }
 
-                if (tooltip) tooltip.remove();
-            });
-            div.appendChild(amenitiesSpan);
+            // Ausstattung als Icons
+            if (room.amenities && room.amenities.length > 0) {
+                const amenitiesDiv = document.createElement('div');
+                amenitiesDiv.className = 'flex justify-center gap-2 mt-2';
+                room.amenities.forEach(amenity => {
+                    const iconWrapper = document.createElement('div');
+                    iconWrapper.className = 'relative';
+
+                    const icon = document.createElement('i');
+                    icon.className = `fas fa-${getAmenityIcon(amenity)} text-gray-600 cursor-pointer`;
+                    iconWrapper.appendChild(icon);
+
+                    const tooltip = document.createElement('div');
+                    tooltip.className = 'absolute hidden bg-black text-white text-xs rounded py-1 px-2 bottom-full left-1/2 transform -translate-x-1/2 mb-1';
+                    tooltip.textContent = getAmenityName(amenity);
+                    iconWrapper.appendChild(tooltip);
+
+                    iconWrapper.addEventListener('mouseenter', () => tooltip.classList.remove('hidden'));
+                    iconWrapper.addEventListener('mouseleave', () => tooltip.classList.add('hidden'));
+
+                    amenitiesDiv.appendChild(iconWrapper);
+                });
+                div.appendChild(amenitiesDiv);
+            }
 
             if (isAdmin) {
                 const buttonsDiv = document.createElement('div');
-                buttonsDiv.className = 'flex gap-2 mt-2';
+                buttonsDiv.className = 'flex gap-2 mt-2 justify-center';
 
                 const editBtn = document.createElement('button');
                 editBtn.innerHTML = '<i class="fas fa-edit"></i>';
@@ -337,6 +376,41 @@
             }
 
             return div;
+        }
+
+        // Hilfsfunktionen für Ausstattungs-Icons und -Namen
+        function getAmenityIcon(amenity) {
+            const icons = {
+                'wifi': 'wifi',
+                'docking-station': 'plug',
+                'desk': 'desktop',
+                'webcam': 'video'
+            };
+            return icons[amenity] || 'question';
+        }
+
+        function getAmenityName(amenity) {
+            const names = {
+                'wifi': 'WLAN',
+                'docking-station': 'Docking Station',
+                'desk': 'Schreibtisch',
+                'webcam': 'Webcam'
+            };
+            return names[amenity] || amenity;
+        }
+
+        async function loadBookingsForDate(date) {
+            try {
+                const response = await fetch(`get_bookings.php?start_date=${date}&end_date=${date}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const bookings = await response.json();
+                return bookings;
+            } catch (error) {
+                console.error('Error loading bookings:', error);
+                return [];
+            }
         }
 
         function getAmenityName(amenity) {
@@ -455,6 +529,7 @@
 
         function showRoomModal(room = null) {
             const modalTitle = document.getElementById('modalTitle');
+            const roomIdInput = document.getElementById('roomId');
             const roomNameInput = document.getElementById('roomName');
             const roomNumberInput = document.getElementById('roomNumber');
             const roomTypeSelect = document.getElementById('roomType');
@@ -463,6 +538,7 @@
 
             if (room) {
                 modalTitle.textContent = 'Raum bearbeiten';
+                roomIdInput.value = room.id;
                 roomNameInput.value = room.name;
                 roomNumberInput.value = room.number;
                 roomTypeSelect.value = room.type;
@@ -472,6 +548,7 @@
                 });
             } else {
                 modalTitle.textContent = 'Neuen Raum hinzufügen';
+                roomIdInput.value = '';
                 roomNameInput.value = '';
                 roomNumberInput.value = '';
                 roomTypeSelect.value = 'office';
@@ -490,46 +567,66 @@
 
         function addOrUpdateRoom(e) {
             e.preventDefault();
+            const roomId = document.getElementById('roomId').value; // Fügen Sie ein verstecktes Feld für die ID hinzu
             const roomName = document.getElementById('roomName').value;
             const roomNumber = document.getElementById('roomNumber').value;
             const roomType = document.getElementById('roomType').value;
             const roomCapacity = parseInt(document.getElementById('roomCapacity').value);
             const amenities = Array.from(document.querySelectorAll('input[name="amenities"]:checked')).map(cb => cb.value);
 
-            const newRoom = {
-                id: Date.now().toString(), // Temporäre ID für neue Räume
+            const roomData = {
                 name: roomName,
                 number: roomNumber,
                 type: roomType,
                 capacity: roomCapacity,
                 amenities: amenities,
-                grid_position: null // Neue Räume haben zunächst keine Grid-Position
+                grid_position: null // Wird nur für neue Räume verwendet
             };
 
-            // Senden Sie den neuen Raum an den Server
-            fetch('add_room.php', {
+            if (roomId) {
+                roomData.id = roomId;
+            }
+
+            const url = roomId ? 'update_room.php' : 'add_room.php';
+
+            fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(newRoom),
+                body: JSON.stringify(roomData),
             })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Aktualisieren Sie die ID mit der vom Server zurückgegebenen ID
-                        newRoom.id = data.roomId;
-                        rooms.push(newRoom);
-                        const roomElement = createRoomElement(newRoom);
-                        availableRooms.appendChild(roomElement);
+                        if (roomId) {
+                            // Aktualisieren des bestehenden Raums
+                            const index = rooms.findIndex(r => r.id.toString() === roomId);
+                            if (index !== -1) {
+                                rooms[index] = { ...rooms[index], ...roomData };
+                                // Aktualisieren des bestehenden Raumelements im Grid oder in availableRooms
+                                const existingRoomElement = document.querySelector(`[data-room-id="${roomId}"]`);
+                                if (existingRoomElement) {
+                                    const newRoomElement = createRoomElement(rooms[index]);
+                                    existingRoomElement.parentNode.replaceChild(newRoomElement, existingRoomElement);
+                                }
+                            }
+                        } else {
+                            // Hinzufügen eines neuen Raums
+                            const newRoom = { ...roomData, id: data.roomId };
+                            rooms.push(newRoom);
+                            const roomElement = createRoomElement(newRoom);
+                            availableRooms.appendChild(roomElement);
+                        }
                         hideRoomModal();
+                        updateGridVisual();
                     } else {
-                        alert('Fehler beim Hinzufügen des Raums: ' + data.message);
+                        alert('Fehler beim Speichern des Raums: ' + data.message);
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Fehler beim Hinzufügen des Raums');
+                    alert('Fehler beim Speichern des Raums');
                 });
         }
 
@@ -567,12 +664,12 @@
         }
 
         function updateGridVisual() {
-            floorplan.querySelectorAll('.grid-item').forEach((cell) => {                
+            floorplan.querySelectorAll('.grid-item').forEach((cell) => {
                 const existingCellNumber = cell.querySelector('.cell-number');
                 if (existingCellNumber) {
                     existingCellNumber.remove();
                 }
-               
+
                 cell.style.border = '1px solid #ccc';
                 cell.style.position = 'relative';
                 cell.style.minHeight = '100px';
@@ -626,6 +723,25 @@
             if (parseInt(gridColsInput.value) < 1) gridColsInput.value = 1;
             if (parseInt(gridColsInput.value) > 20) gridColsInput.value = 20;
         });
+
+        document.getElementById('refreshDate').addEventListener('click', () => {
+            const selectedDate = document.getElementById('dateInput').value;
+            changeDateAndRefresh(selectedDate);
+        });
+
+        document.getElementById('dateInput').valueAsDate = new Date();
+
+        function changeDateAndRefresh(date) {
+            loadBookingsForDate(date).then(bookings => {
+                rooms.forEach(room => {
+                    const roomElement = document.querySelector(`[data-room-id="${room.id}"]`);
+                    if (roomElement) {
+                        const newRoomElement = createRoomElement(room, bookings);
+                        roomElement.parentNode.replaceChild(newRoomElement, roomElement);
+                    }
+                });
+            });
+        }
 
         // Initialisierung
         checkUserStatus();
