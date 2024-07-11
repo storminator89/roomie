@@ -375,7 +375,25 @@
                 div.addEventListener('dragstart', dragStart);
             }
 
+            div.addEventListener('click', () => {
+                selectRoom(room);
+            });
+
             return div;
+        }
+
+        function selectRoom(room) {
+            if (confirm(`Möchten Sie den Raum "${room.name}" für die Buchung auswählen?`)) {
+                // Senden Sie eine Nachricht an die Elternseite
+                window.parent.postMessage({
+                    type: 'roomSelected',
+                    roomId: room.id,
+                    roomName: room.name
+                }, '*');
+
+                // Schließen Sie das aktuelle Fenster (Popup)
+                window.close();
+            }
         }
 
         // Hilfsfunktionen für Ausstattungs-Icons und -Namen

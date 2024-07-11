@@ -337,6 +337,40 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                 alert('Buchungen in der Vergangenheit sind nicht zulässig.');
             }
         });
+
+        let popup = null;
+
+
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'roomSelected') {
+                const selectedWorkspace = document.getElementById('selectedWorkspace');
+                if (selectedWorkspace) {
+                    selectedWorkspace.value = event.data.roomId;
+
+                    // Finden und aktualisieren Sie die ausgewählte Option
+                    const selectedOption = Array.from(selectedWorkspace.options).find(option => option.value == event.data.roomId);
+                    if (selectedOption) {
+                        selectedOption.selected = true;
+                    } else {
+                        console.warn('Selected room option not found in dropdown');
+                    }
+
+                    // Trigger the change event to update any dependent logic
+                    const changeEvent = new Event('change');
+                    selectedWorkspace.dispatchEvent(changeEvent);
+
+                    // Informieren Sie den Benutzer
+                    alert(`Raum "${event.data.roomName}" wurde für die Buchung ausgewählt.`);
+
+                    // Schließen Sie das Popup, falls es noch offen ist
+                    if (popup && !popup.closed) {
+                        popup.close();
+                    }
+                } else {
+                    console.error('selectedWorkspace element not found');
+                }
+            }
+        });
     </script>
     <script src="app.js"></script>
 </body>
