@@ -4,23 +4,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interaktiver Raumplan 2. OG</title>
+    <title>Interaktiver Raumplan</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .room {
+        .grid-item {
+            border: 2px dashed #e2e8f0;
+            border-radius: 1rem;
+            min-height: 80px;
             transition: all 0.3s ease;
-            cursor: move;
+        }
+
+        .grid-item.drag-over {
+            background-color: rgba(var(--room-color-rgb), 0.1);
+            border-color: var(--room-color);
+        }
+
+        .grid-item:not(:empty) {
+            border: none;
+        }
+
+        .room {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            background-color: white;
         }
 
         .room:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
         }
 
-        .grid-item {
-            border: 1px dashed #e2e8f0;
-            min-height: 80px;
+        .room::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 0.25rem;
+            background-color: var(--room-color);
+        }
+
+        .room-header {
+            background-color: var(--room-color);
+            color: white;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .room-name {
+            font-size: 1rem;
+            font-weight: bold;
+        }
+
+        .room-number {
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            border-radius: 0.25rem;
+        }
+
+        .room-type {
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+
+        .room-content {
+            padding: 1rem;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .room-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: #555;
+            margin-bottom: 0.5rem;
+        }
+
+        .room-capacity,
+        .amenities {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .amenity-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.5rem;
+            height: 1.5rem;
+            background-color: #f0f0f0;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .amenity-icon:hover {
+            background-color: #e0e0e0;
+        }
+
+        .bookings {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+            background-color: rgba(0, 0, 0, 0.05);
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .admin-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+
+        .admin-button {
+            padding: 0.25rem;
+            border-radius: 50%;
+            background-color: rgba(0, 0, 0, 0.1);
+            color: #333;
+            transition: all 0.2s ease;
+            font-size: 0.75rem;
+        }
+
+        .admin-button:hover {
+            background-color: rgba(0, 0, 0, 0.2);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .legend-color {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            }
+        }
+
+        .room.selectable {
+            cursor: pointer;
+            animation: pulse 2s infinite;
+        }
+
+        .favorite-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: #ccc;
+            transition: color 0.3s ease;
+        }
+
+        .favorite-icon.active {
+            color: gold;
+        }
+
+        .favorite-icon:hover {
+            color: gold;
         }
     </style>
 </head>
@@ -28,28 +199,72 @@
 <body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8">
         <h1 class="text-4xl font-bold mb-8 text-center text-gray-800">Interaktiver Raumplan 2. OG</h1>
-
-        <div class="bg-white rounded-lg shadow-lg p-6 mb-8 admin-only">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Verfügbare Räume</h2>
-            <div id="availableRooms" class="flex flex-wrap gap-4 mb-6">
-                <!-- Verfügbare Räume werden hier dynamisch hinzugefügt -->
-            </div>
-            <button id="addRoomBtn"
-                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full transition duration-300 ease-in-out transform hover:scale-105">
-                <i class="fas fa-plus mr-2"></i>Raum hinzufügen
-            </button>
-        </div>
-
         <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
             <h2 class="text-2xl font-semibold mb-4 text-gray-700">Raumplan</h2>
-            <div class="mb-4">
-                <label for="dateInput" class="mr-2">Datum:</label>
-                <input type="date" id="dateInput" class="border rounded px-2 py-1">
-                <button id="refreshDate"
-                    class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded ml-2">
-                    Aktualisieren
+            <div id="selectionHint"
+                class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4 rounded shadow-md">
+                <p class="font-bold">Raumauswahl</p>
+                <p>Bitte klicken Sie auf einen Raum, um ihn für Ihre Buchung auszuwählen. Mit der Datumsauswahl können
+                    Sie sehen wer zu welchen Zeiten den Raum gebucht hat.</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-8 admin-only">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-700">Verfügbare Räume</h2>
+                <div id="availableRooms" class="flex flex-wrap gap-4 mb-6">
+                    <!-- Verfügbare Räume werden hier dynamisch hinzugefügt -->
+                </div>
+                <button id="addRoomBtn"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full transition duration-300 ease-in-out transform hover:scale-105">
+                    <i class="fas fa-plus mr-2"></i>Raum hinzufügen
                 </button>
             </div>
+
+            <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Filter</h3>
+                <div class="space-y-4">
+                    <div class="relative">
+                        <input type="text" id="roomFilter" placeholder="Raumname oder -nummer"
+                            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd"
+                                    d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <div class="relative w-48">
+                            <input type="date" id="dateInput"
+                                class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd"
+                                        d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                        </div>
+                        <button id="refreshDate"
+                            class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out flex-shrink-0">
+                            Aktualisieren
+                        </button>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" id="availableOnly" class="form-checkbox h-5 w-5 text-blue-600">
+                            <span class="ml-2 text-gray-700">Nur verfügbare Räume</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" id="favoritesOnly" class="form-checkbox h-5 w-5 text-blue-600">
+                            <span class="ml-2 text-gray-700">Nur Favoriten</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+
             <input type="hidden" id="roomId" name="roomId">
             <div class="mb-4 flex items-center admin-only">
                 <label for="gridRows" class="mr-2">Zeilen:</label>
@@ -67,30 +282,16 @@
                     Grid speichern
                 </button>
             </div>
+
             <div id="floorplan" class="grid gap-4 bg-gray-50 p-4 rounded-lg">
                 <!-- Grid für den Raumplan -->
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-lg p-6 admin-only">
+        <div class="bg-white rounded-lg shadow-lg p-6 mt-8">
             <h2 class="text-2xl font-semibold mb-4 text-gray-700">Legende</h2>
-            <div class="flex flex-wrap gap-6">
-                <div class="flex items-center">
-                    <div class="w-6 h-6 bg-blue-300 mr-3 rounded"></div>
-                    <span class="text-gray-700">Mediaraum</span>
-                </div>
-                <div class="flex items-center">
-                    <div class="w-6 h-6 bg-green-300 mr-3 rounded"></div>
-                    <span class="text-gray-700">Büro</span>
-                </div>
-                <div class="flex items-center">
-                    <div class="w-6 h-6 bg-yellow-300 mr-3 rounded"></div>
-                    <span class="text-gray-700">Großraumbüro</span>
-                </div>
-                <div class="flex items-center">
-                    <div class="w-6 h-6 bg-purple-300 mr-3 rounded"></div>
-                    <span class="text-gray-700">Spez. Abt. Büro</span>
-                </div>
+            <div class="flex flex-wrap gap-4" id="roomTypeLegend">
+                <!-- Legende wird hier dynamisch hinzugefügt -->
             </div>
         </div>
     </div>
@@ -177,11 +378,11 @@
         let gridConfig = null;
 
         const roomTypes = {
-            'mediaroom': { name: 'Mediaraum', classes: 'bg-blue-100 text-blue-800 border border-blue-300' },
-            'office': { name: 'Büro', classes: 'bg-green-100 text-green-800 border border-green-300' },
-            'open-office': { name: 'Großraumbüro', classes: 'bg-yellow-100 text-yellow-800 border border-yellow-300' },
-            'spez-abt-buero': { name: 'Spez. Abt. Büro', classes: 'bg-purple-100 text-purple-800 border border-purple-300' },
-            'default': { name: 'Sonstiger Raum', classes: 'bg-gray-100 text-gray-800 border border-gray-300' }
+            'mediaroom': { name: 'Mediaraum', color: '#3b82f6' },
+            'office': { name: 'Büro', color: '#10b981' },
+            'open-office': { name: 'Großraumbüro', color: '#f59e0b' },
+            'spez-abt-buero': { name: 'Spez. Abt. Büro', color: '#8b5cf6' },
+            'default': { name: 'Sonstiger Raum', color: '#6b7280' }
         };
 
         function checkUserStatus() {
@@ -192,6 +393,7 @@
                     isLoggedIn = data.isLoggedIn;
                     updateUIForUserRole();
                     loadInitialData();
+                    createLegend();
                 })
                 .catch(error => console.error('Error:', error));
         }
@@ -228,43 +430,17 @@
                         gridColsInput.value = gridConfig.cols;
                         updateGrid();
 
-                        let roomLayout;
-                        try {
-                            roomLayout = JSON.parse(gridConfig.room_layout);
-                            console.log('Parsed room layout:', roomLayout);
-                        } catch (error) {
-                            console.error('Error parsing room_layout:', error);
-                            roomLayout = [];
-                        }
-
                         // Laden Sie Buchungen für das aktuelle Datum
                         const currentDate = new Date().toISOString().split('T')[0];
                         const bookings = await loadBookingsForDate(currentDate);
                         console.log('Loaded bookings:', bookings);
 
-                        roomLayout.forEach((roomId, index) => {
-                            if (roomId) {
-                                const room = rooms.find(r => r.id.toString() === roomId.toString());
-                                if (room) {
-                                    console.log('Placing room:', room, 'at index:', index);
-                                    const roomElement = createRoomElement(room, bookings);
-                                    if (floorplan.children[index]) {
-                                        floorplan.children[index].innerHTML = '';
-                                        floorplan.children[index].appendChild(roomElement);
-                                        console.log('Room placed successfully');
-                                    } else {
-                                        console.error('Grid cell not found at index:', index);
-                                    }
-                                } else {
-                                    console.log('Room not found for id:', roomId);
-                                }
-                            }
-                        });
+                        // Platzieren Sie alle Räume auf dem Grid
+                        placeAllRoomsOnGrid(rooms, bookings);
                     } else {
                         updateGrid();
                     }
 
-                    initializeRooms();
                     updateGridVisual();
                     logGridState();
                 } else {
@@ -277,82 +453,108 @@
             }
         }
 
+        function placeAllRoomsOnGrid(rooms, bookings) {
+            const gridCells = floorplan.children;
+            let cellIndex = 0;
+
+            rooms.forEach(room => {
+                if (cellIndex < gridCells.length) {
+                    const roomElement = createRoomElement(room, bookings);
+                    gridCells[cellIndex].innerHTML = '';
+                    gridCells[cellIndex].appendChild(roomElement);
+                    cellIndex++;
+                }
+            });
+        }
+
         function createRoomElement(room, bookings = []) {
             const roomTypeInfo = roomTypes[room.type] || roomTypes['default'];
             const div = document.createElement('div');
-            div.className = `room rounded-lg flex flex-col p-4 ${roomTypeInfo.classes} shadow-md relative overflow-hidden transition-all duration-300 hover:shadow-lg`;
-            div.style.minHeight = '180px';
+            div.className = `room`;
+            div.style.setProperty('--room-color', roomTypeInfo.color);
             div.draggable = isAdmin;
             div.dataset.roomName = room.name;
             div.dataset.roomId = room.id;
             div.dataset.roomType = room.type;
 
-            // Raumname und Nummer
-            const headerDiv = document.createElement('div');
-            headerDiv.className = 'mb-2 text-center';
+            // Header
+            const header = document.createElement('div');
+            header.className = 'room-header';
+            header.innerHTML = `
+        <div>
+            <h3 class="room-name">${room.name}</h3>
+            <div class="room-type">${roomTypeInfo.name}</div>
+        </div>
+        <div class="room-number">${room.number || 'N/A'}</div>
+    `;
+            div.appendChild(header);
 
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = room.name;
-            nameSpan.className = 'font-bold text-lg';
-            headerDiv.appendChild(nameSpan);
+            // Room Content
+            const content = document.createElement('div');
+            content.className = 'room-content';
 
-            const numberSpan = document.createElement('span');
-            numberSpan.textContent = room.number ? ` (${room.number})` : '';
-            numberSpan.className = 'text-sm text-gray-600 ml-1';
-            headerDiv.appendChild(numberSpan);
-
-            div.appendChild(headerDiv);
+            // Room Info
+            const info = document.createElement('div');
+            info.className = 'room-info';
 
             // Kapazität
-            const capacitySpan = document.createElement('span');
-            capacitySpan.textContent = `Kapazität: ${room.capacity}`;
-            capacitySpan.className = 'text-sm mb-2 text-center';
-            div.appendChild(capacitySpan);
+            const capacity = document.createElement('div');
+            capacity.className = 'room-capacity';
+            capacity.innerHTML = `
+        <i class="fas fa-users"></i>
+        <span>${room.capacity}</span>
+    `;
+            info.appendChild(capacity);
 
-            // Buchungsinformationen
+            // Ausstattung
+            if (room.amenities && room.amenities.length > 0) {
+                const amenities = document.createElement('div');
+                amenities.className = 'amenities';
+                room.amenities.forEach(amenity => {
+                    const icon = document.createElement('div');
+                    icon.className = 'amenity-icon';
+                    icon.innerHTML = `<i class="fas fa-${getAmenityIcon(amenity)}" title="${getAmenityName(amenity)}"></i>`;
+                    amenities.appendChild(icon);
+                });
+                info.appendChild(amenities);
+            }
+
+            content.appendChild(info);
+
+            // Buchungen
+            const bookingsDiv = document.createElement('div');
+            bookingsDiv.className = 'bookings';
             const roomBookings = bookings.filter(booking => booking.room === room.name);
             if (roomBookings.length > 0) {
-                const bookingInfo = document.createElement('div');
-                bookingInfo.className = 'text-xs mt-2 bg-yellow-100 p-2 rounded';
-                bookingInfo.innerHTML = '<span class="font-semibold block mb-1">Buchungen:</span>' +
+                bookingsDiv.innerHTML = '<span class="font-semibold block mb-1">Buchungen:</span>' +
                     roomBookings.map(b =>
-                        `<span class="font-bold">${b.user_name}</span>: ${b.start_time.substr(0, 5)}-${b.end_time.substr(0, 5)}`
-                    ).join('<br>');
-                div.appendChild(bookingInfo);
+                        `<div><span class="font-bold">${b.user_name}</span>: ${b.start_time.substr(0, 5)}-${b.end_time.substr(0, 5)}</div>`
+                    ).join('');
+            } else {
+                bookingsDiv.innerHTML = '<span class="text-gray-500">Keine Buchungen</span>';
             }
+            content.appendChild(bookingsDiv);
 
-            // Ausstattung als Icons
-            if (room.amenities && room.amenities.length > 0) {
-                const amenitiesDiv = document.createElement('div');
-                amenitiesDiv.className = 'flex justify-center gap-2 mt-2';
-                room.amenities.forEach(amenity => {
-                    const iconWrapper = document.createElement('div');
-                    iconWrapper.className = 'relative';
+            div.appendChild(content);
 
-                    const icon = document.createElement('i');
-                    icon.className = `fas fa-${getAmenityIcon(amenity)} text-gray-600 cursor-pointer`;
-                    iconWrapper.appendChild(icon);
+            //Favoriten
+            const favoriteIcon = document.createElement('button');
+            favoriteIcon.className = `favorite-icon ${room.is_favorite ? 'active' : ''}`;
+            favoriteIcon.innerHTML = '<i class="fas fa-star"></i>';
+            favoriteIcon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleFavorite(room.id);
+            });
+            header.appendChild(favoriteIcon);
 
-                    const tooltip = document.createElement('div');
-                    tooltip.className = 'absolute hidden bg-black text-white text-xs rounded py-1 px-2 bottom-full left-1/2 transform -translate-x-1/2 mb-1';
-                    tooltip.textContent = getAmenityName(amenity);
-                    iconWrapper.appendChild(tooltip);
-
-                    iconWrapper.addEventListener('mouseenter', () => tooltip.classList.remove('hidden'));
-                    iconWrapper.addEventListener('mouseleave', () => tooltip.classList.add('hidden'));
-
-                    amenitiesDiv.appendChild(iconWrapper);
-                });
-                div.appendChild(amenitiesDiv);
-            }
-
+            // Admin-Buttons
             if (isAdmin) {
                 const buttonsDiv = document.createElement('div');
-                buttonsDiv.className = 'flex gap-2 mt-2 justify-center';
+                buttonsDiv.className = 'admin-buttons';
 
                 const editBtn = document.createElement('button');
                 editBtn.innerHTML = '<i class="fas fa-edit"></i>';
-                editBtn.className = 'bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600 transition duration-300';
+                editBtn.className = 'admin-button';
                 editBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     showRoomModal(room);
@@ -361,14 +563,14 @@
 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
-                deleteBtn.className = 'bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600 transition duration-300';
+                deleteBtn.className = 'admin-button';
                 deleteBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     deleteRoom(room);
                 });
                 buttonsDiv.appendChild(deleteBtn);
 
-                div.appendChild(buttonsDiv);
+                content.appendChild(buttonsDiv);
             }
 
             if (isAdmin) {
@@ -380,6 +582,31 @@
             });
 
             return div;
+        }
+
+        // Hilfsfunktion für Raumtyp-Namen
+        function getRoomTypeName(type) {
+            const names = {
+                'mediaroom': 'Mediaraum',
+                'office': 'Büro',
+                'open-office': 'Großraumbüro',
+                'spez-abt-buero': 'Spez. Abt. Büro'
+            };
+            return names[type] || 'Sonstiger Raum';
+        }
+        function getRoomTypeIcon(type) {
+            const icons = {
+                'mediaroom': 'fa-tv',
+                'office': 'fa-briefcase',
+                'open-office': 'fa-users',
+                'spez-abt-buero': 'fa-star'
+            };
+            return icons[type] || 'fa-door-open';
+        }
+
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : null;
         }
 
         function selectRoom(room) {
@@ -415,6 +642,61 @@
             return names[amenity] || amenity;
         }
 
+        function toggleFavorite(roomId) {
+            fetch('update_favorite.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `favorite_room_id=${roomId}`
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const roomElement = document.querySelector(`[data-room-id="${roomId}"]`);
+                        if (roomElement) {
+                            const favoriteIcon = roomElement.querySelector('.favorite-icon');
+                            favoriteIcon.classList.toggle('active', data.is_favorite);
+
+                            // Aktualisieren Sie den Favoritenstatus im rooms-Array
+                            const roomIndex = rooms.findIndex(r => r.id === roomId);
+                            if (roomIndex !== -1) {
+                                rooms[roomIndex].is_favorite = data.is_favorite;
+                            }
+
+                            // Aktualisieren Sie die Raumanordnung
+                            updateRoomOrder();
+                        }
+                    } else {
+                        console.error('Fehler beim Aktualisieren des Favoritenstatus:', data.error);
+                        if (data.error === 'Nicht eingeloggt') {
+                            alert('Bitte loggen Sie sich ein, um Favoriten zu markieren.');
+                        }
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function updateRoomOrder() {
+            const sortedRooms = [...rooms].sort((a, b) => {
+                if (a.is_favorite === b.is_favorite) {
+                    return a.name.localeCompare(b.name);
+                }
+                return b.is_favorite - a.is_favorite;
+            });
+
+            floorplan.innerHTML = '';
+            sortedRooms.forEach(room => {
+                const roomElement = createRoomElement(room);
+                const gridItem = document.createElement('div');
+                gridItem.className = 'grid-item';
+                gridItem.appendChild(roomElement);
+                floorplan.appendChild(gridItem);
+            });
+
+            updateGridVisual();
+        }
+
         async function loadBookingsForDate(date) {
             try {
                 const response = await fetch(`get_bookings.php?start_date=${date}&end_date=${date}`);
@@ -440,8 +722,10 @@
         }
 
         function updateGrid() {
-            const rows = parseInt(gridRowsInput.value);
+            const rows = Math.max(parseInt(gridRowsInput.value), Math.ceil(rooms.length / parseInt(gridColsInput.value)));
             const cols = parseInt(gridColsInput.value);
+
+            gridRowsInput.value = rows;
 
             floorplan.innerHTML = '';
             floorplan.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
@@ -451,6 +735,7 @@
                 const gridItem = document.createElement('div');
                 gridItem.className = 'grid-item';
                 gridItem.addEventListener('dragover', dragOver);
+                gridItem.addEventListener('dragleave', dragLeave);
                 gridItem.addEventListener('drop', drop);
                 floorplan.appendChild(gridItem);
             }
@@ -505,6 +790,22 @@
 
         function dragOver(e) {
             e.preventDefault();
+            if (this.children.length === 0) {
+                this.classList.add('drag-over');
+                const roomId = e.dataTransfer.getData('text');
+                const roomElement = document.querySelector(`[data-room-id="${roomId}"]`);
+                if (roomElement) {
+                    const roomColor = getComputedStyle(roomElement).getPropertyValue('--room-color');
+                    this.style.setProperty('--room-color', roomColor);
+                    this.style.setProperty('--room-color-rgb', hexToRgb(roomColor));
+                }
+            }
+        }
+
+        function dragLeave(e) {
+            this.classList.remove('drag-over');
+            this.style.removeProperty('--room-color');
+            this.style.removeProperty('--room-color-rgb');
         }
 
         function drop(e) {
@@ -512,13 +813,7 @@
             const roomId = e.dataTransfer.getData('text');
             const roomElement = document.querySelector(`[data-room-id="${roomId}"]`);
 
-            if (roomElement && e.target.classList.contains('grid-item')) {
-                // Entfernen Sie den Raum aus seinem vorherigen Container
-                if (roomElement.parentElement) {
-                    roomElement.parentElement.removeChild(roomElement);
-                }
-
-                // Fügen Sie den Raum zum neuen Grid-Item hinzu
+            if (roomElement && e.target.classList.contains('grid-item') && e.target.children.length === 0) {
                 e.target.innerHTML = '';
                 e.target.appendChild(roomElement);
                 roomElement.style.width = '100%';
@@ -526,6 +821,10 @@
 
                 updateGridLayout();
             }
+
+            this.classList.remove('drag-over');
+            this.style.removeProperty('--room-color');
+            this.style.removeProperty('--room-color-rgb');
         }
 
         function initializeRooms() {
@@ -724,6 +1023,23 @@
                 });
         }
 
+        function createLegend() {
+            const legendContainer = document.getElementById('roomTypeLegend');
+            legendContainer.innerHTML = ''; // Leert den Container
+
+            Object.entries(roomTypes).forEach(([type, info]) => {
+                if (type !== 'default') {
+                    const legendItem = document.createElement('div');
+                    legendItem.className = 'legend-item';
+                    legendItem.innerHTML = `
+                <div class="legend-color" style="background-color: ${info.color};"></div>
+                <span>${info.name}</span>
+            `;
+                    legendContainer.appendChild(legendItem);
+                }
+            });
+        }
+
         addRoomBtn.addEventListener('click', () => showRoomModal());
         roomForm.addEventListener('submit', addOrUpdateRoom);
         cancelBtn.addEventListener('click', hideRoomModal);
@@ -756,11 +1072,69 @@
                         roomElement.parentNode.replaceChild(newRoomElement, roomElement);
                     }
                 });
+                filterRooms();
             });
         }
 
+        const roomFilter = document.getElementById('roomFilter');
+        const availableOnlyCheckbox = document.getElementById('availableOnly');
+        const favoritesOnlyCheckbox = document.getElementById('favoritesOnly');
+
+        function filterRooms() {
+            const filterText = roomFilter.value.toLowerCase();
+            const showAvailableOnly = availableOnlyCheckbox.checked;
+            const showFavoritesOnly = favoritesOnlyCheckbox.checked;
+            const selectedDate = document.getElementById('dateInput').value;
+
+            loadBookingsForDate(selectedDate).then(bookings => {
+                Array.from(floorplan.children).forEach(cell => {
+                    const roomElement = cell.querySelector('.room');
+                    if (roomElement) {
+                        const room = rooms.find(r => r.id.toString() === roomElement.dataset.roomId);
+                        const roomName = room.name.toLowerCase();
+                        const roomNumber = room.number.toLowerCase();
+                        const matchesFilter = roomName.includes(filterText) || roomNumber.includes(filterText);
+
+                        const roomBookings = bookings.filter(booking => booking.room === room.name);
+
+                        // Berechnen Sie die Anzahl der belegten Plätze
+                        const occupiedSeats = roomBookings.reduce((total, booking) => {
+                            const startTime = new Date(`${selectedDate}T${booking.start_time}`);
+                            const endTime = new Date(`${selectedDate}T${booking.end_time}`);
+                            const now = new Date(`${selectedDate}T${new Date().toTimeString().slice(0, 8)}`);
+                            if (startTime <= now && now < endTime) {
+                                return total + 1; // Annahme: Jede Buchung belegt einen Platz
+                            }
+                            return total;
+                        }, 0);
+
+                        const availableSeats = room.capacity - occupiedSeats;
+                        const isAvailable = availableSeats > 0;
+                        const isFavorite = room.is_favorite;
+
+                        const shouldShow = matchesFilter &&
+                            (!showAvailableOnly || isAvailable) &&
+                            (!showFavoritesOnly || isFavorite);
+
+                        roomElement.style.display = shouldShow ? '' : 'none';
+
+                        // Aktualisieren Sie die Anzeige der verfügbaren Plätze
+                        const capacityElement = roomElement.querySelector('.room-capacity span');
+                        if (capacityElement) {
+                            capacityElement.textContent = `${availableSeats}/${room.capacity}`;
+                        }
+                    }
+                });
+            });
+        }
+
+        roomFilter.addEventListener('input', filterRooms);
+        availableOnlyCheckbox.addEventListener('change', filterRooms);
+        favoritesOnlyCheckbox.addEventListener('change', filterRooms);
+
         // Initialisierung
         checkUserStatus();
+        filterRooms();
     </script>
 </body>
 
