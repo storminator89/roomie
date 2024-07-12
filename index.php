@@ -51,7 +51,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
 </head>
 
 <body class="bg-gray-100" x-data="roomieApp()">
-<nav class="bg-custom-nav shadow-lg">
+    <nav class="bg-custom-nav shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex">
@@ -70,9 +70,14 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                         <a href="rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'rooms.php' ? 'active' : 'inactive'; ?>">
                             <i class="fas fa-door-open mr-1"></i>Räume
                         </a>
-                        <a href="admin_users.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'admin_users.php' ? 'active' : 'inactive'; ?>">
-                            <i class="fas fa-users mr-1"></i>Benutzerverwaltung
-                        </a>
+                        <?php if (isAdmin()) : ?>
+                            <a href="admin_users.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'admin_users.php' ? 'active' : 'inactive'; ?>">
+                                <i class="fas fa-users mr-1"></i>Benutzerverwaltung
+                            </a>
+                            <a href="admin_permissions.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white <?php echo $current_page == 'admin_permissions.php' ? 'border-yellow-400' : 'border-transparent'; ?>">
+                                <i class="fas fa-tools"></i>&nbsp;Berechtigungen
+                            </a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="hidden sm:ml-6 sm:flex sm:items-center">

@@ -77,9 +77,14 @@ $permissions = $db->query("
                         <a href="rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white border-transparent">
                             <i class="fas fa-door-open"></i>&nbsp;Räume
                         </a>
-                        <a href="admin_permissions.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white border-yellow-400">
-                            <i class="fas fa-tools"></i>&nbsp;Berechtigungen
-                        </a>
+                        <?php if (isAdmin()) : ?>
+                            <a href="admin_users.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'admin_users.php' ? 'active' : 'inactive'; ?>">
+                                <i class="fas fa-users mr-1"></i>Benutzerverwaltung
+                            </a>
+                            <a href="admin_permissions.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white <?php echo $current_page == 'admin_permissions.php' ? 'border-yellow-400' : 'border-transparent'; ?>">
+                                <i class="fas fa-tools"></i>&nbsp;Berechtigungen
+                            </a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="hidden sm:ml-6 sm:flex sm:items-center">
