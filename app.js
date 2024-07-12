@@ -1,4 +1,149 @@
 function roomieApp() {
+
+    document.addEventListener('DOMContentLoaded', (event) => {
+        const tourCompleted = localStorage.getItem('tourCompleted');
+
+        // Füge die Styles dynamisch hinzu
+        const style = document.createElement('style');
+        style.textContent = `
+            .introjs-overlay {
+                background-color: rgba(30, 30, 30, 0.85) !important; /* Dunkelgrauer Hintergrund */
+            }
+            .introjs-tooltip {
+                background: rgba(255, 255, 255, 0.95) !important;
+                backdrop-filter: blur(10px) !important;
+                border-radius: 16px !important;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+                border: 1px solid rgba(255, 255, 255, 0.18) !important;
+                padding: 28px !important;
+                max-width: 480px !important;
+                width: 90% !important;
+            }
+            .introjs-tooltiptext {
+                color: #333 !important;
+                font-family: 'Inter', sans-serif !important;
+                font-size: 16px !important;
+                line-height: 1.8 !important;
+                margin-bottom: 20px !important;
+            }
+            .introjs-tooltipbuttons {
+                display: flex !important;
+                justify-content: space-between !important;
+                flex-wrap: nowrap !important;
+            }
+            .introjs-button {
+                background: #FCD34D !important;
+                border: none !important;
+                color: #1F2937 !important;
+                padding: 12px 20px !important;
+                border-radius: 8px !important;
+                font-weight: 600 !important;
+                transition: all 0.3s ease !important;
+                text-shadow: none !important;
+                font-family: 'Inter', sans-serif !important;
+                margin: 4px !important;
+                flex-grow: 1 !important;
+                text-align: center !important;
+            }
+            .introjs-button:hover {
+                background: #F59E0B !important;
+                color: #ffffff !important;
+                transform: translateY(-2px) !important;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+            }
+            .introjs-skipbutton {
+                flex-grow: 0 !important;
+                padding: 12px !important;
+            }
+            .introjs-arrow {
+                border-color: rgba(255, 255, 255, 0.95) !important;
+            }
+            .introjs-helperLayer {
+                box-shadow: 0 0 0 9999px rgba(30, 30, 30, 0.85) !important;
+                border-radius: 8px !important;
+            }
+            .introjs-tooltip-title {
+                font-family: 'Inter', sans-serif !important;
+                font-weight: 700 !important;
+                font-size: 24px !important;
+                margin-bottom: 16px !important;
+                color: #1F2937 !important;
+            }
+            .introjs-tooltip-content {
+                display: flex !important;
+                flex-direction: column !important;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Überprüfe, ob die Tour bereits abgeschlossen wurde
+        if (!tourCompleted) {
+            console.log('Starting tour for the first time');
+            introJs().setOptions({
+                steps: [
+                    {
+                        intro: `
+                            <div class="introjs-tooltip-content">
+                                <h2 class='introjs-tooltip-title'>Willkommen bei Ihrer Raumbuchung!</h2>
+                                <p>Lassen Sie uns eine kurze Tour durch die Anwendung machen. Wir zeigen Ihnen, wie Sie effizient Räume buchen können.</p>
+                            </div>
+                        `
+                    },
+                    {
+                        element: document.querySelector('[data-step="1"]'),
+                        intro: `
+                            <div class="introjs-tooltip-content">
+                                <h2 class='introjs-tooltip-title'>Raumplan</h2>
+                                <p>Hier finden Sie unseren interaktiven Raumplan. Klicken Sie auf einen Raum, um ihn auszuwählen und weitere Details zu sehen.</p>
+                            </div>
+                        `
+                    },
+                    {
+                        element: document.querySelector('[data-step="2"]'),
+                        intro: `
+                            <div class="introjs-tooltip-content">
+                                <h2 class='introjs-tooltip-title'>Kalender</h2>
+                                <p>Nutzen Sie unseren benutzerfreundlichen Kalender, um das gewünschte Datum oder einen Zeitraum für Ihre Buchung auszuwählen.</p>
+                            </div>
+                        `
+                    },
+                    {
+                        element: '#selectedWorkspace',
+                        intro: `
+                            <div class="introjs-tooltip-content">
+                                <h2 class='introjs-tooltip-title'>Raumauswahl</h2>
+                                <p>Alternativ können Sie auch einen Raum direkt aus dieser Dropdown-Liste auswählen. Hier finden Sie alle verfügbaren Räume übersichtlich aufgelistet.</p>
+                            </div>
+                        `
+                    },
+                    {
+                        element: '#bookingForm',
+                        intro: `
+                            <div class="introjs-tooltip-content">
+                                <h2 class='introjs-tooltip-title'>Buchung abschließen</h2>
+                                <p>Nachdem Sie Raum, Datum und Zeit ausgewählt haben, können Sie hier Ihre Buchung abschließen. Überprüfen Sie alle Details und klicken Sie auf 'Buchen', um den Vorgang abzuschließen.</p>
+                            </div>
+                        `
+                    }
+                ],
+                nextLabel: 'Weiter →',
+                prevLabel: '← Zurück',
+                skipLabel: 'Überspringen',
+                doneLabel: 'Fertig',
+                tooltipClass: 'custom-tooltip',
+                highlightClass: 'custom-highlight',
+                exitOnOverlayClick: false,
+                showStepNumbers: false,
+                disableInteraction: true
+            }).oncomplete(function () {
+                localStorage.setItem('tourCompleted', 'true');
+            }).onexit(function () {
+                localStorage.setItem('tourCompleted', 'true');
+            }).start();
+        } else {
+            console.log('Tour already completed, not starting');
+        }
+    });
     return {
         currentDate: new Date(),
         startDate: null,
@@ -100,7 +245,7 @@ function roomieApp() {
                 const month = this.currentDate.getMonth() + 1;
                 fetch(`get_monthly_bookings.php?room_id=${this.selectedWorkspace}&year=${year}&month=${month}`)
                     .then(response => response.json())
-                    .then(data => {                        
+                    .then(data => {
                         this.bookedDates = data;
                     })
                     .catch(error => console.error('Error:', error));
@@ -235,5 +380,7 @@ function roomieApp() {
             this.selectedFloorPlan = floor;
             this.showFloorPlanPopup = true;
         }
+
+
     }
 }

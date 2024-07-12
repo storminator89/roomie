@@ -47,10 +47,13 @@ function getMonthlyBookings($db, $year, $month, $roomId)
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intro.js/5.1.0/introjs.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/intro.js/5.1.0/intro.min.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 
 <body class="bg-gray-100" x-data="roomieApp()">
+    <div id="tour-start" style="display: none;"></div>
     <nav class="bg-custom-nav shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
@@ -159,7 +162,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                     <p class="text-yellow-700">Bitte wählen Sie zunächst einen Ort aus dem interaktiven Raumplan oder in der Dropdownliste unten aus. Danach einen Zeitraum im Kalender, indem Sie den Start- und Endtermin anklicken.</p>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-                    <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300">
+                    <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300" data-intro="Wählen Sie hier einen Raum aus dem interaktiven Raumplan aus." data-step="1">
                         <div class="flex flex-row items-center justify-between p-4 bg-yellow-50 text-gray-800 border-b border-yellow-300">
                             <h3 class="text-xl font-semibold">Raumplan</h3>
                         </div>
@@ -172,7 +175,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                         </div>
                     </div>
 
-                    <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300">
+                    <div class="bg-white shadow-lg rounded-2xl overflow-hidden border-2 border-yellow-300" data-intro="Wählen Sie hier das gewünschte Datum oder einen Zeitraum aus." data-step="2">
                         <div class="flex flex-row items-center justify-between p-4 bg-yellow-50 text-gray-800 border-b border-yellow-300">
                             <h2 class="text-xl font-semibold" x-text="currentMonthYear"></h2>
                             <div class="space-x-2">
