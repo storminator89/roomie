@@ -419,6 +419,34 @@
         </div>
     </div>
 
+    <div id="bookingModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900" id="modalRoomName"></h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500" id="modalDate"></p>
+                    <select id="time_period" name="time_period"
+                        class="mt-3 w-full bg-white border border-gray-300 rounded-md p-2" required>
+                        <option value="">Zeitspanne auswählen</option>
+                        <option value="ganzerTag">Ganzer Tag (09:00 - 17:00)</option>
+                        <option value="vormittags">Vormittags (09:00 - 12:00)</option>
+                        <option value="nachmittags">Nachmittags (13:00 - 17:00)</option>
+                    </select>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="bookButton"
+                        class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                        Buchen
+                    </button>
+                    <button id="cancelBooking"
+                        class="mt-3 px-4 py-2 bg-gray-300 text-black text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                        Abbrechen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const floorplan = document.getElementById('floorplan');
         const availableRooms = document.getElementById('availableRooms');
@@ -443,6 +471,41 @@
             'spez-abt-buero': { name: 'Spez. Abt. Büro', color: '#8b5cf6' },
             'default': { name: 'Sonstiger Raum', color: '#6b7280' }
         };
+
+        function bookRoom(room) {
+            const timePeriod = document.getElementById('time_period').value;
+            const dateInput = document.getElementById('dateInput').value;
+
+            if (!timePeriod) {
+                alert('Bitte wählen Sie eine Zeitspanne aus.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('start_date', dateInput);
+            formData.append('end_date', dateInput);
+            formData.append('selectedWorkspace', room.id);
+            formData.append('time_period', timePeriod);
+
+            fetch('process_booking.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Buchung erfolgreich! ' + data.message);
+                        hideBookingModal();
+                        loadInitialData(); // Aktualisieren Sie die Anzeige
+                    } else {
+                        alert('Fehler bei der Buchung: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+                });
+        }
 
         function checkUserStatus() {
             fetch('check_admin.php')
@@ -552,6 +615,10 @@
             div.dataset.roomId = room.id;
             div.dataset.roomType = room.type;
 
+            div.addEventListener('click', () => {
+                showBookingModal(room);
+            });
+
             // Header
             const header = document.createElement('div');
             header.className = 'room-header';
@@ -654,11 +721,35 @@
                 div.addEventListener('dragstart', dragStart);
             }
 
-            div.addEventListener('click', () => {
-                selectRoom(room);
+            return div;
+        }
+
+        function showBookingModal(room) {
+            const modal = document.getElementById('bookingModal');
+            const modalRoomName = document.getElementById('modalRoomName');
+            const modalDate = document.getElementById('modalDate');
+            const dateInput = document.getElementById('dateInput');
+
+            modalRoomName.textContent = `Buchen: ${room.name}`;
+
+            // Konvertiere das Datum in deutsches Format
+            const selectedDate = new Date(dateInput.value);
+            const formattedDate = selectedDate.toLocaleDateString('de-DE', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
             });
 
-            return div;
+            modalDate.textContent = `Datum: ${formattedDate}`;
+
+            modal.classList.remove('hidden');
+
+            document.getElementById('bookButton').onclick = () => bookRoom(room);
+            document.getElementById('cancelBooking').onclick = hideBookingModal;
+        }
+
+        function hideBookingModal() {
+            document.getElementById('bookingModal').classList.add('hidden');
         }
 
         // Hilfsfunktion für Raumtyp-Namen
@@ -686,17 +777,7 @@
             return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : null;
         }
 
-        function selectRoom(room) {
-            if (confirm(`Möchten Sie den Raum "${room.name}" für die Buchung auswählen?`)) {
-                window.opener.postMessage({
-                    type: 'roomSelected',
-                    roomId: room.id,
-                    roomName: room.name
-                }, '*');
 
-                window.close();
-            }
-        }
 
         // Hilfsfunktionen für Ausstattungs-Icons und -Namen
         function getAmenityIcon(amenity) {

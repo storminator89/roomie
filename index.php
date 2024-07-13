@@ -265,7 +265,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                 </div>
 
                 <div class="flex space-x-3 mb-8">
-                    <form id="bookingForm" action="process_booking.php" method="POST" class="flex-1">
+                    <form id="bookingForm" class="flex-1">
                         <input type="hidden" name="start_date" x-bind:value="startDate ? formatDateToUTC(startDate) : ''">
                         <input type="hidden" name="end_date" x-bind:value="endDate ? formatDateToUTC(endDate) : ''">
                         <input type="hidden" name="selectedWorkspace" x-bind:value="selectedWorkspace">
@@ -280,10 +280,20 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                             </select>
                         </div>
 
-                        <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 text-white rounded-md p-2 transition-colors duration-200 flex items-center justify-center">
+                        <button type="button" id="bookButton" class="w-full bg-yellow-400 hover:bg-yellow-500 text-white rounded-md p-2 transition-colors duration-200 flex items-center justify-center">
                             <i class="fas fa-book"></i>&nbsp;Buchen
                         </button>
                     </form>
+                </div>
+                
+                <div id="notificationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden flex items-center justify-center">
+                    <div class="bg-white p-5 rounded-lg shadow-xl">
+                        <h2 id="notificationTitle" class="text-xl font-bold mb-4"></h2>
+                        <p id="notificationMessage" class="mb-4"></p>
+                        <button id="notificationClose" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                            Schließen
+                        </button>
+                    </div>
                 </div>
             </div>
 

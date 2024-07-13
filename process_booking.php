@@ -1,11 +1,13 @@
 <?php
-session_start();
 require_once 'auth.php';
 
 if (!isLoggedIn()) {
-    header("Location: login.php");
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'error' => 'Nicht eingeloggt']);
     exit;
 }
+
+header('Content-Type: application/json');
 
 date_default_timezone_set('Europe/Berlin');
 
@@ -13,22 +15,20 @@ try {
     $db = new PDO('sqlite:roomie.db');
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-    echo "Connection failed: " . $e->getMessage();
+    echo json_encode(['success' => false, 'error' => "Connection failed: " . $e->getMessage()]);
     exit;
 }
 
 function isAuthorizedToBook($db, $userId, $roomId)
 {
-    // Prüfen, ob der Raum ein spezielles Abteilungsbüro ist
     $stmt = $db->prepare("SELECT type FROM rooms WHERE id = :room_id");
     $stmt->execute(['room_id' => $roomId]);
     $roomType = $stmt->fetchColumn();
 
     if ($roomType != 'spez-abt-buero') {
-        return true; // Für andere Räume keine spezielle Berechtigung erforderlich
+        return true;
     }
 
-    // Berechtigung des Benutzers prüfen
     $stmt = $db->prepare("SELECT COUNT(*) FROM permissions WHERE user_id = :user_id AND room_id = :room_id");
     $stmt->execute(['user_id' => $userId, 'room_id' => $roomId]);
     $permissionCount = $stmt->fetchColumn();
@@ -52,44 +52,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $startTime = '13:00';
         $endTime = '17:00';
     } else {
-        $_SESSION['error'] = "Ungültige Zeitspanne.";
-        header("Location: index.php");
+        echo json_encode(['success' => false, 'error' => "Ungültige Zeitspanne."]);
         exit;
     }
 
     if (!$startDate || !$endDate || empty($workspace) || empty($timePeriod)) {
-        $_SESSION['error'] = "Alle Felder müssen ausgefüllt sein und gültige Daten enthalten.";
-        header("Location: index.php");
+        echo json_encode(['success' => false, 'error' => "Alle Felder müssen ausgefüllt sein und gültige Daten enthalten."]);
         exit;
     }
 
     if (!is_numeric($workspace)) {
-        $_SESSION['error'] = "Ungültiges Workspace-Format.";
-        header("Location: index.php");
+        echo json_encode(['success' => false, 'error' => "Ungültiges Workspace-Format."]);
         exit;
     }
     
     $roomId = $workspace;
 
     if (!isAuthorizedToBook($db, $_SESSION['user_id'], $roomId)) {
-        $_SESSION['error'] = "Sie sind nicht berechtigt, diesen Raum zu buchen.";
-        header("Location: index.php");
+        echo json_encode(['success' => false, 'error' => "Sie sind nicht berechtigt, diesen Raum zu buchen."]);
         exit;
     }
 
     try {
-        // Überprüfen, ob der Raum existiert und seine Kapazität abrufen
-        $stmt = $db->prepare("SELECT id, capacity FROM rooms WHERE id = :id");
+        $stmt = $db->prepare("SELECT id, capacity, name FROM rooms WHERE id = :id");
         $stmt->execute(['id' => $roomId]);
         $room = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if (!$room) {
-            $_SESSION['error'] = "Ungültiger Raum.";
-            header("Location: index.php");
+            echo json_encode(['success' => false, 'error' => "Ungültiger Raum."]);
             exit;
         }
 
-        // Überprüfen, ob die Kapazität überschritten wird
         $stmt = $db->prepare("SELECT COUNT(*) as booking_count FROM bookings WHERE room_id = :room_id AND date = :date AND ((start_time <= :start_time AND end_time > :start_time) OR (start_time < :end_time AND end_time >= :end_time) OR (start_time >= :start_time AND end_time <= :end_time))");
         $stmt->execute([
             'room_id' => $roomId,
@@ -101,12 +94,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bookingCount = $stmt->fetch(PDO::FETCH_ASSOC)['booking_count'];
 
         if ($bookingCount >= $room['capacity']) {
-            $_SESSION['error'] = "Die Kapazität des Raums ist bereits erreicht.";
-            header("Location: index.php");
+            echo json_encode(['success' => false, 'error' => "Die Kapazität des Raums ist bereits erreicht."]);
             exit;
         }
 
-        // Überprüfen, ob der Benutzer bereits an diesem Tag und in diesem Zeitraum gebucht hat
         $stmt = $db->prepare("SELECT COUNT(*) as booking_count FROM bookings WHERE room_id = :room_id AND user_id = :user_id AND date = :date AND ((start_time <= :start_time AND end_time > :start_time) OR (start_time < :end_time AND end_time >= :end_time) OR (start_time >= :start_time AND end_time <= :end_time))");
         $stmt->execute([
             'room_id' => $roomId,
@@ -119,12 +110,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $userBookingCount = $stmt->fetch(PDO::FETCH_ASSOC)['booking_count'];
 
         if ($userBookingCount > 0) {
-            $_SESSION['error'] = "Sie haben den Raum in diesem Zeitraum bereits gebucht.";
-            header("Location: index.php");
+            echo json_encode(['success' => false, 'error' => "Sie haben den Raum in diesem Zeitraum bereits gebucht."]);
             exit;
         }
 
-        // Buchung hinzufügen
         $stmt = $db->prepare("INSERT INTO bookings (user_id, room_id, seat_id, date, start_time, end_time) VALUES (:user_id, :room_id, :seat_id, :date, :start_time, :end_time)");
 
         if ($startDate == $endDate) {
@@ -150,7 +139,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // E-Mail-Benachrichtigung
         $booking_id = $db->lastInsertId();
         $booking = [
             'id' => $booking_id,
@@ -163,16 +151,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
         sendBookingEmail($booking, $booking['user_email']);
 
-        $_SESSION['success'] = "Buchung erfolgreich erstellt und die Bestätigungs-E-Mail wurde gesendet.";
-        header("Location: bookings.php?success=1");
+        echo json_encode(['success' => true, 'message' => "Buchung erfolgreich erstellt und die Bestätigungs-E-Mail wurde gesendet."]);
         exit;
     } catch (PDOException $e) {
-        $_SESSION['error'] = "Fehler bei der Buchung: " . $e->getMessage();
-        header("Location: index.php");
+        echo json_encode(['success' => false, 'error' => "Fehler bei der Buchung: " . $e->getMessage()]);
         exit;
     }
 } else {
-    header("Location: index.php");
+    echo json_encode(['success' => false, 'error' => "Ungültige Anfragemethode."]);
     exit;
 }
 
@@ -190,18 +176,15 @@ function sendBookingEmail($booking, $recipientEmail) {
     $separator = md5(time());
     $eol = PHP_EOL;
 
-    // Kopfzeilen für die E-Mail
     $headers = "From: Roomie Booking System <your-email@example.com>" . $eol;
     $headers .= "MIME-Version: 1.0" . $eol;
     $headers .= "Content-Type: multipart/mixed; boundary=\"" . $separator . "\"" . $eol;
 
-    // E-Mail-Body
     $body = "--" . $separator . $eol;
     $body .= "Content-Type: text/plain; charset=UTF-8" . $eol;
     $body .= "Content-Transfer-Encoding: 8bit" . $eol;
     $body .= $message . $eol;
 
-    // Anhängen der ICS-Datei
     $body .= "--" . $separator . $eol;
     $body .= "Content-Type: text/calendar; charset=UTF-8; name=\"booking.ics\"" . $eol;
     $body .= "Content-Transfer-Encoding: base64" . $eol;
@@ -210,7 +193,6 @@ function sendBookingEmail($booking, $recipientEmail) {
     $body .= chunk_split(base64_encode($icsContent)) . $eol;
     $body .= "--" . $separator . "--";
 
-    // E-Mail senden
     mail($recipientEmail, "=?UTF-8?B?".base64_encode($subject)."?=", $body, $headers);
 }
 

@@ -1,5 +1,47 @@
 function roomieApp() {
 
+    document.addEventListener('DOMContentLoaded', function () {
+        const bookButton = document.getElementById('bookButton');
+        const bookingForm = document.getElementById('bookingForm');
+        const notificationModal = document.getElementById('notificationModal');
+        const notificationTitle = document.getElementById('notificationTitle');
+        const notificationMessage = document.getElementById('notificationMessage');
+        const notificationClose = document.getElementById('notificationClose');
+
+        bookButton.addEventListener('click', function (e) {
+            e.preventDefault();
+            const formData = new FormData(bookingForm);
+
+            fetch('process_booking.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('Buchung erfolgreich', data.message);
+                        // Optional: Formular zurücksetzen oder Seite aktualisieren
+                    } else {
+                        showNotification('Fehler', data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showNotification('Fehler', 'Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+                });
+        });
+
+        function showNotification(title, message) {
+            notificationTitle.textContent = title;
+            notificationMessage.textContent = message;
+            notificationModal.classList.remove('hidden');
+        }
+
+        notificationClose.addEventListener('click', function () {
+            notificationModal.classList.add('hidden');
+        });
+    });
+
     document.addEventListener('DOMContentLoaded', (event) => {
         const tourCompleted = localStorage.getItem('tourCompleted');
 
