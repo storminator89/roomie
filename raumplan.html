@@ -8,6 +8,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        #floorplan {
+            display: grid;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.5rem;
+        }
+
         .grid-item {
             border: 2px dashed #e2e8f0;
             border-radius: 1rem;
@@ -25,11 +32,12 @@
         }
 
         .room {
+            min-height: 100px;
+            min-width: 200px;
             width: 100%;
-            height: 100%;
             display: flex;
             flex-direction: column;
-            border-radius: 1rem;
+            border-radius: 0.5rem;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             transition: all 0.3s ease;
             position: relative;
@@ -192,6 +200,50 @@
 
         .favorite-icon:hover {
             color: gold;
+        }
+
+        #floorplan {
+            display: grid;
+            gap: 1rem;
+            width: 100%;
+        }
+
+        @media (max-width: 640px) {
+            #floorplan {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .room {
+                min-height: 60px;
+            }
+
+        }
+
+        @media (max-width: 640px) {
+            .room {
+                font-size: 0.9rem;
+            }
+
+            .room-content {
+                padding: 0.25rem 0.5rem;
+            }
+
+            .room-info {
+                flex-wrap: wrap;
+            }
+
+            .amenities {
+                flex-wrap: wrap;
+            }
+
+            .bookings {
+                margin-top: 0.25rem;
+                white-space: nowrap;
+                overflow-x: auto;
+                padding-bottom: 0.25rem;
+            }
         }
     </style>
 </head>
@@ -453,16 +505,16 @@
             }
         }
 
-        function placeAllRoomsOnGrid(rooms, bookings) {
+        async function placeAllRoomsOnGrid(rooms) {
             const gridCells = floorplan.children;
-            let cellIndex = 0;
+            const currentDate = document.getElementById('dateInput').value;
+            const bookings = await loadBookingsForDate(currentDate);
 
-            rooms.forEach(room => {
-                if (cellIndex < gridCells.length) {
+            rooms.forEach((room, index) => {
+                if (index < gridCells.length) {
                     const roomElement = createRoomElement(room, bookings);
-                    gridCells[cellIndex].innerHTML = '';
-                    gridCells[cellIndex].appendChild(roomElement);
-                    cellIndex++;
+                    gridCells[index].innerHTML = '';
+                    gridCells[index].appendChild(roomElement);
                 }
             });
         }
@@ -470,7 +522,7 @@
         function createRoomElement(room, bookings = []) {
             const roomTypeInfo = roomTypes[room.type] || roomTypes['default'];
             const div = document.createElement('div');
-            div.className = `room`;
+            div.className = 'room';
             div.style.setProperty('--room-color', roomTypeInfo.color);
             div.draggable = isAdmin;
             div.dataset.roomName = room.name;
@@ -481,12 +533,23 @@
             const header = document.createElement('div');
             header.className = 'room-header';
             header.innerHTML = `
-        <div>
+        <div class="room-title">
             <h3 class="room-name">${room.name}</h3>
             <div class="room-type">${roomTypeInfo.name}</div>
         </div>
         <div class="room-number">${room.number || 'N/A'}</div>
     `;
+
+            // Favoriten
+            const favoriteIcon = document.createElement('button');
+            favoriteIcon.className = `favorite-icon ${room.is_favorite ? 'active' : ''}`;
+            favoriteIcon.innerHTML = '<i class="fas fa-star"></i>';
+            favoriteIcon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleFavorite(room.id);
+            });
+            header.appendChild(favoriteIcon);
+
             div.appendChild(header);
 
             // Room Content
@@ -526,26 +589,16 @@
             bookingsDiv.className = 'bookings';
             const roomBookings = bookings.filter(booking => booking.room === room.name);
             if (roomBookings.length > 0) {
-                bookingsDiv.innerHTML = '<span class="font-semibold block mb-1">Buchungen:</span>' +
+                bookingsDiv.innerHTML = '<span class="font-semibold">Buchungen:</span> ' +
                     roomBookings.map(b =>
-                        `<div><span class="font-bold">${b.user_name}</span>: ${b.start_time.substr(0, 5)}-${b.end_time.substr(0, 5)}</div>`
-                    ).join('');
+                        `<span class="booking-item">${b.user_name}: ${b.start_time.substr(0, 5)}-${b.end_time.substr(0, 5)}</span>`
+                    ).join(', ');
             } else {
                 bookingsDiv.innerHTML = '<span class="text-gray-500">Keine Buchungen</span>';
             }
             content.appendChild(bookingsDiv);
 
             div.appendChild(content);
-
-            //Favoriten
-            const favoriteIcon = document.createElement('button');
-            favoriteIcon.className = `favorite-icon ${room.is_favorite ? 'active' : ''}`;
-            favoriteIcon.innerHTML = '<i class="fas fa-star"></i>';
-            favoriteIcon.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleFavorite(room.id);
-            });
-            header.appendChild(favoriteIcon);
 
             // Admin-Buttons
             if (isAdmin) {
@@ -721,17 +774,24 @@
             return amenityNames[amenity] || amenity;
         }
 
-        function updateGrid() {
-            const rows = Math.max(parseInt(gridRowsInput.value), Math.ceil(rooms.length / parseInt(gridColsInput.value)));
-            const cols = parseInt(gridColsInput.value);
+        async function updateGrid() {
+            const totalRooms = rooms.length;
+            let cols;
+            if (window.innerWidth > 640) {
+                cols = parseInt(gridColsInput.value);
+            } else {
+                cols = 1; // Eine Spalte für mobile Geräte
+            }
+            const rows = Math.ceil(totalRooms / cols);
 
             gridRowsInput.value = rows;
+            gridColsInput.value = cols;
 
             floorplan.innerHTML = '';
-            floorplan.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
-            floorplan.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+            floorplan.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+            floorplan.style.gridAutoRows = 'minmax(80px, auto)';
 
-            for (let i = 0; i < rows * cols; i++) {
+            for (let i = 0; i < totalRooms; i++) {
                 const gridItem = document.createElement('div');
                 gridItem.className = 'grid-item';
                 gridItem.addEventListener('dragover', dragOver);
@@ -740,9 +800,9 @@
                 floorplan.appendChild(gridItem);
             }
 
+            await placeAllRoomsOnGrid(rooms);
             updateGridVisual();
         }
-
 
         function logGridState() {
             console.log('Current grid state:');
@@ -1131,6 +1191,23 @@
         roomFilter.addEventListener('input', filterRooms);
         availableOnlyCheckbox.addEventListener('change', filterRooms);
         favoritesOnlyCheckbox.addEventListener('change', filterRooms);
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        window.addEventListener('resize', debounce(() => {
+            updateGrid();
+            placeAllRoomsOnGrid(rooms, []);
+        }, 250));
 
         // Initialisierung
         checkUserStatus();
