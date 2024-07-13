@@ -136,9 +136,14 @@ try {
                         <a href="rooms.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'rooms.php' ? 'active' : 'inactive'; ?>">
                             <i class="fas fa-door-open mr-1"></i>Räume
                         </a>
-                        <a href="admin_users.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'admin_users.php' ? 'active' : 'inactive'; ?>">
-                            <i class="fas fa-users mr-1"></i>Benutzerverwaltung
-                        </a>
+                        <?php if (isAdmin()) : ?>
+                            <a href="admin_users.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium <?php echo $current_page == 'admin_users.php' ? 'active' : 'inactive'; ?>">
+                                <i class="fas fa-users mr-1"></i>Benutzerverwaltung
+                            </a>
+                            <a href="admin_permissions.php" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-white <?php echo $current_page == 'admin_permissions.php' ? 'border-yellow-400' : 'border-transparent'; ?>">
+                                <i class="fas fa-tools"></i>&nbsp;Berechtigungen
+                            </a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="hidden sm:ml-6 sm:flex sm:items-center">
@@ -187,9 +192,15 @@ try {
                     </div>
                 </div>
                 <div class="mt-3 space-y-1">
-                    <a href="profile.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-user mr-2"></i>Ihr Profil</a>
-                    <a href="settings.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-cog mr-2"></i>Einstellungen</a>
-                    <a href="logout.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</a>
+                    <a href="profile.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium inactive">
+                        <i class="fas fa-user mr-2"></i>Ihr Profil
+                    </a>
+                    <a href="settings.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium inactive">
+                        <i class="fas fa-cog mr-2"></i>Einstellungen
+                    </a>
+                    <a href="logout.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium inactive">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Abmelden
+                    </a>
                 </div>
             </div>
         </div>

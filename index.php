@@ -129,9 +129,15 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                     </div>
                 </div>
                 <div class="mt-3 space-y-1">
-                    <a href="profile.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-user mr-2"></i>Ihr Profil</a>
-                    <a href="settings.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-cog mr-2"></i>Einstellungen</a>
-                    <a href="logout.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</a>
+                    <a href="profile.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium inactive">
+                        <i class="fas fa-user mr-2"></i>Ihr Profil
+                    </a>
+                    <a href="settings.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium inactive">
+                        <i class="fas fa-cog mr-2"></i>Einstellungen
+                    </a>
+                    <a href="logout.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium inactive">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Abmelden
+                    </a>
                 </div>
             </div>
         </div>

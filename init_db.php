@@ -58,13 +58,22 @@ try {
     FOREIGN KEY (room_id) REFERENCES rooms(id)
 )");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS user_favorites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    room_id INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (room_id) REFERENCES rooms(id),
+    UNIQUE(user_id, room_id)
+)");
+
     $db->exec("CREATE TABLE IF NOT EXISTS grid_config (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     rows INTEGER NOT NULL,
     cols INTEGER NOT NULL,
     room_layout TEXT
 )");
-   
+
 
     $db->exec("INSERT OR IGNORE INTO seats (room_id, top, left_pos) VALUES 
         (5, '20%', '20%'),

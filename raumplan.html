@@ -293,16 +293,16 @@
 
                     <div
                         class="date-filter-container flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 mb-4">
-                        <div class="relative w-full sm:w-auto">
-                            <input type="date" id="dateInput"
-                                class="w-full sm:w-auto pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <div class="flex items-center w-full sm:w-auto">
+                            <div class="mr-2">
                                 <svg class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd"
                                         d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
                                         clip-rule="evenodd" />
                                 </svg>
                             </div>
+                            <input type="date" id="dateInput"
+                                class="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                         </div>
                         <button id="refreshDate"
                             class="w-full sm:w-auto bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out">
@@ -471,6 +471,7 @@
 
         async function loadInitialData() {
             try {
+                // Laden der Grid-Konfiguration und Raumdaten
                 const response = await fetch('load_grid.php');
                 const data = await response.json();
 
@@ -483,6 +484,21 @@
                     }));
 
                     console.log('Loaded rooms:', rooms);
+
+                    // Laden der Benutzerfavoriten
+                    const favoritesResponse = await fetch('get_user_favorites.php');
+                    const favoritesData = await favoritesResponse.json();
+
+                    if (favoritesData.success) {
+                        const userFavorites = new Set(favoritesData.favorites);
+                        rooms = rooms.map(room => ({
+                            ...room,
+                            is_favorite: userFavorites.has(room.id)
+                        }));
+                        console.log('Updated rooms with favorites:', rooms);
+                    } else {
+                        console.log('Failed to load favorites:', favoritesData.error);
+                    }
 
                     if (gridConfig) {
                         gridRowsInput.value = gridConfig.rows;
@@ -596,10 +612,11 @@
             bookingsDiv.className = 'bookings';
             const roomBookings = bookings.filter(booking => booking.room === room.name);
             if (roomBookings.length > 0) {
-                bookingsDiv.innerHTML = '<span class="font-semibold">Buchungen:</span> ' +
-                    roomBookings.map(b =>
-                        `<span class="booking-item">${b.user_name}: ${b.start_time.substr(0, 5)}-${b.end_time.substr(0, 5)}</span>`
-                    ).join(', ');
+                bookingsDiv.innerHTML = '<span class="font-semibold">Buchungen:</span><br>';
+                const bookingsList = roomBookings.map(b =>
+                    `<span class="booking-item">${b.user_name}: ${b.start_time.substr(0, 5)}-${b.end_time.substr(0, 5)}</span>`
+                ).join('<br>');
+                bookingsDiv.innerHTML += bookingsList;
             } else {
                 bookingsDiv.innerHTML = '<span class="text-gray-500">Keine Buchungen</span>';
             }
