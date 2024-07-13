@@ -110,6 +110,12 @@
             gap: 0.25rem;
         }
 
+        .room-unavailable {
+            opacity: 0.5;
+            pointer-events: none;
+            filter: grayscale(100%);
+        }
+
         .amenity-icon {
             display: flex;
             align-items: center;
@@ -285,10 +291,11 @@
                         </div>
                     </div>
 
-                    <div class="flex items-center space-x-2">
-                        <div class="relative w-48">
+                    <div
+                        class="date-filter-container flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 mb-4">
+                        <div class="relative w-full sm:w-auto">
                             <input type="date" id="dateInput"
-                                class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                class="w-full sm:w-auto pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <svg class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd"
@@ -298,7 +305,7 @@
                             </div>
                         </div>
                         <button id="refreshDate"
-                            class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out flex-shrink-0">
+                            class="w-full sm:w-auto bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out">
                             Aktualisieren
                         </button>
                     </div>
@@ -751,12 +758,16 @@
         }
 
         async function loadBookingsForDate(date) {
+            console.log(`Loading bookings for date: ${date}`);
             try {
-                const response = await fetch(`get_bookings.php?start_date=${date}&end_date=${date}`);
+                const url = `get_bookings.php?start_date=${date}&end_date=${date}`;
+                console.log(`Fetching from URL: ${url}`);
+                const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const bookings = await response.json();
+                console.log('Bookings loaded:', bookings);
                 return bookings;
             } catch (error) {
                 console.error('Error loading bookings:', error);
@@ -1140,57 +1151,67 @@
         const availableOnlyCheckbox = document.getElementById('availableOnly');
         const favoritesOnlyCheckbox = document.getElementById('favoritesOnly');
 
-        function filterRooms() {
+        async function filterRooms() {
+            console.log('filterRooms function called');
             const filterText = roomFilter.value.toLowerCase();
             const showAvailableOnly = availableOnlyCheckbox.checked;
             const showFavoritesOnly = favoritesOnlyCheckbox.checked;
             const selectedDate = document.getElementById('dateInput').value;
+            console.log(`Filter settings: text="${filterText}", availableOnly=${showAvailableOnly}, favoritesOnly=${showFavoritesOnly}, date=${selectedDate}`);
 
-            loadBookingsForDate(selectedDate).then(bookings => {
-                Array.from(floorplan.children).forEach(cell => {
-                    const roomElement = cell.querySelector('.room');
-                    if (roomElement) {
-                        const room = rooms.find(r => r.id.toString() === roomElement.dataset.roomId);
-                        const roomName = room.name.toLowerCase();
-                        const roomNumber = room.number.toLowerCase();
-                        const matchesFilter = roomName.includes(filterText) || roomNumber.includes(filterText);
+            const bookings = await loadBookingsForDate(selectedDate);
+            console.log('Bookings loaded:', bookings);
 
-                        const roomBookings = bookings.filter(booking => booking.room === room.name);
+            rooms.forEach(room => {
+                const roomElement = document.querySelector(`[data-room-id="${room.id}"]`);
+                if (roomElement) {
+                    const roomName = room.name.toLowerCase();
+                    const roomNumber = room.number.toLowerCase();
+                    const matchesFilter = roomName.includes(filterText) || roomNumber.includes(filterText);
 
-                        // Berechnen Sie die Anzahl der belegten Plätze
-                        const occupiedSeats = roomBookings.reduce((total, booking) => {
-                            const startTime = new Date(`${selectedDate}T${booking.start_time}`);
-                            const endTime = new Date(`${selectedDate}T${booking.end_time}`);
-                            const now = new Date(`${selectedDate}T${new Date().toTimeString().slice(0, 8)}`);
-                            if (startTime <= now && now < endTime) {
-                                return total + 1; // Annahme: Jede Buchung belegt einen Platz
-                            }
-                            return total;
-                        }, 0);
+                    const roomBookings = bookings.filter(booking => booking.room === room.name);
+                    const occupiedSeats = calculateOccupiedSeats(roomBookings, selectedDate);
+                    const availableSeats = Math.max(0, room.capacity - occupiedSeats);
+                    const isAvailable = availableSeats > 0;
 
-                        const availableSeats = room.capacity - occupiedSeats;
-                        const isAvailable = availableSeats > 0;
-                        const isFavorite = room.is_favorite;
+                    console.log(`Room: ${room.name}, Capacity: ${room.capacity}, Bookings: ${roomBookings.length}, Occupied: ${occupiedSeats}, Available: ${availableSeats}, IsAvailable: ${isAvailable}`);
 
-                        const shouldShow = matchesFilter &&
-                            (!showAvailableOnly || isAvailable) &&
-                            (!showFavoritesOnly || isFavorite);
+                    const matchesFavorite = !showFavoritesOnly || room.is_favorite;
 
-                        roomElement.style.display = shouldShow ? '' : 'none';
+                    // Determine visibility based on text filter and favorites
+                    const isVisible = matchesFilter && matchesFavorite;
 
-                        // Aktualisieren Sie die Anzeige der verfügbaren Plätze
-                        const capacityElement = roomElement.querySelector('.room-capacity span');
-                        if (capacityElement) {
-                            capacityElement.textContent = `${availableSeats}/${room.capacity}`;
-                        }
-                    }
-                });
+                    // Apply the unavailable style if the room is not available and the filter is active
+                    const shouldBeUnavailable = !isAvailable && showAvailableOnly;
+                    roomElement.classList.toggle('room-unavailable', shouldBeUnavailable);
+
+                    // Set display style based on visibility (text filter and favorites only)
+                    roomElement.style.display = isVisible ? '' : 'none';
+
+                    updateCapacityDisplay(roomElement, availableSeats, room.capacity);
+
+                    console.log(`Room: ${room.name}, IsVisible: ${isVisible}, IsAvailable: ${isAvailable}, ShouldBeUnavailable: ${shouldBeUnavailable}, ClassList: ${roomElement.classList}`);
+                }
             });
         }
 
-        roomFilter.addEventListener('input', filterRooms);
+        function updateCapacityDisplay(roomElement, availableSeats, totalCapacity) {
+            const capacityElement = roomElement.querySelector('.room-capacity span');
+            if (capacityElement) {
+                capacityElement.textContent = `${availableSeats}/${totalCapacity}`;
+                if (availableSeats === 0) {
+                    capacityElement.classList.add('text-red-500');
+                } else if (availableSeats < totalCapacity / 2) {
+                    capacityElement.classList.add('text-yellow-500');
+                } else {
+                    capacityElement.classList.add('text-green-500');
+                }
+            }
+        }
+
         availableOnlyCheckbox.addEventListener('change', filterRooms);
         favoritesOnlyCheckbox.addEventListener('change', filterRooms);
+        roomFilter.addEventListener('input', filterRooms);
 
         function debounce(func, wait) {
             let timeout;
@@ -1204,10 +1225,14 @@
             };
         }
 
-        window.addEventListener('resize', debounce(() => {
-            updateGrid();
-            placeAllRoomsOnGrid(rooms, []);
-        }, 250));
+        function calculateOccupiedSeats(bookings, date) {
+            return bookings.length;
+        }
+
+        document.getElementById('dateInput').addEventListener('change', (e) => {
+            changeDateAndRefresh(e.target.value);
+            filterRooms();
+        });
 
         // Initialisierung
         checkUserStatus();
