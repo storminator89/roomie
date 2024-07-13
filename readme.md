@@ -1,36 +1,36 @@
-# Roomie 
+# Roomie
 
-Roomie  ist eine Webanwendung zur Verwaltung und Buchung von Räumen in einem Bürogebäude.
+Roomie is a web application for managing and booking rooms in an office building.
 
-## Funktionen
+## Features
 
-- **📊 Dashboard**: Erhalten Sie eine sofortige Übersicht über alle verfügbaren Räume und deren aktuelle Belegung. Verpassen Sie nie wieder einen freien Raum!
-- **🗺️ Interaktiver Raumplan mit Raumverwaltung**: Nutzen Sie unser visuell ansprechendes Grid, um Räume auf einen Blick zu sehen. Admins können mühelos neue Räume hinzufügen und bestehende verwalten.
-- **📅 Buchungen**: Planen und verwalten Sie Ihre Raumreservierungen mit Leichtigkeit. Erhalten Sie ICS-Dateien und automatische E-Mail-Benachrichtigungen, um stets auf dem Laufenden zu bleiben.
-- **🏢 Räume**: Behalten Sie die Kontrolle über alle verfügbaren Räume und deren Nutzung. Verwalten Sie Kapazitäten, Ausstattung und Verfügbarkeit effizient.
-- **👥 Benutzerverwaltung**: Verwalten Sie Ihre Benutzer schnell und unkompliziert. Legen Sie neue Benutzer an, aktualisieren Sie Informationen und vergeben Sie Berechtigungen im Handumdrehen.
+- **📊 Dashboard**: Get an instant overview of all available rooms and their current occupancy. Never miss a free room again!
+- **🗺️ Interactive Room Plan with Room Management**: Use our visually appealing grid to see rooms at a glance. Admins can easily add new rooms and manage existing ones.
+- **📅 Bookings**: Plan and manage your room reservations with ease. Receive ICS files and automatic email notifications to stay updated.
+- **🏢 Rooms**: Maintain control over all available rooms and their usage. Efficiently manage capacities, equipment, and availability.
+- **👥 User Management**: Quickly and easily manage your users. Add new users, update information, and assign permissions in no time.
 
-
-## Technologien
+## Technologies
 
 - **Frontend**: HTML, CSS, JavaScript, Alpine.js, Tailwind CSS
 - **Backend**: PHP, SQLite
 
 ## Screenshots
-### Startseite
+
+### Home Page
 ![Screenshot](screenshot/main.png)
 
-### Buchungen
-![Buchung](screenshot/bookings.png)
+### Bookings
+![Booking](screenshot/bookings.png)
 
-### Interaktiver Raumplan
-![Raumplan](screenshot/interaktiver_raumplan.png)
+### Interactive Room Plan
+![Room Plan](screenshot/interaktiver_raumplan.png)
 
-### Raumübersicht
-![Übersicht](screenshot/rooms.png)
+### Room Overview
+![Overview](screenshot/rooms.png)
 
-### Berchtigungsmatrix wer darf Räume buchen
-![Berechtigungsmatrix](screenshot/raumberechtigung.png)
+### Permissions Matrix
+![Permissions Matrix](screenshot/raumberechtigung.png)
 
-### Raum Administration
+### Room Administration
 ![Administration](screenshot/room_administration.png)
