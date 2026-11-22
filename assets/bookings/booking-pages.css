@@ -34,7 +34,7 @@
 .rb-room-list span { overflow-wrap:anywhere; }
 .rb-periods { display:grid; gap:.35rem; border:0; padding:0; margin:0; }
 .rb-periods legend { font-weight:650; margin-bottom:.2rem; }
-.rb-periods label { display:flex; gap:.5rem; align-items:center; min-height:44px; }
+.rb-periods > label { display:flex; gap:.5rem; align-items:center; min-height:44px; }
 .rb-periods small { font-size:.8rem; color:var(--roomplan-muted,#525b65); }
 .rb-periods input:disabled + span { color:var(--roomplan-muted,#525b65); }
 .rb-page :focus-visible { outline:2px solid #255b91; outline-offset:3px; }

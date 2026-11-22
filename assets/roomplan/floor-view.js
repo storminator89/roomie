@@ -115,11 +115,9 @@ export function renderFloorPosition({
   search.dataset.floorFocusKey = 'search';
   search.maxLength = 100;
   search.value = filters.query;
-  const onlyBookable = button('Nur buchbar', 'roomplan-action roomplan-action-secondary rp-floor-available');
-  onlyBookable.dataset.floorFocusKey = 'available';
   const resultCount = el('span', 'rp-floor-result-count');
   resultCount.setAttribute('role', 'status');
-  filtersRow.append(search, onlyBookable, resultCount);
+  filtersRow.append(search, resultCount);
 
   const shortcuts = el('details', 'rp-floor-shortcuts');
   const shortcutTitle = el('summary', '', 'Räume im Grundriss');
@@ -155,11 +153,11 @@ export function renderFloorPosition({
   const tools = el('div', 'rp-floor-controls');
   tools.setAttribute('role', 'group');
   tools.setAttribute('aria-label', 'Grundriss vergrößern');
-  const smaller = button('−', 'roomplan-action-secondary rp-floor-zoom', 'Verkleinern');
-  const larger = button('+', 'roomplan-action-secondary rp-floor-zoom', 'Vergrößern');
+  const smaller = button('−', 'roomplan-action roomplan-action-secondary rp-floor-zoom', 'Verkleinern');
+  const larger = button('+', 'roomplan-action roomplan-action-secondary rp-floor-zoom', 'Vergrößern');
   smaller.dataset.floorFocusKey = 'minus';
   larger.dataset.floorFocusKey = 'plus';
-  const level = button('100 %', 'roomplan-action-secondary rp-floor-level', 'Zoom zurücksetzen: 100 Prozent');
+  const level = button('100 %', 'roomplan-action roomplan-action-secondary rp-floor-level', 'Zoom zurücksetzen: 100 Prozent');
   level.dataset.floorFocusKey = 'zoom';
   const legend = el('ul', 'rp-floor-legend');
   legend.setAttribute('aria-label', 'Belegungsstatus');
@@ -234,10 +232,9 @@ export function renderFloorPosition({
     }
     const active = required.length > 0 || filters.onlyBookable;
     shortcuts.hidden = count === 0;
-    shortcutTitle.textContent = active ? 'Suchergebnisse' : 'Räume im Grundriss';
+    shortcutTitle.textContent = required.length ? 'Suchergebnisse' : filters.onlyBookable ? 'Freie Räume' : 'Räume im Grundriss';
     if (active) shortcuts.open = true;
     else if (resetOpen && !viewport.hidden) shortcuts.open = false;
-    onlyBookable.setAttribute('aria-pressed', String(filters.onlyBookable));
     resultCount.textContent = !active ? '' : filters.onlyBookable && availabilityStatus !== 'ready'
       ? (availabilityStatus === 'error' ? 'Belegung unbekannt' : 'Belegung wird geladen …')
       : count === 0 ? 'Keine Treffer' : count === 1 ? '1 Raum' : `${count} Räume`;
@@ -247,7 +244,6 @@ export function renderFloorPosition({
     onFilterChange(selectedId != null && entries.get(selectedId)?.marker.hidden);
   };
   search.addEventListener('input', () => { filters.query = search.value; notifyFilters(); });
-  onlyBookable.addEventListener('click', () => { filters.onlyBookable = !filters.onlyBookable; notifyFilters(); });
   applyFilters();
   updateSelection(null);
   // Keep the renderer's DOM return contract; expose view state without a re-render.
@@ -258,7 +254,9 @@ export function renderFloorPosition({
     setZoom(position.zoomIndex);
     viewport.scrollLeft = position.x;
     viewport.scrollTop = position.y;
-    if (!viewport.hidden) shortcuts.open = position.open;
+    if (!viewport.hidden && !filters.onlyBookable && !normalizeRoomSearch(filters.query).length) {
+      shortcuts.open = position.open;
+    }
   };
 
   let zoomIndex = 0;

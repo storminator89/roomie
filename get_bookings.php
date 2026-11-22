@@ -37,7 +37,8 @@ try {
         exit;
     }
     foreach ($bookings as &$booking) {
-        if (!$isAdmin && (int) $booking['user_id'] !== $userId) {
+        $booking['own'] = (int) $booking['user_id'] === $userId;
+        if (!$isAdmin && !$booking['own']) {
             unset($booking['id'], $booking['user_id'], $booking['seat_id'], $booking['user_name']);
         }
     }

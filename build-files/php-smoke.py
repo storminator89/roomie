@@ -2,22 +2,29 @@
 """Local application smoke test. Python 3 + selected PHP CLI (PDO SQLite, Linux POSIX)."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from base64 import b64decode
 import datetime as dt
+from html.parser import HTMLParser
 import http.cookiejar
 import json
 import os
 from pathlib import Path
 import re
 import shutil
+import signal
+import sqlite3
 import struct
 import socket
 import subprocess
 import sys
 import tempfile
+from threading import Barrier
 import time
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
+from zoneinfo import ZoneInfo
 from urllib.request import (
     HTTPRedirectHandler,
     HTTPCookieProcessor,
@@ -177,6 +184,216 @@ def smoke_floorplan(command, root, env, guest, admin, admin_status, user, room_i
     print("Floorplan: multiple uploads, rename, saved markers, revision, room permissions and private image passed", flush=True)
 
 
+class BookingDetailsHTML(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.inputs = []
+        self.range = {}
+        self.map_back = None
+        self.select = None
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "input":
+            self.inputs.append(attrs)
+        elif tag == "select":
+            self.select = attrs.get("name")
+        elif tag == "option" and self.select and "selected" in attrs:
+            self.range[self.select] = attrs.get("value")
+        elif tag == "a" and "rb-back" in attrs.get("class", "").split():
+            self.map_back = attrs.get("href")
+
+    def handle_endtag(self, tag):
+        if tag == "select":
+            self.select = None
+
+
+def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status, user, user_status, concurrent):
+    db_path = env["ROOMIE_DB_PATH"]
+    run(command + ["-r", """
+        require 'booking_helpers.php';
+        // 10:15 in Berlin during daylight-saving time, without changing the host clock.
+        $now = new DateTimeImmutable('2026-06-01T08:15:00Z');
+        $date = parseBookingDate('2026-06-01');
+        foreach ([['09:45', '10:00'], ['10:00', '10:30'], ['10:15', '10:30']] as [$start, $end]) {
+            try {
+                roomieParseCustomBookingTimes($date, $start, $end, $now);
+                fwrite(STDERR, 'Unexpected elapsed, ongoing, or boundary custom slot'); exit(1);
+            } catch (DomainException) {
+                continue;
+            }
+        }
+        if (roomieParseCustomBookingTimes($date, '10:30', '10:45', $now) !== ['10:30', '10:45']) {
+            fwrite(STDERR, 'Unexpected result for future same-day slot'); exit(1);
+        }
+    """], root, env)
+    with closing(sqlite3.connect(db_path)) as db, db:
+        ids = dict(db.execute("SELECT email, id FROM users"))
+        user_id = ids["smoke-user@example.test"]
+        admin_id = ids["smoke-admin@example.test"]
+        colleague_id = db.execute("""
+            INSERT INTO users (name, email, password, is_admin)
+            SELECT 'Smoke Other Member', 'smoke-other@example.test', password, 0 FROM users WHERE id = ?
+        """, (user_id,)).lastrowid
+        rooms = {}
+        for name, capacity, kind in (("Gap", 1, "meeting"), ("Capacity", 2, "shared-desk"),
+                                     ("Own overlap", 3, "shared-desk"), ("Range", 1, "office"),
+                                     ("Preset", 1, "office"), ("Race", 1, "office"),
+                                     ("Restricted", 2, "fk-office")):
+            rooms[name] = db.execute("INSERT INTO rooms (name, type, capacity) VALUES (?, ?, ?)",
+                                     (f"QA Flex {name}", kind, capacity)).lastrowid
+        db.execute("INSERT INTO permissions (user_id, room_id) VALUES (?, ?)", (colleague_id, rooms["Restricted"]))
+        next_date = (dt.date.fromisoformat(date) + dt.timedelta(days=1)).isoformat()
+        for who, room, on, start, end in (
+            (colleague_id, "Gap", date, "09:00", "10:00:00"),
+            (colleague_id, "Gap", date, "11:00:00", "17:00"),
+            (colleague_id, "Capacity", date, "10:00:00", "10:30:00"),
+            (admin_id, "Capacity", date, "10:30", "11:00"),
+            (user_id, "Own overlap", date, "12:00", "12:30"),
+            (colleague_id, "Range", next_date, "09:00", "17:00"),
+        ):
+            db.execute("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, ?, ?)",
+                       (who, rooms[room], on, start, end))
+
+    colleague = Client(user.base_url)
+    colleague_status = colleague.login("smoke-other@example.test", env["ROOMIE_SMOKE_PASSWORD"])
+    user_token = user_status["csrf_token"]
+    admin_token = admin_status["csrf_token"]
+    colleague_token = colleague_status["csrf_token"]
+
+    def fields(room, start="10:00", end="11:00", day=date):
+        return {"selectedWorkspace": rooms[room], "start_date": day, "end_date": day,
+                "time_period": "individuell", "start_time": start, "end_time": end}
+
+    def submit(payload, actor=user, token=user_token, expected=None, description="booking"):
+        code, headers, body = actor.request("process_booking.php", payload, csrf=token)
+        expect(200 <= code < 500 and "application/json" in headers.get("Content-Type", ""),
+               f"{description}: expected a structured booking result, got HTTP {code}")
+        result = json.loads(body)
+        expect(isinstance(result.get("success"), bool), f"{description}: missing booking outcome")
+        if expected is not None:
+            expect(result["success"] is expected, f"{description}: received {result}")
+        return code, result
+
+    for start, end in (("9:00", "10:00"), ("09:00:00", "10:00"), ("09:10", "10:00"),
+                       ("08:45", "10:00"), ("16:45", "17:15"), ("11:00", "11:00"),
+                       ("11:00", "10:00"), ("", "10:00")):
+        submit(fields("Preset", start, end), expected=False, description=f"Reject invalid window {start!r}–{end!r}")
+    malformed = fields("Preset")
+    malformed["start_time[]"] = malformed.pop("start_time")
+    submit(malformed, expected=False, description="Reject non-scalar time input")
+    submit(dict(fields("Preset"), end_date=next_date), expected=False, description="Reject custom multi-day booking")
+    berlin_clock = dt.datetime.now(ZoneInfo("Europe/Berlin"))
+    past_day = (berlin_clock.date() - dt.timedelta(days=1)).isoformat()
+    submit(fields("Preset", day=past_day), expected=False, description="Reject past date")
+    today = berlin_clock.date().isoformat()
+    if berlin_clock.time() > dt.time(9, 15):
+        submit(fields("Preset", "09:00", "09:15", today), expected=False, description="Reject an ended same-day slot")
+    code, _ = submit(fields("Preset"), token=None, expected=False, description="Reject booking without CSRF")
+    expect(code == 403, "Missing booking CSRF token should receive HTTP 403")
+
+    for actor, expected_can_book in ((user, None), (admin, False), (colleague, True)):
+        code, _, raw = actor.request("load_grid.php")
+        expect(code == 200, "Expected authenticated map-room data")
+        by_id = {room["id"]: room for room in json.loads(raw)["data"]["rooms"]}
+        expect(by_id[rooms["Gap"]]["can_book"] is True, "Public rooms must be bookable on the map")
+        if expected_can_book is None:
+            expect(rooms["Restricted"] not in by_id, "The map must not expose rooms hidden from members")
+        else:
+            expect(by_id[rooms["Restricted"]]["can_book"] is expected_can_book,
+                   "Map eligibility must distinguish an admin's inspection rights from a booking grant")
+
+    hidden_url = 'get_bookings.php?' + urlencode({"room_id": rooms["Restricted"], "start_date": date})
+    expect(guest.request(hidden_url)[0] == 401, "Room occupancy must stay private to a signed-in session")
+    expect(user.request(hidden_url)[0] == 404, "Restricted occupancy must be hidden from ungranted members")
+    expect(user.request(f"room_details.php?id={rooms['Restricted']}&date={date}")[0] == 404,
+           "A restricted room must not leak through room details")
+    submit(fields("Restricted"), expected=False, description="Reject ungranted member booking")
+    submit(fields("Restricted"), actor=admin, token=admin_token, expected=False,
+           description="Admin visibility does not confer booking rights")
+    submit(fields("Restricted"), actor=colleague, token=colleague_token, expected=True,
+           description="A grant enables custom booking")
+
+    gap_url = f"room_details.php?id={rooms['Gap']}&date={date}"
+    code, _, html = user.request(gap_url)
+    expect(code == 200 and 'id="rb-room-book"' in html and "Smoke Other Member" not in html,
+           "Room details must permit the free gap without exposing other bookers")
+    details = BookingDetailsHTML(html)
+    periods = {entry.get("value"): entry for entry in details.inputs if entry.get("name") == "time_period"}
+    expect(all(value in periods and "disabled" in periods[value] for value in ("ganzerTag", "vormittags", "nachmittags")),
+           "All three presets should be unavailable on a room with only a custom gap")
+    expect("individuell" in periods and "disabled" not in periods["individuell"] and "checked" in periods["individuell"]
+           and details.range == {"start_time": "10:00", "end_time": "10:15"},
+           "The booking form must select the earliest usable custom gap when presets are full")
+    preferred = {"start_time": "10:15", "end_time": "10:45"}
+    code, _, html = user.request(gap_url + "&" + urlencode({**preferred, "free": "1"}))
+    linked = BookingDetailsHTML(html)
+    target = urlsplit(linked.map_back or "")
+    expect(code == 200 and linked.range == preferred and target.path == "raumplan.php"
+           and parse_qs(target.query) == {key: [value] for key, value in {**preferred, "date": date, "free": "1"}.items()},
+           "Opening room details and returning must preserve the map's date, times and free filter")
+    submit(fields("Gap"), expected=True, description="Custom interval fits a gap between legacy bookings")
+    submit(fields("Gap", "09:45", "10:15"), actor=admin, token=admin_token, expected=False,
+           description="Overlapping a booking by 15 minutes blocks a single-place room")
+    submit(fields("Own overlap", "12:15", "12:45"), expected=False,
+           description="Own overlap is blocked despite spare capacity")
+    submit(fields("Own overlap", "12:30", "12:45"), expected=True,
+           description="Own adjacent booking is permitted")
+    submit(fields("Capacity"), expected=True, description="Adjacent bookings consume one place each, not two")
+    submit(fields("Capacity", "10:15", "10:30"), actor=admin, token=admin_token, expected=False,
+           description="Peak concurrent capacity must be respected")
+    submit(dict(fields("Range"), time_period="ganzerTag", end_date=next_date), expected=False,
+           description="A blocked date must roll back the entire multi-day booking")
+
+    expected_presets = [("ganzerTag", "09:00", "17:00"), ("vormittags", "09:00", "12:00"),
+                        ("nachmittags", "13:00", "17:00")]
+    for offset, (period, _, _) in enumerate(expected_presets):
+        on = (dt.date.fromisoformat(date) + dt.timedelta(days=offset)).isoformat()
+        submit(dict(fields("Preset", "16:45", "17:00", on), time_period=period), expected=True,
+               description=f"Keep legacy {period} preset authoritative regardless of custom time fields")
+
+    if concurrent:
+        barrier = Barrier(2, timeout=5)
+
+        def compete(actor, token):
+            barrier.wait()
+            return submit(fields("Race"), actor=actor, token=token, description="Race for one place")[1]["success"]
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(compete, user, user_token)
+            second = pool.submit(compete, colleague, colleague_token)
+            expect(sorted((first.result(), second.result())) == [False, True],
+                   "Exactly one concurrent request should win the last place")
+        with closing(sqlite3.connect(db_path)) as db:
+            expect(db.execute("SELECT COUNT(*) FROM bookings WHERE room_id = ?", (rooms["Race"],)).fetchone()[0] == 1,
+                   "Exactly one concurrent booking should commit")
+
+    with closing(sqlite3.connect(db_path)) as db:
+        expect(db.execute("SELECT date FROM bookings WHERE user_id = ? AND room_id = ?", (user_id, rooms["Range"])).fetchall() == [],
+               "A failed multi-day preset must not leave a partial booking")
+        expect(db.execute("SELECT start_time, end_time FROM bookings WHERE room_id = ? ORDER BY date", (rooms["Preset"],)).fetchall()
+               == [(start, end) for _, start, end in expected_presets], "Presets must persist their original hours")
+        own_gap = db.execute("SELECT id, start_time, end_time FROM bookings WHERE user_id = ? AND room_id = ?",
+                             (user_id, rooms["Gap"])).fetchall()
+        expect(len(own_gap) == 1 and own_gap[0][1:] == ("10:00", "11:00"), "Custom window must persist exact selected times")
+
+    code, _, raw = user.request('get_bookings.php?' + urlencode({"room_id": rooms["Gap"], "start_date": date}))
+    slots = json.loads(raw)
+    expect(code == 200 and len(slots) == 3 and sum("user_id" in booking for booking in slots) == 1
+           and sum(booking["own"] is True for booking in slots) == 1
+           and all(booking["own"] is ("user_id" in booking) for booking in slots)
+           and "Smoke Other Member" not in raw, "Map occupancy must identify own slots without leaking other identities")
+    code, headers, ics = user.request(f"bookings.php?download=calendar&booking_id={own_gap[0][0]}")
+    expect(code == 200 and "text/calendar" in headers.get("Content-Type", ""), "Custom booking needs a calendar download")
+    for label, hour in (("DTSTART", 10), ("DTEND", 11)):
+        local = dt.datetime.combine(dt.date.fromisoformat(date), dt.time(hour), ZoneInfo("Europe/Berlin"))
+        stamp = local.astimezone(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        expect(f"{label}:{stamp}" in ics.split("\r\n"), f"Custom ICS must preserve converted {label}")
+    print("Flexible bookings: validation, presets, gap, peak capacity, own overlap, rollback, "
+          "room grants, private map data and ICS passed" + ("; concurrent last place passed" if concurrent else ""), flush=True)
+
+
 def smoke(php, root, scratch, expected_minor):
     env = {key: value for key, value in os.environ.items()
            if not key.startswith("ROOMIE_") and key != "PHP_CLI_SERVER_WORKERS"}
@@ -187,6 +404,8 @@ def smoke(php, root, scratch, expected_minor):
         "ROOMIE_ADMIN_EMAIL": "smoke-admin@example.test",
         "ROOMIE_SMOKE_PASSWORD": "FreshTempSmokeOnly!91",
     })
+    concurrent = os.name == "posix"
+    server_env = dict(env, PHP_CLI_SERVER_WORKERS="3") if concurrent else env
     command = [php] + PHP_TEST_ARGS
     php_code = """
       echo PHP_VERSION, PHP_EOL;
@@ -235,8 +454,8 @@ def smoke(php, root, scratch, expected_minor):
     base_url = f"http://127.0.0.1:{port}/"
     with logfile.open("w", encoding="utf-8") as output:
         with subprocess.Popen(command + ["-d", f"session.save_path={sessions}", "-S",
-                              f"127.0.0.1:{port}", "-t", str(root)], cwd=root, env=env,
-                              stdout=output, stderr=subprocess.STDOUT) as server:
+                              f"127.0.0.1:{port}", "-t", str(root)], cwd=root, env=server_env,
+                              stdout=output, stderr=subprocess.STDOUT, start_new_session=concurrent) as server:
             try:
                 guest = Client(base_url)
                 for _ in range(50):
@@ -338,12 +557,23 @@ def smoke(php, root, scratch, expected_minor):
                 print("Local HTTP: authentication, floorplan roles, dashboard, booking, and ICS passed", flush=True)
                 smoke_avatar(command, root, env, guest, user, user_status)
                 smoke_floorplan(command, root, env, guest, admin, admin_status, user, room_id)
+                smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status,
+                                        user, user_status, concurrent)
             finally:
-                server.terminate()
+                if concurrent:
+                    try:
+                        os.killpg(server.pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+                else:
+                    server.terminate()
                 try:
                     server.wait(timeout=5)
                 except subprocess.TimeoutExpired:
-                    server.kill()
+                    if concurrent:
+                        os.killpg(server.pid, signal.SIGKILL)
+                    else:
+                        server.kill()
                     server.wait()
                 log = logfile.read_text(encoding="utf-8")
                 if DIAGNOSTIC.search(log):

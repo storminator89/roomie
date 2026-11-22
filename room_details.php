@@ -40,7 +40,7 @@ try {
         $grant->closeCursor();
     }
     [$acl, $aclParams] = roomieBookingAccessSql('r', $userId, $admin);
-    $stmt = $db->prepare("SELECT b.start_time, b.end_time, b.user_id = :owner AS own,
+    $stmt = $db->prepare("SELECT b.start_time, b.end_time, b.user_id, b.user_id = :owner AS own,
                          CASE WHEN :canSeeNames = 1 OR b.user_id = :viewer THEN u.name END AS user_name
                           FROM bookings b JOIN users u ON b.user_id = u.id JOIN rooms r ON r.id = b.room_id
                           WHERE b.room_id = :room_id AND b.date = :selected_date AND $acl
@@ -91,47 +91,60 @@ function detailEscape(string $text): string
     return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-function detailUrl(int $roomId, string $date): string
+function detailUrl(int $roomId, string $date, array $context): string
 {
-    return 'room_details.php?' . http_build_query(['id' => $roomId, 'date' => $date]);
-}
-
-function periodCanBeBooked(int $capacity, array $bookings, string $start, string $end): bool
-{
-    if ($capacity < 1) return false;
-    $deltas = [];
-    foreach ($bookings as $booking) {
-        // Match the half-open overlap semantics used by the booking write endpoint.
-        if ($booking['start_time'] >= $end || $booking['end_time'] <= $start) continue;
-        if ($booking['own']) return false;
-        $from = max($start, $booking['start_time']);
-        $to = min($end, $booking['end_time']);
-        $deltas[$from] = ($deltas[$from] ?? 0) + 1;
-        $deltas[$to] = ($deltas[$to] ?? 0) - 1;
-    }
-    ksort($deltas, SORT_STRING);
-    $used = 0;
-    foreach ($deltas as $delta) {
-        $used += $delta;
-        if ($used >= $capacity) return false;
-    }
-    return true;
+    return 'room_details.php?' . http_build_query(['id' => $roomId, 'date' => $date] + $context);
 }
 
 $capacity = max(0, (int) $room['capacity']);
-$today = roomieBookingToday();
+$now = new DateTimeImmutable('now', $parsedDate->getTimezone());
+$today = $now->setTime(0, 0);
 $canBookDate = $parsedDate >= $today && $parsedDate <= $today->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days');
 $periods = [
-    'ganzerTag' => ['Ganztags', '09:00', '17:00'],
-    'vormittags' => ['Vormittags', '09:00', '12:00'],
-    'nachmittags' => ['Nachmittags', '13:00', '17:00'],
+    'ganzerTag' => ['Ganztags', ROOMIE_BOOKING_OPEN_TIME, ROOMIE_BOOKING_CLOSE_TIME],
+    'vormittags' => ['Vormittags', ROOMIE_BOOKING_OPEN_TIME, '12:00'],
+    'nachmittags' => ['Nachmittags', '13:00', ROOMIE_BOOKING_CLOSE_TIME],
 ];
 $firstPeriod = null;
 foreach ($periods as $key => &$period) {
-    $period[] = $canBookRoom && $canBookDate && periodCanBeBooked($capacity, $bookings, $period[1], $period[2]);
+    $period[] = $canBookRoom && $canBookDate && roomieBookingConflict($bookings, $capacity, $userId, $period[1], $period[2]) === null;
     if ($period[3] && $firstPeriod === null) $firstPeriod = $key;
 }
 unset($period);
+
+$customTimes = [];
+$opens = $parsedDate->modify(ROOMIE_BOOKING_OPEN_TIME);
+$closes = $parsedDate->modify(ROOMIE_BOOKING_CLOSE_TIME);
+$step = new DateInterval('PT' . ROOMIE_BOOKING_STEP_MINUTES . 'M');
+$firstCustom = null;
+for ($slot = $opens; $slot <= $closes; $slot = $slot->add($step)) {
+    $from = $slot->format('H:i');
+    $customTimes[] = $from;
+    $end = $slot->add($step);
+    if ($firstCustom === null && $canBookRoom && $canBookDate && $slot > $now && $end <= $closes) {
+        $to = $end->format('H:i');
+        if (roomieBookingConflict($bookings, $capacity, $userId, $from, $to) === null) {
+            $firstCustom = [$from, $to];
+        }
+    }
+}
+$detailContext = [];
+$givenStart = $_GET['start_time'] ?? null;
+$givenEnd = $_GET['end_time'] ?? null;
+$chosenCustom = null;
+if (in_array($givenStart, $customTimes, true) && in_array($givenEnd, $customTimes, true) && $givenStart < $givenEnd) {
+    $detailContext += ['start_time' => $givenStart, 'end_time' => $givenEnd];
+    if ($firstCustom) {
+        try {
+            $chosenCustom = roomieParseCustomBookingTimes($parsedDate, $givenStart, $givenEnd, $now);
+        } catch (DomainException) {
+            // Preserve the range on the back link even if it is no longer bookable.
+        }
+    }
+}
+if (($_GET['free'] ?? null) === '1') $detailContext['free'] = '1';
+if ($firstCustom && ($chosenCustom || $firstPeriod === null)) $firstPeriod = 'individuell';
+[$customStart, $customEnd] = $chosenCustom ?? $firstCustom ?? [ROOMIE_BOOKING_OPEN_TIME, ROOMIE_BOOKING_CLOSE_TIME];
 
 $equipmentLabels = [
     'wifi' => 'WLAN', 'projector' => 'Beamer', 'whiteboard' => 'Whiteboard',
@@ -141,7 +154,7 @@ $equipmentLabels = [
 $equipment = json_decode((string) $room['equipment'], true);
 $equipment = is_array($equipment) ? array_slice(array_unique(array_filter($equipment, 'is_string')), 0, 20) : [];
 $roomName = (string) $room['name'];
-$planUrl = 'raumplan.php?date=' . rawurlencode($selected_date);
+$planUrl = 'raumplan.php?' . http_build_query(['date' => $selected_date] + $detailContext);
 $prev = parseBookingDate($parsedDate->modify('-1 day')->format('Y-m-d'));
 $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
 ?>
@@ -153,7 +166,7 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
     <title><?= detailEscape($roomName) ?> · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/bookings/booking-pages.css">
-    <script src="assets/bookings/room-book.js" defer></script>
+    <script src="assets/bookings/room-book.js" type="module"></script>
 </head>
 <body class="roomplan-page">
 <?php $roomieActivePage = 'room_details.php'; require __DIR__ . '/roomplan_shell.php'; ?>
@@ -174,10 +187,13 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
     <?php endif; ?>
     <form method="get" action="room_details.php" class="rb-filter">
         <input type="hidden" name="id" value="<?= $room_id ?>">
+        <?php foreach ($detailContext as $name => $value) : ?>
+            <input type="hidden" name="<?= detailEscape($name) ?>" value="<?= detailEscape($value) ?>">
+        <?php endforeach; ?>
         <label>Datum<input type="date" name="date" value="<?= detailEscape($selected_date) ?>" required></label>
         <button type="submit" class="roomplan-action roomplan-action-secondary">Anzeigen</button>
-        <?php if ($prev) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $prev->format('Y-m-d'))) ?>" aria-label="Vorheriger Tag">←</a><?php endif; ?>
-        <?php if ($next) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $next->format('Y-m-d'))) ?>" aria-label="Nächster Tag">→</a><?php endif; ?>
+        <?php if ($prev) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $prev->format('Y-m-d'), $detailContext)) ?>" aria-label="Vorheriger Tag">←</a><?php endif; ?>
+        <?php if ($next) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $next->format('Y-m-d'), $detailContext)) ?>" aria-label="Nächster Tag">→</a><?php endif; ?>
     </form>
     <div class="rb-room-columns">
         <section class="roomplan-panel rb-room-panel">
@@ -210,13 +226,35 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
                         <span><strong><?= $title ?></strong> <small><?= $start ?>–<?= $end ?><?php if (!$available) : ?> · nicht verfügbar<?php endif; ?></small></span>
                     </label>
                     <?php endforeach; ?>
+                    <label>
+                        <input type="radio" name="time_period" value="individuell"<?= $firstPeriod === 'individuell' ? ' checked' : '' ?><?= !$firstCustom ? ' disabled' : '' ?> required>
+                        <span><strong>Individuell</strong><?php if (!$firstCustom) : ?> <small>nicht verfügbar</small><?php endif; ?></span>
+                    </label>
+                    <?php if ($firstCustom) : ?>
+                    <div class="rp-time-range" data-custom-time<?= $firstPeriod !== 'individuell' ? ' hidden' : '' ?>>
+                        <label class="rp-time-label" for="rb-book-start-time">Von
+                            <select class="rp-date rp-time" id="rb-book-start-time" name="start_time" required<?= $firstPeriod !== 'individuell' ? ' disabled' : '' ?>>
+                                <?php foreach (array_slice($customTimes, 0, -1) as $option) : ?>
+                                    <option value="<?= $option ?>"<?= $customStart === $option ? ' selected' : '' ?>><?= $option ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <label class="rp-time-label" for="rb-book-end-time">Bis
+                            <select class="rp-date rp-time" id="rb-book-end-time" name="end_time" required<?= $firstPeriod !== 'individuell' ? ' disabled' : '' ?>>
+                                <?php foreach (array_slice($customTimes, 1) as $option) : ?>
+                                    <option value="<?= $option ?>"<?= $customEnd === $option ? ' selected' : '' ?>><?= $option ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                    </div>
+                    <?php endif; ?>
                 </fieldset>
                 <button type="submit" class="roomplan-action">Buchen</button>
             </form>
             <p id="rb-room-feedback" class="rb-notice" role="status" tabindex="-1" hidden></p>
             <div id="rb-room-bookings" class="rb-segments" hidden>
                 <a href="bookings.php?date=<?= rawurlencode($selected_date) ?>">Zu meinen Buchungen</a>
-                <a href="<?= detailEscape(detailUrl($room_id, $selected_date)) ?>">Belegung aktualisieren</a>
+                <a href="<?= detailEscape(detailUrl($room_id, $selected_date, $detailContext)) ?>">Belegung aktualisieren</a>
             </div>
             <noscript><a class="rb-inline-link" href="<?= detailEscape($planUrl) ?>">Im Raumplan buchen</a></noscript>
             <?php endif; ?>

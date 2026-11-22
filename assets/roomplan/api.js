@@ -41,6 +41,7 @@ export function normalizeRoomplan(response, availableFavorites = []) {
             number: String(raw.number ?? ''),
             type: String(raw.type ?? ''),
             capacity: Math.max(0, Math.min(500, Number.parseInt(raw.capacity, 10) || 0)),
+            canBook: raw.can_book !== false,
             amenities: decodeList(raw.equipment).filter(v => typeof v === 'string').slice(0, 32),
             position
         });
@@ -153,11 +154,22 @@ export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
             const payload = await request('update_favorite.php', {body: new URLSearchParams({favorite_room_id: roomId})});
             return payload.is_favorite === true;
         },
-        async book({roomId, date, period}) {
-            if (!positiveId(roomId) || !DAYS.test(date) || !PERIODS.includes(period)) throw new Error('Bitte Raum, Datum und Zeitspanne prüfen.');
-            const payload = await request('process_booking.php', {body: new URLSearchParams({
+        async book({roomId, date, period, startTime, endTime}) {
+            const custom = period === 'individuell';
+            if (!positiveId(roomId) || !DAYS.test(date) || (!custom && !PERIODS.includes(period))) {
+                throw new Error('Bitte Raum, Datum und Zeitspanne prüfen.');
+            }
+            const body = new URLSearchParams({
                 selectedWorkspace: roomId, start_date: date, end_date: date, time_period: period
-            })});
+            });
+            if (custom) {
+                if (!/^\d{2}:\d{2}$/.test(startTime ?? '') || !/^\d{2}:\d{2}$/.test(endTime ?? '')) {
+                    throw new Error('Bitte Start- und Endzeit wählen.');
+                }
+                body.set('start_time', startTime);
+                body.set('end_time', endTime);
+            }
+            const payload = await request('process_booking.php', {body});
             return {message: payload.message};
         },
         async saveLayout(layout) {

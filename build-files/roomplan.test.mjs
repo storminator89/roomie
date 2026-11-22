@@ -63,3 +63,29 @@ test('new editor never sends an unlocked layout write', async () => {
     const api = createRoomplanApi({fetcher: async () => assert.fail('fetch should not run')});
     await assert.rejects(api.saveLayout({rows: 1, cols: 1, layout: [null]}), /Layout-Version fehlt/);
 });
+
+test('planner keeps inspect-only rooms visible without treating them as bookable', () => {
+    const {rooms} = normalizeRoomplan({rooms: [
+        {id: 1, type: 'fk-office', can_book: false}, {id: 2, type: 'fk-office', can_book: true},
+    ]});
+    assert.deepEqual(rooms.map(room => [room.id, room.canBook]), [[1, false], [2, true]]);
+});
+
+test('planner sends only custom time fields for same-day individual bookings', async () => {
+    const calls = [];
+    const api = createRoomplanApi({csrf: 'fixture-token', fetcher: async (path, opts) => {
+        calls.push([path, opts]);
+        return {ok: true, status: 200, json: async () => ({success: true, message: 'Gebucht.'})};
+    }});
+    const common = {roomId: 7, date: '2026-11-22', startTime: '10:15', endTime: '11:45'};
+    assert.deepEqual(await api.book({...common, period: 'individuell'}), {message: 'Gebucht.'});
+    assert.equal(calls[0][0], 'process_booking.php');
+    assert.equal(calls[0][1].headers['X-CSRF-Token'], 'fixture-token');
+    assert.deepEqual(Object.fromEntries(calls[0][1].body), {
+        selectedWorkspace: '7', start_date: common.date, end_date: common.date, time_period: 'individuell',
+        start_time: common.startTime, end_time: common.endTime,
+    });
+    await api.book({...common, period: 'vormittags'});
+    assert.equal(calls[1][1].body.has('start_time'), false);
+    assert.equal(calls[1][1].body.has('end_time'), false);
+});

@@ -2,7 +2,8 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_calendar.php';
 
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: private, no-store');
 
 function bookingError(string $message): void
 {
@@ -23,10 +24,11 @@ $today = roomieBookingToday();
 $horizon = $today->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days');
 $timePeriod = $_POST['time_period'] ?? null;
 $periods = [
-    'ganzerTag' => ['09:00', '17:00'],
-    'vormittags' => ['09:00', '12:00'],
-    'nachmittags' => ['13:00', '17:00'],
+    'ganzerTag' => [ROOMIE_BOOKING_OPEN_TIME, ROOMIE_BOOKING_CLOSE_TIME],
+    'vormittags' => [ROOMIE_BOOKING_OPEN_TIME, '12:00'],
+    'nachmittags' => ['13:00', ROOMIE_BOOKING_CLOSE_TIME],
 ];
+$custom = $timePeriod === 'individuell';
 
 if (!$startDate || !$endDate || $startDate > $endDate || $startDate->diff($endDate)->days > 30) {
     bookingError('Bitte einen gültigen Zeitraum von bis zu 31 Tagen auswählen.');
@@ -40,11 +42,23 @@ if ($roomId === null) {
     bookingError('Ungültiger Raum.');
     exit;
 }
-if (!is_string($timePeriod) || !isset($periods[$timePeriod])) {
+if ($custom) {
+    if ($startDate != $endDate) {
+        bookingError('Eine individuelle Zeit ist nur für einen einzelnen Tag buchbar.');
+        exit;
+    }
+    try {
+        [$startTime, $endTime] = roomieParseCustomBookingTimes($startDate, $_POST['start_time'] ?? null, $_POST['end_time'] ?? null);
+    } catch (DomainException $error) {
+        bookingError($error->getMessage());
+        exit;
+    }
+} elseif (is_string($timePeriod) && isset($periods[$timePeriod])) {
+    [$startTime, $endTime] = $periods[$timePeriod];
+} else {
     bookingError('Ungültige Zeitspanne.');
     exit;
 }
-[$startTime, $endTime] = $periods[$timePeriod];
 $userId = (int) $_SESSION['user_id'];
 $db = getDatabaseConnection();
 $transactionOpen = false;
@@ -61,6 +75,17 @@ try {
         $db->exec('ROLLBACK');
         roomieBookingJson(['success' => false, 'error' => 'Sitzung nicht mehr gültig.'], 401);
         exit;
+    }
+
+    if ($custom) {
+        // The start may have passed while this request waited for the write lock.
+        try {
+            roomieParseCustomBookingTimes($startDate, $startTime, $endTime);
+        } catch (DomainException $error) {
+            $db->exec('ROLLBACK');
+            bookingError($error->getMessage());
+            exit;
+        }
     }
 
     $findRoom = $db->prepare('SELECT name, type, capacity FROM rooms WHERE id = :id');
@@ -99,10 +124,13 @@ try {
     }
 
     if ($rejection === null) {
+        // The indexed prefilter can include an extra touching row with seconds;
+        // the shared conflict check compares the full timestamps.
         $checkBookings = $db->prepare(
             'SELECT user_id, start_time, end_time FROM bookings
              WHERE room_id = :room AND date = :date AND start_time < :end_time AND end_time > :start_time'
         );
+        $checkBookings->setFetchMode(PDO::FETCH_ASSOC);
         $insert = $db->prepare(
             'INSERT INTO bookings (user_id, room_id, seat_id, date, start_time, end_time)
              VALUES (:user_id, :room_id, NULL, :date, :start_time, :end_time)'
@@ -110,35 +138,13 @@ try {
         for ($day = $startDate; $day <= $endDate; $day = $day->modify('+1 day')) {
             $date = $day->format('Y-m-d');
             $checkBookings->execute(['room' => $roomId, 'date' => $date, 'start_time' => $startTime, 'end_time' => $endTime]);
-            $changes = [];
-            $alreadyBooked = false;
-            while ($existing = $checkBookings->fetch(PDO::FETCH_ASSOC)) {
-                if ((int) $existing['user_id'] === $userId) {
-                    $alreadyBooked = true;
-                    break;
-                }
-                $from = max($startTime, $existing['start_time']);
-                $to = min($endTime, $existing['end_time']);
-                $changes[$from] = ($changes[$from] ?? 0) + 1;
-                $changes[$to] = ($changes[$to] ?? 0) - 1;
-            }
+            $conflict = roomieBookingConflict($checkBookings, (int) $room['capacity'], $userId, $startTime, $endTime);
             $checkBookings->closeCursor();
-            if ($alreadyBooked) {
+            if ($conflict === 'own') {
                 $rejection = 'Sie haben den Raum am ' . $day->format('d.m.Y') . ' bereits gebucht.';
                 break;
             }
-            // Adjacent bookings release and occupy a place at the same boundary.
-            // Compare peak simultaneous occupancy, not a sum across disparate time slots.
-            ksort($changes, SORT_STRING);
-            $occupancy = 0;
-            $capacity = (int) $room['capacity'];
-            foreach ($changes as $change) {
-                $occupancy += $change;
-                if ($occupancy >= $capacity) {
-                    break;
-                }
-            }
-            if ($occupancy >= $capacity) {
+            if ($conflict === 'capacity') {
                 $rejection = 'Die Kapazität des Raums am ' . $day->format('d.m.Y') . ' ist bereits erreicht.';
                 break;
             }

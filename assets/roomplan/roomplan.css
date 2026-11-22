@@ -109,14 +109,20 @@
 .rp-view-toolbar, .rp-card-header, .rp-card-actions, .rp-dialog-actions {
     display: flex; flex-wrap: wrap; align-items: center; gap: .625rem;
 }
-.rp-view-toolbar { justify-content: space-between; margin-block-end: .95rem; }
+.rp-view-toolbar { margin-block-end: .95rem; }
+.rp-view-toolbar button[aria-pressed="true"] { background: #fff3d1; border-color: #946700; }
 .rp-date-control, .rp-periods { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
-.rp-date-label, .rp-period { color: var(--roomplan-muted); font-size: .875rem; font-weight: 600; }
+.rp-date-label, .rp-time-label, .rp-period, .rp-floor-pick { color: var(--roomplan-muted); font-size: .875rem; font-weight: 600; }
 .rp-period input { accent-color: #8d650e; }
 .rp-date {
     min-height: 2.75rem; min-width: 9rem; padding: .45rem .6rem; background: #fff; color: var(--roomplan-ink);
     border: 1px solid var(--roomplan-control-border); border-radius: .65rem; font: inherit;
 }
+.rp-time-range, .rp-time-label { display: flex; align-items: center; gap: .4rem; }
+.rp-time-range { flex-wrap: wrap; gap: .4rem .65rem; }
+.rp-time { min-width: 0; padding-inline: .5rem; font-weight: 400; }
+.rp-periods > .rp-time-range { flex-basis: 100%; margin-block: .35rem; }
+.rp-periods { min-width: 0; }
 .rp-status {
     margin: .7rem 0; padding: .7rem .8rem; border-radius: .65rem;
     color: var(--roomplan-muted); background: #fff; border: 1px solid var(--roomplan-border);
@@ -183,10 +189,10 @@
     white-space: nowrap;
 }
 .rp-legacy-panel button { border-color: transparent; }
-.rp-floor-pick { align-items: start; display: grid; gap: .2rem; }
+.rp-floor-pick { align-items: center; display: flex; gap: .4rem; max-width: 100%; }
 .rp-floor-pick select {
-    min-height: 2.75rem; max-width: min(19rem, 100%); border: 1px solid #90918c;
-    border-radius: .65rem; background: #fff; color: inherit; padding: .45rem .65rem; font: inherit;
+    min-height: 2.75rem; min-width: 0; max-width: 19rem; border: 1px solid var(--roomplan-control-border);
+    border-radius: .65rem; background: #fff; color: var(--roomplan-ink); padding: .45rem .65rem; font: inherit; font-weight: 400;
 }
 .rp-floor-focus { margin-top: .75rem; }
 .rp-floor-focus .rp-card { max-width: 36rem; }

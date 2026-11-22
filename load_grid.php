@@ -17,8 +17,23 @@ try {
     $stmt = $db->query("SELECT * FROM grid_config ORDER BY id DESC LIMIT 1");
     $gridConfig = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $rooms = roomieListRooms($db, (int) $_SESSION['user_id'], isAdmin());
-    if ($gridConfig && !isAdmin()) {
+    $userId = (int) $_SESSION['user_id'];
+    $admin = isAdmin();
+    $rooms = roomieListRooms($db, $userId, $admin);
+    $granted = [];
+    if ($admin) {
+        // Admins may see restricted rooms without being permitted to book them.
+        $grants = $db->prepare('SELECT room_id FROM permissions WHERE user_id = ?');
+        $grants->execute([$userId]);
+        $granted = array_fill_keys($grants->fetchAll(PDO::FETCH_COLUMN), true);
+    }
+    foreach ($rooms as &$room) {
+        $room['can_book'] = !$admin
+            || !in_array($room['type'], ROOMIE_RESTRICTED_ROOM_TYPES, true)
+            || isset($granted[(int) $room['id']]);
+    }
+    unset($room);
+    if ($gridConfig && !$admin) {
         $visible = array_fill_keys(array_column($rooms, 'id'), true);
         $layout = json_decode((string) $gridConfig['room_layout'], true);
         $gridConfig['room_layout'] = json_encode(array_map(static fn ($id) => is_scalar($id) && isset($visible[(int) $id]) ? (int) $id : null, is_array($layout) ? array_values($layout) : []));

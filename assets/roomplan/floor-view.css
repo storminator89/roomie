@@ -70,7 +70,7 @@
 }
 .rp-floor-result-count { color:var(--roomplan-muted,#525b65); font-size:.875rem; }
 .rp-floor-result-count:empty { display:none; }
-.rp-floor-available[aria-pressed="true"],.rp-floor-shortcut[aria-expanded="true"] {
+.rp-floor-shortcut[aria-expanded="true"] {
   background:#fff3d1; border-color:#946700;
 }
 .rp-floor-shortcut-list { max-block-size:9rem; overflow:auto; padding:.2rem; }

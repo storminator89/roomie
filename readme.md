@@ -101,7 +101,17 @@ bookmark forwards to the integrated page. No new database schema is needed.
 - Existing PHP endpoints remain authoritative for room visibility, user roles,
   bookings and inventory. Layout dimensions and existing placements are retained.
 
-Run `node --test build-files/roomplan.test.mjs` to check the frontend data
+### Find and book a time
+
+In the room plan, select a date and **Von** / **Bis**, then enable
+**Nur freie Räume** to compare availability for that window. Choose a room
+and book the selected time. Room details also accept an individual slot.
+Custom slots are for one day, between 09:00 and 17:00 (Europe/Berlin), in
+15-minute increments. The existing presets and multi-day booking still work.
+Room permissions and available places are checked again on save; the filter
+does not reserve a room. No database change is needed for custom times.
+
+Run `node --test build-files/*.test.mjs` to check the frontend data
 contract without a running PHP server.
 
 ## PHP 8.6 runtime
@@ -143,9 +153,8 @@ touchscreen. Use **Position & Größe** for precise keyboard edits, then save th
 Use the plan's rename action to update its title without replacing the image
 or its zones. Each plan may have up to 200 marked rooms; up to 12 plans are supported.
 
-Use **Raum suchen** to find a marked room and **Nur buchbar** to see which rooms
-have an available booking period on the selected date. Select a room to open
-its booking options. The older grid and the room list remain available.
+Use **Raum suchen** to find a marked room. Select a room to open its booking
+options. The older grid and the room list remain available.
 
 GD must be enabled. Roomie decodes the upload, stores a new PNG in the
 private SQLite database and serves it only to signed-in users. Do not upload
