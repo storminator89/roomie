@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_calendar.php';
+require_once __DIR__ . '/room_blocks.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: private, no-store');
@@ -137,6 +138,10 @@ try {
         );
         for ($day = $startDate; $day <= $endDate; $day = $day->modify('+1 day')) {
             $date = $day->format('Y-m-d');
+            if (roomieRoomHasBlock($db, $roomId, $date, $startTime, $endTime)) {
+                $rejection = 'Der Raum ist am ' . $day->format('d.m.Y') . ' zur gewählten Zeit gesperrt.';
+                break;
+            }
             $checkBookings->execute(['room' => $roomId, 'date' => $date, 'start_time' => $startTime, 'end_time' => $endTime]);
             $conflict = roomieBookingConflict($checkBookings, (int) $room['capacity'], $userId, $startTime, $endTime);
             $checkBookings->closeCursor();

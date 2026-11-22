@@ -145,7 +145,7 @@ export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
         },
         async loadBookings(date, {signal} = {}) {
             if (!DAYS.test(date)) throw new Error('Bitte ein Datum wählen.');
-            const search = new URLSearchParams({start_date: date, end_date: date});
+            const search = new URLSearchParams({start_date: date, end_date: date, include_blocks: 1});
             const payload = await request('get_bookings.php?' + search, {signal});
             if (!Array.isArray(payload)) throw new Error('Belegung konnte nicht geladen werden.');
             return payload;

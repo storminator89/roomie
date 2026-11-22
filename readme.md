@@ -135,6 +135,20 @@ read-only integration proposal. It is not enabled or implemented.
 Run `node --test build-files/*.test.mjs` to check the frontend data
 contract without a running PHP server.
 
+### Room closures
+
+Admins can choose **Sperrzeiten** on a room's details page and block a future
+time range, for example during maintenance. Use 09:00–17:00 for a whole-day
+closure. Roomie will not override an existing booking to add a closure.
+The blocked window is removed from online availability, including weekly
+series and rescheduling. Existing bookings and calendar files are unaffected.
+
+For an existing installation, back up SQLite and run the additive CLI
+`php schema_hardening.php` with the normal environment before using closures.
+Do not roll back to older application code while room closures are active:
+older booking paths do not enforce them. Fresh installs create the table
+through `init_db.php`.
+
 ## PHP 8.6 runtime
 
 The deployment target is PHP **8.6.x** (`.php-version`). Select it separately

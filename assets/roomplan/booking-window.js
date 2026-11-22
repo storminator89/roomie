@@ -46,6 +46,10 @@ function available(capacity, bookings, a, b) {
   for (const row of bookings) {
     const start = clock(row.start_time);
     const end = clock(row.end_time);
+    if (row.blocked === true) {
+      if (start === null || end === null || start >= end || (start < b && end > a)) return false;
+      continue;
+    }
     if (start === null || end === null || start >= end || start >= b || end <= a) continue;
     if (row.own === true) return false;
     const from = Math.max(a, start);

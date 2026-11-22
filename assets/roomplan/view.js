@@ -560,7 +560,9 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     const occupancy = el('div', 'rp-bookings');
     if (bookingStatus === 'ready') {
       if (roomBookings.length) {
-        const summary = onlyFree ? 'Im Zeitraum frei' : available ? 'Teilweise belegt' : 'Belegt';
+        const fullyBlocked = roomBookings.some(item => item.blocked === true
+          && clock(item.start_time) <= opening && clock(item.end_time) >= closing);
+        const summary = onlyFree ? 'Im Zeitraum frei' : fullyBlocked ? 'Gesperrt' : available ? 'Teilweise belegt' : 'Belegt';
         const more = el('details', 'rp-booking-details');
         more.append(el('summary', 'rp-availability', summary));
         const list = el('ul', 'rp-booking-list');
@@ -568,7 +570,8 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
           const from = clock(item.start_time);
           const to = clock(item.end_time);
           if (!from || !to) return;
-          const name = typeof item.user_name === 'string' ? item.user_name.trim() : '';
+          const name = item.blocked === true ? 'Gesperrt'
+            : typeof item.user_name === 'string' ? item.user_name.trim() : '';
           list.append(el('li', '', `${from}–${to} · ${name || 'Belegt'}`));
         });
         more.append(list);
@@ -699,6 +702,9 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
           if (bookingStatus !== 'ready') return 'unknown';
           if (onlyFree) return matchesFreeFilter(room) ? 'free' : 'busy';
           const { booked, presets, custom } = availabilityFor(room);
+          const allDayBlocked = booked.some(item => item.blocked === true
+            && clock(item.start_time) <= opening && clock(item.end_time) >= closing);
+          if (allDayBlocked) return 'blocked';
           return !presets.length && !custom ? 'busy' : booked.length ? 'partial' : 'free';
         },
         onRoomSelect(room, opener) {

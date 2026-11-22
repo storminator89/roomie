@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/room_access.php';
+require_once __DIR__ . '/room_blocks.php';
 
 const ROOMIE_SERIES_MIN = 2;
 const ROOMIE_SERIES_MAX = 12;
@@ -64,9 +65,13 @@ function roomieSeriesInspect(PDO $db, int $userId, array $plan, DateTimeImmutabl
     $rows = [];
     $anyConflict = false;
     foreach ($plan['dates'] as $date) {
-        $check->execute([$plan['roomId'], $date, $plan['end'], $plan['start']]);
-        $status = roomieBookingConflict($check, (int) $room['capacity'], $userId, $plan['start'], $plan['end']);
-        $check->closeCursor();
+        if (roomieRoomHasBlock($db, $plan['roomId'], $date, $plan['start'], $plan['end'])) {
+            $status = 'blocked';
+        } else {
+            $check->execute([$plan['roomId'], $date, $plan['end'], $plan['start']]);
+            $status = roomieBookingConflict($check, (int) $room['capacity'], $userId, $plan['start'], $plan['end']);
+            $check->closeCursor();
+        }
         $anyConflict = $anyConflict || $status !== null;
         $rows[] = [
             'date' => $date,
@@ -75,6 +80,7 @@ function roomieSeriesInspect(PDO $db, int $userId, array $plan, DateTimeImmutabl
             'message' => match ($status) {
                 'own' => 'Du hast diesen Raum schon zu dieser Zeit gebucht.',
                 'capacity' => 'Keine freie Kapazität.',
+                'blocked' => 'Der Raum ist zu dieser Zeit gesperrt.',
                 default => 'Verfügbar.',
             },
         ];

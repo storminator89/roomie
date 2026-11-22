@@ -860,6 +860,167 @@ def smoke_series(command, root, env, date, guest, admin, admin_status, user, use
           + ("; Berlin DST HTTP+ICS passed" if dst_tested else "; HTTP DST transition outside 90-day window"), flush=True)
 
 
+def smoke_room_block_upgrade(command, root, env, scratch):
+    existing = scratch / "pre-block-upgrade.sqlite"
+    with closing(sqlite3.connect(env["ROOMIE_DB_PATH"])) as source, closing(sqlite3.connect(existing)) as copy:
+        expect(source.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='room_blocks'").fetchone(),
+               "Fresh setup must install the maintenance table")
+        source.backup(copy)
+        copy.execute("DROP TABLE room_blocks")
+        copy.execute("""INSERT INTO bookings (user_id, room_id, date, start_time, end_time)
+            VALUES ((SELECT MIN(id) FROM users), (SELECT MIN(id) FROM rooms), '2030-06-17', '10:00:00', '11:00:00')""")
+        copy.commit()
+        before = {table: copy.execute(f"SELECT * FROM {table} ORDER BY id").fetchall()
+                  for table in ("users", "rooms", "bookings")}
+    existing.chmod(0o600)
+    for _ in range(2):
+        run(command + [str(root / "schema_hardening.php")], root, dict(env, ROOMIE_DB_PATH=str(existing)))
+    with closing(sqlite3.connect(existing)) as db:
+        expect(db.execute("SELECT COUNT(*) FROM room_blocks").fetchone()[0] == 0, "Upgrade creates an empty block table")
+        expect(db.execute("PRAGMA foreign_key_check").fetchall() == [], "Upgrade must preserve referential integrity")
+        expect(before == {table: db.execute(f"SELECT * FROM {table} ORDER BY id").fetchall() for table in before},
+               "Reapplying the additive upgrade must preserve users, rooms and their bookings exactly")
+    print("Room blocks schema: fresh installation, additive existing upgrade and safe repeat passed", flush=True)
+
+
+def smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, concurrent):
+    db_path = env["ROOMIE_DB_PATH"]
+    endpoint = "admin_room_blocks.php"
+    later = (dt.date.fromisoformat(date) + dt.timedelta(days=1)).isoformat()
+    second_week = (dt.date.fromisoformat(date) + dt.timedelta(days=7)).isoformat()
+    with closing(sqlite3.connect(db_path)) as db, db:
+        users = dict(db.execute("SELECT email, id FROM users"))
+        user_id = users["smoke-user@example.test"]
+        other_id = users["smoke-other@example.test"]
+        rooms = {}
+        for label, kind in (("Open", "office"), ("Occupied", "office"), ("Restricted", "fk-office"),
+                            ("Series", "office"), ("Race", "office")):
+            rooms[label] = db.execute("INSERT INTO rooms (name, type, capacity) VALUES (?, ?, 2)",
+                                      (f"QA Block {label}", kind)).lastrowid
+        occupied = db.execute("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, '10:15:00', '10:45:00')",
+                              (other_id, rooms["Occupied"], date)).lastrowid
+        move_id = db.execute("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, '15:00', '16:00')",
+                             (user_id, rooms["Open"], date)).lastrowid
+
+    def rows(table, room):
+        with closing(sqlite3.connect(db_path)) as db:
+            return db.execute(f"SELECT id, date, start_time, end_time FROM {table} WHERE room_id = ? ORDER BY date, start_time, id",
+                              (room,)).fetchall()
+
+    def create(room, day=date, start="10:00", end="11:00", csrf=admin_status["csrf_token"]):
+        return {"action": "create", "room_id": room, "date": day, "start_time": start, "end_time": end,
+                "kind": "maintenance", "csrf_token": csrf}
+
+    def add(room, day=date):
+        code, headers, html = admin.request(endpoint, create(room, day))
+        expect(code == 303 and (headers.get("Location") or "").startswith(endpoint),
+               f"Admin should be able to create a maintenance block: HTTP {code}")
+        entries = rows("room_blocks", room)
+        expect(len(entries) == 1 and entries[0][1:] == (day, "10:00", "11:00"), "Maintenance block should persist its exact window")
+        return entries[0][0]
+
+    def submit(room, start="10:15", end="10:45", *, first=date, last=None, period="individuell"):
+        code, _, raw = user.request("process_booking.php", {"csrf_token": user_status["csrf_token"],
+            "selectedWorkspace": room, "time_period": period, "start_date": first, "end_date": last or first,
+            "start_time": start, "end_time": end})
+        expect(code == 200, f"Booking outcome should have existing HTTP 200 JSON contract, got {code}")
+        return json.loads(raw)
+
+    def preview(room):
+        code, _, html = user.request("series_booking.php", {"stage": "preview", "csrf_token": user_status["csrf_token"],
+            "room_id": room, "date": date, "start_time": "10:15", "end_time": "10:45", "count": 2})
+        expect(code == 200, f"Maintenance-aware preview should render status rows, got {code}")
+        return SeriesHTML(html).forms.get("rb-series-book"), html
+
+    open_room = rooms["Open"]
+    expect(user.request(endpoint, create(open_room, csrf=user_status["csrf_token"]))[0] == 403,
+           "Regular members may not create a room block")
+    expect(admin.request(endpoint, create(open_room, csrf=""))[0] == 403, "Maintenance changes must require CSRF")
+    expect(rows("room_blocks", open_room) == [], "Rejected requests must not create a block")
+    code, _, html = admin.request(endpoint)
+    expect(code == 200 and 'Sperr' in html, "Administrators need an accessible maintenance management page")
+    code, _, conflict_html = admin.request(endpoint, create(rooms["Occupied"]))
+    expect(code == 409 and "Smoke Other Member" not in conflict_html, "An overlapping existing booking cannot be displaced or disclosed")
+    expect(rows("bookings", rooms["Occupied"]) == [(occupied, date, "10:15:00", "10:45:00")]
+           and rows("room_blocks", rooms["Occupied"]) == [], "Rejecting maintenance must preserve the original reservation")
+
+    series_room = rooms["Series"]
+    stale, _ = preview(series_room)
+    expect(stale is not None, "Before a block is created both dates must be available")
+    block_id = add(open_room, later)
+    expect(admin.request(endpoint, create(open_room, later, "10:45", "11:15"))[0] == 409
+           and len(rows("room_blocks", open_room)) == 1, "A second overlapping maintenance block must not overwrite or duplicate the first")
+    add(rooms["Restricted"])
+    add(series_room, second_week)
+
+    scoped = {"room_id": open_room, "start_date": later}
+    code, _, raw = user.request("get_bookings.php?" + urlencode({**scoped, "include_blocks": 1}))
+    expect(code == 200 and json.loads(raw) == [{"room_id": open_room, "date": later, "start_time": "10:00",
+                                             "end_time": "11:00", "blocked": True}],
+           "Authorized map users receive the blocked interval, but no block ID, type, admin identity or other metadata")
+    code, _, raw = user.request("get_bookings.php?" + urlencode(scoped))
+    expect(code == 200 and json.loads(raw) == [], "Legacy feeds must not be changed unless blocks are requested")
+    expect(guest.request("get_bookings.php?include_blocks=1")[0] == 401, "Blocks remain private to signed-in users")
+    code, _, raw = user.request("get_bookings.php?" + urlencode({"start_date": date, "include_blocks": 1}))
+    expect(code == 200 and not any(row.get("room_id") == rooms["Restricted"] for row in json.loads(raw)),
+           "Bulk availability cannot expose blocked intervals of a hidden room")
+    code, _, html = user.request(f"room_details.php?id={open_room}&date={later}")
+    expect(code == 200 and "Gesperrt" in html and "Roomie Smoke Admin" not in html and endpoint not in html,
+           "Room detail must show a neutral closed interval, not the administrator or private management link")
+    code, _, admin_html = admin.request(f"room_details.php?id={open_room}&date={later}")
+    expect(code == 200 and f'{endpoint}?room_id={open_room}&amp;date={later}' in admin_html,
+           "Administrators can reach the room's maintenance management from details")
+
+    for result in (submit(open_room, first=later), submit(open_room, first=later, period="vormittags"),
+                   submit(open_room, first=date, last=later, period="vormittags")):
+        expect(result.get("success") is False and "gesperrt" in result.get("error", "").lower(),
+               "Custom, preset and multi-day writes must reject a maintenance overlap")
+    expect(rows("bookings", open_room) == [(move_id, date, "15:00", "16:00")],
+           "A block on the second day must leave the attempted first-day preset unwritten")
+
+    code, _, _ = user.request("reschedule_booking.php", {"booking_id": move_id, "date": later, "start_time": "10:15",
+        "end_time": "10:45", "original_date": date, "original_start_time": "15:00", "original_end_time": "16:00",
+        "csrf_token": user_status["csrf_token"]})
+    expect(code == 409 and rows("bookings", open_room) == [(move_id, date, "15:00", "16:00")],
+           "A blocked reschedule target must leave the existing booking untouched")
+    code, _, _ = user.request("series_booking.php", stale)
+    expect(code == 409 and rows("bookings", series_room) == [], "A stale series proof must not write earlier dates when the later one is blocked")
+    new, blocked_html = preview(series_room)
+    expect(new is None and 'id="rb-series-results"' in blocked_html and ("Gesperrt" in blocked_html or "Belegt" in blocked_html),
+           "Fresh series preview must explain the block without a confirmation form")
+
+    for start, end in (("09:45", "10:00"), ("11:00", "11:15")):
+        expect(submit(open_room, start, end, first=later).get("success") is True, "Bookings touching either block edge must succeed")
+    remove = {"action": "remove", "room_id": open_room, "block_id": block_id, "csrf_token": admin_status["csrf_token"]}
+    expect(user.request(endpoint, dict(remove, csrf_token=user_status["csrf_token"]))[0] == 403,
+           "Only administrators can remove a block")
+    expect(admin.request(endpoint, dict(remove, csrf_token=""))[0] == 403, "Removing a block requires CSRF")
+    expect(admin.request(endpoint, dict(remove, room_id=series_room))[0] == 404 and len(rows("room_blocks", open_room)) == 1,
+           "A block may be removed only through its matching room")
+    expect(admin.request(endpoint, remove)[0] == 303 and rows("room_blocks", open_room) == [],
+           "Authorized removal should remove only the named maintenance interval")
+    expect(submit(open_room, first=later).get("success") is True, "Removing the block restores bookability inside its old interval")
+
+    if concurrent:
+        race = rooms["Race"]
+        barrier = Barrier(2, timeout=5)
+
+        def start_together(action):
+            barrier.wait()
+            return action()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            block = pool.submit(start_together, lambda: admin.request(endpoint, create(race))[0])
+            booking = pool.submit(start_together, lambda: submit(race).get("success"))
+            result, booked = block.result(), booking.result()
+        expect(result in (303, 409) and booked is (result == 409),
+               "Concurrent block and booking at the same time must be mutually exclusive")
+        expect(len(rows("bookings", race)) + len(rows("room_blocks", race)) == 1, "Only one concurrent write must persist")
+
+    print("Room blocks: authorization/CSRF, privacy, occupied protection, single/preset/move/series, adjacency and removal passed"
+          + ("; concurrent block vs booking passed" if concurrent else ""), flush=True)
+
+
 def smoke(php, root, scratch, expected_minor):
     env = {key: value for key, value in os.environ.items()
            if not key.startswith("ROOMIE_") and key != "PHP_CLI_SERVER_WORKERS"}
@@ -911,6 +1072,7 @@ def smoke(php, root, scratch, expected_minor):
         echo (new DateTimeImmutable('tomorrow', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
     """
     room_id, date = run(command + ["-r", seed], root, env).splitlines()
+    smoke_room_block_upgrade(command, root, env, scratch)
     sessions = scratch / "sessions"
     sessions.mkdir(mode=0o700)
     logfile = scratch / "server.log"
@@ -1027,6 +1189,7 @@ def smoke(php, root, scratch, expected_minor):
                                         user, user_status, concurrent)
                 smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, concurrent)
                 smoke_series(command, root, env, date, guest, admin, admin_status, user, user_status, concurrent)
+                smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, concurrent)
             finally:
                 if concurrent:
                     try:

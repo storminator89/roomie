@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_helpers.php';
+require_once __DIR__ . '/room_blocks.php';
 
 if (!isLoggedIn()) {
     header("Location: login.php");
@@ -56,7 +57,8 @@ try {
         http_response_code(422);
         exit('Zu viele Buchungen für dieses Datum.');
     }
-    
+    // The helper returns only time bounds, never staff, type or internal block data.
+    $roomBlocks = roomieRoomBlocksForDate($db, $room_id, $selected_date);
 } catch (Throwable) {
     error_log('Roomie could not load room details');
     http_response_code(503);
@@ -107,7 +109,10 @@ $periods = [
 ];
 $firstPeriod = null;
 foreach ($periods as $key => &$period) {
-    $period[] = $canBookRoom && $canBookDate && roomieBookingConflict($bookings, $capacity, $userId, $period[1], $period[2]) === null;
+    $blocked = roomieRoomBlockOverlaps($roomBlocks, $period[1], $period[2]);
+    $period[] = $canBookRoom && $canBookDate && !$blocked
+        && roomieBookingConflict($bookings, $capacity, $userId, $period[1], $period[2]) === null;
+    $period[] = $blocked;
     if ($period[3] && $firstPeriod === null) $firstPeriod = $key;
 }
 unset($period);
@@ -117,13 +122,17 @@ $opens = $parsedDate->modify(ROOMIE_BOOKING_OPEN_TIME);
 $closes = $parsedDate->modify(ROOMIE_BOOKING_CLOSE_TIME);
 $step = new DateInterval('PT' . ROOMIE_BOOKING_STEP_MINUTES . 'M');
 $firstCustom = null;
+$blockedStarts = [];
 for ($slot = $opens; $slot <= $closes; $slot = $slot->add($step)) {
     $from = $slot->format('H:i');
     $customTimes[] = $from;
     $end = $slot->add($step);
-    if ($firstCustom === null && $canBookRoom && $canBookDate && $slot > $now && $end <= $closes) {
+    if ($end <= $closes) {
         $to = $end->format('H:i');
-        if (roomieBookingConflict($bookings, $capacity, $userId, $from, $to) === null) {
+        $blocked = roomieRoomBlockOverlaps($roomBlocks, $from, $to);
+        if ($blocked) $blockedStarts[$from] = true;
+        if (!$blocked && $firstCustom === null && $canBookRoom && $canBookDate && $slot > $now
+            && roomieBookingConflict($bookings, $capacity, $userId, $from, $to) === null) {
             $firstCustom = [$from, $to];
         }
     }
@@ -131,15 +140,17 @@ for ($slot = $opens; $slot <= $closes; $slot = $slot->add($step)) {
 $detailContext = [];
 $givenStart = $_GET['start_time'] ?? null;
 $givenEnd = $_GET['end_time'] ?? null;
+$requestedCustom = null;
 $chosenCustom = null;
 if (in_array($givenStart, $customTimes, true) && in_array($givenEnd, $customTimes, true) && $givenStart < $givenEnd) {
     $detailContext += ['start_time' => $givenStart, 'end_time' => $givenEnd];
-    if ($firstCustom) {
-        try {
-            $chosenCustom = roomieParseCustomBookingTimes($parsedDate, $givenStart, $givenEnd, $now);
-        } catch (DomainException) {
-            // Preserve the range on the back link even if it is no longer bookable.
+    try {
+        $requestedCustom = roomieParseCustomBookingTimes($parsedDate, $givenStart, $givenEnd, $now);
+        if ($firstCustom && !roomieRoomBlockOverlaps($roomBlocks, $givenStart, $givenEnd)) {
+            $chosenCustom = $requestedCustom;
         }
+    } catch (DomainException) {
+        // Preserve the range on the back link even if it is no longer bookable.
     }
 }
 if (($_GET['free'] ?? null) === '1') $detailContext['free'] = '1';
@@ -155,11 +166,18 @@ $equipment = json_decode((string) $room['equipment'], true);
 $equipment = is_array($equipment) ? array_slice(array_unique(array_filter($equipment, 'is_string')), 0, 20) : [];
 $roomName = (string) $room['name'];
 $planUrl = 'raumplan.php?' . http_build_query(['date' => $selected_date] + $detailContext);
+$blocksAdminUrl = 'admin_room_blocks.php?' . http_build_query(['room_id' => $room_id, 'date' => $selected_date]);
 $seriesParams = ['room_id' => $room_id, 'date' => $selected_date];
-if ($chosenCustom) {
-    $seriesParams += ['start_time' => $chosenCustom[0], 'end_time' => $chosenCustom[1]];
+if ($requestedCustom) {
+    $seriesParams += ['start_time' => $requestedCustom[0], 'end_time' => $requestedCustom[1]];
 }
 $seriesUrl = 'series_booking.php?' . http_build_query($seriesParams);
+$occupancy = $bookings;
+foreach ($roomBlocks as $block) {
+    $occupancy[] = $block + ['blocked' => true];
+}
+usort($occupancy, static fn (array $a, array $b): int =>
+    [$a['start_time'], $a['end_time']] <=> [$b['start_time'], $b['end_time']]);
 $prev = parseBookingDate($parsedDate->modify('-1 day')->format('Y-m-d'));
 $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
 ?>
@@ -199,15 +217,18 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
         <button type="submit" class="roomplan-action roomplan-action-secondary">Anzeigen</button>
         <?php if ($prev) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $prev->format('Y-m-d'), $detailContext)) ?>" aria-label="Vorheriger Tag">←</a><?php endif; ?>
         <?php if ($next) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $next->format('Y-m-d'), $detailContext)) ?>" aria-label="Nächster Tag">→</a><?php endif; ?>
+        <?php if ($admin) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape($blocksAdminUrl) ?>">Sperrzeiten</a><?php endif; ?>
     </form>
     <div class="rb-room-columns">
         <section class="roomplan-panel rb-room-panel">
             <h2>Belegung · <time datetime="<?= detailEscape($selected_date) ?>"><?= detailEscape($parsedDate->format('d.m.Y')) ?></time></h2>
-            <?php if (!$bookings) : ?><p class="rb-empty">Keine Buchungen.</p><?php else : ?>
+            <?php if (!$occupancy) : ?><p class="rb-empty">Keine Buchungen.</p><?php else : ?>
             <ul class="rb-room-list">
-                <?php foreach ($bookings as $booking) : ?>
-                <li><strong><?= detailEscape(substr($booking['start_time'], 0, 5) . '–' . substr($booking['end_time'], 0, 5)) ?></strong>
-                    <span><?= $booking['own'] ? 'Eigene Buchung' : detailEscape($booking['user_name'] ?? 'Belegt') ?></span></li>
+                <?php foreach ($occupancy as $entry) : ?>
+                <li><strong><?= detailEscape(substr($entry['start_time'], 0, 5) . '–' . substr($entry['end_time'], 0, 5)) ?></strong>
+                    <?php if (!empty($entry['blocked'])) : ?><span class="rb-period-blocked">Gesperrt</span>
+                    <?php else : ?><span><?= $entry['own'] ? 'Eigene Buchung' : detailEscape($entry['user_name'] ?? 'Belegt') ?></span><?php endif; ?>
+                </li>
                 <?php endforeach; ?>
             </ul>
             <?php endif; ?>
@@ -225,10 +246,10 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
                 <input type="hidden" name="end_date" value="<?= detailEscape($selected_date) ?>">
                 <fieldset class="rb-periods">
                     <legend>Zeit wählen</legend>
-                    <?php foreach ($periods as $id => [$title, $start, $end, $available]) : ?>
+                    <?php foreach ($periods as $id => [$title, $start, $end, $available, $blocked]) : ?>
                     <label>
                         <input type="radio" name="time_period" value="<?= $id ?>"<?= $firstPeriod === $id ? ' checked' : '' ?><?= !$available ? ' disabled' : '' ?> required>
-                        <span><strong><?= $title ?></strong> <small><?= $start ?>–<?= $end ?><?php if (!$available) : ?> · nicht verfügbar<?php endif; ?></small></span>
+                        <span><strong><?= $title ?></strong> <small><?= $start ?>–<?= $end ?><?php if (!$available) : ?> · <?= $blocked ? 'gesperrt' : 'nicht verfügbar' ?><?php endif; ?></small></span>
                     </label>
                     <?php endforeach; ?>
                     <label>
@@ -236,18 +257,18 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
                         <span><strong>Individuell</strong><?php if (!$firstCustom) : ?> <small>nicht verfügbar</small><?php endif; ?></span>
                     </label>
                     <?php if ($firstCustom) : ?>
-                    <div class="rp-time-range" data-custom-time<?= $firstPeriod !== 'individuell' ? ' hidden' : '' ?>>
+                    <div class="rp-time-range" data-custom-time data-room-blocks="<?= detailEscape(json_encode($roomBlocks, JSON_THROW_ON_ERROR)) ?>"<?= $firstPeriod !== 'individuell' ? ' hidden' : '' ?>>
                         <label class="rp-time-label" for="rb-book-start-time">Von
                             <select class="rp-date rp-time" id="rb-book-start-time" name="start_time" required<?= $firstPeriod !== 'individuell' ? ' disabled' : '' ?>>
                                 <?php foreach (array_slice($customTimes, 0, -1) as $option) : ?>
-                                    <option value="<?= $option ?>"<?= $customStart === $option ? ' selected' : '' ?>><?= $option ?></option>
+                                    <option value="<?= $option ?>"<?= $customStart === $option ? ' selected' : '' ?><?= isset($blockedStarts[$option]) ? ' disabled' : '' ?>><?= $option ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </label>
                         <label class="rp-time-label" for="rb-book-end-time">Bis
                             <select class="rp-date rp-time" id="rb-book-end-time" name="end_time" required<?= $firstPeriod !== 'individuell' ? ' disabled' : '' ?>>
                                 <?php foreach (array_slice($customTimes, 1) as $option) : ?>
-                                    <option value="<?= $option ?>"<?= $customEnd === $option ? ' selected' : '' ?>><?= $option ?></option>
+                                    <option value="<?= $option ?>"<?= $customEnd === $option ? ' selected' : '' ?><?= $option <= $customStart || roomieRoomBlockOverlaps($roomBlocks, $customStart, $option) ? ' disabled' : '' ?>><?= $option ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </label>

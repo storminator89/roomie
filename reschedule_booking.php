@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_helpers.php';
+require_once __DIR__ . '/room_blocks.php';
 
 header('Cache-Control: private, no-store');
 header('Content-Type: text/html; charset=utf-8');
@@ -106,6 +107,9 @@ try {
     $endClock = roomieBookingClock($end);
     if ($date === $expectedDate && $startClock === $sourceStart && $endClock === $sourceEnd) {
         throw new RoomieRescheduleRejected('Bitte ändere das Datum oder die Uhrzeit.', 400);
+    }
+    if (roomieRoomHasBlock($db, $roomId, $date, $start, $end)) {
+        throw new RoomieRescheduleRejected('Der Raum ist zur gewählten Zeit gesperrt.', 409);
     }
 
     if ($booking['seat_id'] !== null) {

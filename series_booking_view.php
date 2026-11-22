@@ -67,11 +67,12 @@ $latestStart = $horizon->modify('-' . (7 * (ROOMIE_SERIES_MIN - 1)) . ' days');
         <ul class="rb-room-list rb-series-results" aria-label="Verfügbarkeit der Termine">
         <?php foreach ($preview as $occurrence) :
             $available = $seriesAvailable($occurrence);
+            $blocked = ($occurrence['status'] ?? null) === 'blocked';
             $day = parseBookingDate($occurrence['date']);
         ?>
             <li>
                 <time datetime="<?= $seriesEscape($occurrence['date']) ?>"><?= $seriesEscape($day?->format('d.m.Y') ?? $occurrence['date']) ?></time>
-                <strong class="rb-series-<?= $available ? 'free' : 'busy' ?>"><?= $available ? 'Frei' : 'Belegt' ?></strong>
+                <strong class="<?= $blocked ? 'rb-period-blocked' : ($available ? 'rb-series-free' : 'rb-series-busy') ?>"><?= $blocked ? 'Gesperrt' : ($available ? 'Frei' : 'Belegt') ?></strong>
             </li>
         <?php endforeach; ?>
         </ul>

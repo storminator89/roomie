@@ -80,3 +80,9 @@ test('planner defaults to all rooms and keeps a selected availability range in h
   assert.equal(cleared.href, base);
   assert.equal(readViewLocation(`${base}?start_time=11:16&end_time=11:45`, today).range, null);
 });
+
+test('first free booking skips all slots inside room maintenance', () => {
+  const morningClosure = { ...slot('09:00', '11:00'), blocked: true };
+  const now = new Date('2026-11-22T12:00:00Z');
+  assert.deepEqual(firstFreeBookingWindow(30, [morningClosure], '2026-11-23', now), ['11:00', '11:15']);
+});

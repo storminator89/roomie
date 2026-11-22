@@ -2,6 +2,7 @@ const availabilityStates = new Map([
   ['free', { label: 'Verfügbar', symbol: '✓' }],
   ['partial', { label: 'Teilweise belegt', symbol: '◐' }],
   ['busy', { label: 'Belegt', symbol: '●' }],
+  ['blocked', { label: 'Gesperrt', symbol: '×' }],
   ['unknown', { label: 'Belegung unbekannt', symbol: '?' }],
 ]);
 const zooms = [100, 150, 200, 300];
@@ -162,6 +163,7 @@ export function renderFloorPosition({
   const legend = el('ul', 'rp-floor-legend');
   legend.setAttribute('aria-label', 'Belegungsstatus');
   for (const [key, state] of availabilityStates) {
+    if (key === 'blocked' && !markers.some(marker => marker.key === key)) continue;
     const item = el('li');
     const icon = el('span', 'rp-floor-indicator', state.symbol);
     icon.setAttribute('aria-hidden', 'true');

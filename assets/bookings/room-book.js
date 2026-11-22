@@ -1,4 +1,4 @@
-import { bookingWindowInFuture, validBookingWindow } from '../roomplan/booking-window.js';
+import { bookingWindowInFuture, periodCanBeBooked, validBookingWindow } from '../roomplan/booking-window.js';
 
 (() => {
   const form = document.getElementById('rb-room-book');
@@ -8,6 +8,7 @@ import { bookingWindowInFuture, validBookingWindow } from '../roomplan/booking-w
   const submit = form.querySelector('button[type=submit]');
   const periods = form.querySelector('fieldset');
   const customControls = form.querySelector('[data-custom-time]');
+  const blocks = JSON.parse(customControls?.dataset.roomBlocks ?? '[]').map(block => ({ ...block, blocked: true }));
   const startTime = form.querySelector('[name=start_time]');
   const endTime = form.querySelector('[name=end_time]');
   const date = form.querySelector('[name=start_date]').value;
@@ -23,8 +24,10 @@ import { bookingWindowInFuture, validBookingWindow } from '../roomplan/booking-w
     const custom = form.querySelector('[name=time_period]:checked')?.value === 'individuell';
     customControls.hidden = !custom;
     startTime.disabled = endTime.disabled = !custom;
-    for (const option of endTime.options) option.disabled = option.value <= startTime.value;
-    if (endTime.value <= startTime.value) {
+    for (const option of endTime.options) {
+      option.disabled = !periodCanBeBooked(1, blocks, startTime.value, option.value);
+    }
+    if (endTime.selectedOptions[0]?.disabled || !endTime.value) {
       endTime.value = [...endTime.options].find(option => !option.disabled)?.value ?? '';
     }
   }
@@ -38,6 +41,11 @@ import { bookingWindowInFuture, validBookingWindow } from '../roomplan/booking-w
     if (body.get('time_period') === 'individuell'
       && (!validBookingWindow(startTime.value, endTime.value) || !bookingWindowInFuture(date, startTime.value))) {
       tell('Bitte eine gültige Zeit in der Zukunft wählen.', true);
+      startTime.focus();
+      return;
+    }
+    if (body.get('time_period') === 'individuell' && !periodCanBeBooked(1, blocks, startTime.value, endTime.value)) {
+      tell('Der Raum ist in diesem Zeitraum gesperrt.', true);
       startTime.focus();
       return;
     }

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_helpers.php';
+require_once __DIR__ . '/room_blocks.php';
 
 $userId = roomieRequireBookingViewer();
 $isAdmin = isAdmin();
@@ -43,8 +44,28 @@ try {
         }
     }
     unset($booking);
+    if (($_GET['include_blocks'] ?? null) === '1') {
+        $blocks = roomieReadVisibleRoomBlocks(
+            $db, $userId, $isAdmin, $params['start_date'], $params['end_date'], $roomId, 2001
+        );
+        if (count($bookings) + count($blocks) > 2000) {
+            roomieBookingJson(['error' => 'Zu viele Einträge. Bitte Raum oder Zeitraum eingrenzen.'], 422);
+            exit;
+        }
+        foreach ($blocks as $block) {
+            $bookings[] = [
+                'room_id' => (int) $block['room_id'],
+                'date' => $block['date'],
+                'start_time' => $block['start_time'],
+                'end_time' => $block['end_time'],
+                'blocked' => true,
+            ];
+        }
+        usort($bookings, static fn (array $a, array $b): int =>
+            [$a['date'], $a['start_time'], $a['room_id']] <=> [$b['date'], $b['start_time'], $b['room_id']]);
+    }
     roomieBookingJson($bookings);
-} catch (PDOException $e) {
+} catch (Throwable $e) {
     error_log('Roomie booking availability read failed');
     roomieBookingJson(['error' => 'Buchungen nicht verfügbar.'], 500);
 }

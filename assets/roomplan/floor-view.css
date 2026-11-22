@@ -14,6 +14,7 @@
 }
 .rp-floor-position [data-availability="free"] { --rp-plan-ink:#075944; --rp-plan-overlay:rgba(16,185,129,.27); }
 .rp-floor-position [data-availability="partial"] { --rp-plan-ink:#704300; --rp-plan-overlay:rgba(255,194,38,.39); }
+.rp-floor-position [data-availability="blocked"] { --rp-plan-ink:#4a4a52; --rp-plan-overlay:rgba(120,120,140,.33); }
 .rp-floor-position [data-availability="busy"] { --rp-plan-ink:#8e263c; --rp-plan-overlay:rgba(251,113,133,.30); }
 .rp-floor-position [data-availability="unknown"] { --rp-plan-ink:#3e4d62; --rp-plan-overlay:rgba(100,116,139,.24); }
 

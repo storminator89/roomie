@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/room_blocks.php';
 
 function roomieInstallSecuritySchema(PDO $db): void
 {
@@ -36,6 +37,7 @@ function roomieInstallSecuritySchema(PDO $db): void
         CHECK (x + w <= 1 AND y + h <= 1)
     ) WITHOUT ROWID');
     $db->exec('CREATE INDEX IF NOT EXISTS floorplan_markers_room ON floorplan_markers(room_id)');
+    roomieInstallRoomBlocksSchema($db);
 }
 
 if (PHP_SAPI !== 'cli' || realpath($_SERVER['SCRIPT_FILENAME'] ?? '') !== __FILE__) {

@@ -89,3 +89,16 @@ test('planner sends only custom time fields for same-day individual bookings', a
     assert.equal(calls[1][1].body.has('start_time'), false);
     assert.equal(calls[1][1].body.has('end_time'), false);
 });
+
+test('planner requests maintenance rows explicitly without changing the legacy booking API', async () => {
+    const closure = {room_id: 7, date: '2026-11-22', start_time: '10:00', end_time: '11:00', blocked: true};
+    const api = createRoomplanApi({fetcher: async path => {
+        const request = new URL(path, 'https://roomie.example.test/');
+        assert.equal(request.pathname, '/get_bookings.php');
+        assert.deepEqual(Object.fromEntries(request.searchParams), {
+            start_date: closure.date, end_date: closure.date, include_blocks: '1',
+        });
+        return {ok: true, status: 200, json: async () => [closure]};
+    }});
+    assert.deepEqual(await api.loadBookings(closure.date), [closure]);
+});
