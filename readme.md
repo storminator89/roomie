@@ -131,11 +131,15 @@ check an Apache/PHP-FPM installation or change the host's PHP selection.
 
 ### Uploaded floorplans
 
-Admins open **Raumplan → Grundrisse bearbeiten** to add a named plan as PNG/JPEG
-(up to 5 MiB, 2400 px per side and 3 megapixels). Select an existing room and
-mark a rectangle with two clicks/taps, or enter the geometry as percentages.
-Save the zones explicitly. Each plan may have up to 200 marked rooms; up to
-12 plans are supported. The older grid and the room list remain available.
+Admins open **Raumplan → Grundrisse bearbeiten → + Grundriss** to drop a PNG/JPEG
+or select it from their device (up to 5 MiB, 2400 px per side and 3 megapixels).
+Select a room and draw its zone with the mouse or tap two corners on a
+touchscreen. Use **Position & Größe** for precise keyboard edits, then save the zones.
+Each plan may have up to 200 marked rooms; up to 12 plans are supported.
+
+Use **Raum suchen** to find a marked room and **Nur buchbar** to see which rooms
+have an available booking period on the selected date. Select a room to open
+its booking options. The older grid and the room list remain available.
 
 GD must be enabled. Roomie decodes the upload, stores a new PNG in the
 private SQLite database and serves it only to signed-in users. Do not upload

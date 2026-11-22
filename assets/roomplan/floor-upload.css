@@ -1,0 +1,21 @@
+.rp-fu {border:1px solid #e2e8f0;border-radius:.75rem;background:#fff}
+.rp-fu summary {cursor:pointer;min-height:2.75rem;padding:.65rem .85rem;color:#1e40af;font-weight:700}
+.rp-fu summary::marker {font-size:.8em;color:#475569}
+.rp-fu-form {display:grid;justify-items:start;gap:.65rem;padding:0 .85rem .85rem}
+.rp-fu-drop {position:relative;display:grid;justify-items:center;gap:.2rem;width:100%;padding:.8rem .5rem;border:1px dashed #64748b;border-radius:.5rem;background:#f8fafc;text-align:center;cursor:pointer}
+.rp-fu-drop.rp-fu-drag,.rp-fu-drop:hover {background:#eff6ff;border-color:#2563eb}
+.rp-fu-drop:focus-within {outline:3px solid #1d4ed8;outline-offset:2px}
+.rp-fu-picker {position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.rp-fu-choose {color:#1e40af;font-weight:700}
+.rp-fu-format,.rp-fu-warning {font-size:.875rem;color:#475569}
+.rp-fu-chosen {display:flex;align-items:center;gap:.55rem;max-width:100%}
+.rp-fu-file {overflow-wrap:anywhere;font-size:.875rem;font-weight:600}
+.rp-fu-preview {width:80px;height:48px;object-fit:contain;border:1px solid #cbd5e1;border-radius:.4rem;background:#f8fafc}
+.rp-fu-name {display:grid;gap:.25rem;width:min(100%,22rem);font-size:.875rem;font-weight:650}
+.rp-fu-name input {width:100%}
+.rp-fu-error {font-size:.875rem;color:#991b1b}
+.rp-fu-form[aria-busy] .rp-fu-drop {opacity:.58;cursor:wait}
+.rp-fu-drag-text {display:none;font-size:.875rem;color:#475569}
+@media (hover:hover) and (pointer:fine) {
+    .rp-fu-drag-text {display:block}
+}

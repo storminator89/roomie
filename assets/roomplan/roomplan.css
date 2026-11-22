@@ -171,7 +171,18 @@
     .rp-grid-empty { grid-template-columns: 1fr; }
 }
 
-.rp-floor-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.rp-floor-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.rp-legacy-actions { position: relative; }
+.rp-legacy-actions summary { min-width: 2.75rem; padding-inline: .45rem; list-style: none; }
+.rp-legacy-actions summary::-webkit-details-marker { display: none; }
+.rp-legacy-actions[open] summary { background: #fff3d1; }
+.rp-legacy-panel {
+    position: absolute; z-index: 20; inset-inline-end: 0; top: calc(100% + .3rem);
+    padding: .3rem; border: 1px solid var(--roomplan-border); border-radius: .75rem;
+    background: var(--roomplan-surface); box-shadow: 0 .5rem 1.5rem #0002;
+    white-space: nowrap;
+}
+.rp-legacy-panel button { border-color: transparent; }
 .rp-floor-pick { align-items: start; display: grid; gap: .2rem; }
 .rp-floor-pick select {
     min-height: 2.75rem; max-width: min(19rem, 100%); border: 1px solid #90918c;

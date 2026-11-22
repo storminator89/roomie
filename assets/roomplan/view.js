@@ -134,12 +134,18 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   let floors = [];
   let floorLoadRun = 0;
   let selectedFloorRoom = null;
+  let activeFloorView = null;
+  let activeFloorViewId = null;
+  let floorRoomOpener = null;
+  const floorFilters = { query: '', onlyBookable: false };
   const floorEdit = main.querySelector('#roomplan-floor-edit');
   const floorEditorRoot = main.querySelector('#roomplan-floor-editor');
   let floorEditor = null;
   let bookingRun = 0;
   let bookingController = null;
   let editorOpened = false;
+  let editorOpening = false;
+  const legacyActions = edit?.closest('.rp-legacy-actions');
   let editorMounted = null;
   let trigger = null;
   const pendingStars = new Set();
@@ -453,35 +459,78 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     if (floor) {
       const panel = section(floor.title);
       const focus = el('div', 'rp-floor-focus');
+      focus.id = 'rp-selected-floor-room';
+      focus.hidden = true;
+      const previousKey = activeFloorView?.contains(active) ? active.dataset.floorFocusKey : null;
+      const previousView = activeFloorViewId === floor.id ? activeFloorView?.snapshot() : null;
+      const findControl = key => [...visual.querySelectorAll('[data-floor-focus-key]')]
+        .find(control => control.dataset.floorFocusKey === key && !control.closest('[hidden]') && !control.disabled);
+      function closeDetails() {
+        const opener = findControl(floorRoomOpener);
+        selectedFloorRoom = null;
+        updateFocus();
+        (opener || findControl('search') || visual).focus();
+      }
       function updateFocus(moveFocus = false) {
         const room = plan.rooms.find(candidate => candidate.id === selectedFloorRoom);
-        if (!room || !floor.markers.some(marker => marker.roomId === room.id)) {
+        if (!room || !visual.isFloorRoomShown(room.id)) {
           focus.replaceChildren();
+          focus.hidden = true;
+          visual.selectFloorRoom(null);
           return;
         }
         const selectedCard = card(room);
         selectedCard.tabIndex = -1;
+        const close = button('×', 'rp-icon-button rp-floor-close-detail');
+        close.setAttribute('aria-label', `Raumdetails schließen: ${room.name}`);
+        close.dataset.floorFocusKey = 'close';
+        close.title = 'Schließen';
+        close.addEventListener('click', closeDetails);
+        selectedCard.querySelector('.rp-card-header')?.append(close);
         focus.replaceChildren(selectedCard);
+        focus.hidden = false;
+        visual.selectFloorRoom(room.id);
         if (moveFocus || String(room.id) === String(focusRoom)) {
           (selectedCard.querySelector('[data-book-room-id]:enabled') || selectedCard).focus();
+        } else if (previousId === String(room.id)) {
+          (previousKey === 'close' ? close : selectedCard.querySelector(previousControl || 'a'))?.focus();
         }
       }
       const visual = renderFloorPosition({
-        floor, rooms: plan.rooms,
+        floor, rooms: plan.rooms, filters: floorFilters, roomDetails: focus,
+        availabilityStatus: bookingStatus,
+        canBook: (_room, state) => (state === 'free' || state === 'partial')
+          && dateInput.value >= today && dateInput.value <= bookThrough,
         availability(room) {
           if (bookingStatus !== 'ready') return 'unknown';
           const booked = bookingsByRoom?.get(room.id) ?? [];
           const times = availablePeriods(room.capacity, booked);
           return !times.length ? 'busy' : booked.length ? 'partial' : 'free';
         },
-        onRoomSelect(room) { selectedFloorRoom = room.id; updateFocus(true); },
+        onRoomSelect(room, opener) {
+          selectedFloorRoom = room.id;
+          floorRoomOpener = opener.dataset.floorFocusKey;
+          updateFocus(true);
+        },
+        onFilterChange(selectionHidden) {
+          if (!selectionHidden) return;
+          selectedFloorRoom = null;
+          updateFocus();
+        },
         imageUrl: api.floorplanImageUrl(floor.id),
       });
-      panel.append(visual, focus);
+      panel.append(visual);
       content.replaceChildren(panel);
+      if (previousView) visual.restore(previousView);
+      activeFloorView = visual;
+      activeFloorViewId = floor.id;
       updateFocus();
+      if (previousKey && !previousId) (findControl(previousKey) || findControl('search') || visual).focus();
+      if (focusRoom != null && !visual.isFloorRoomShown(focusRoom)) (findControl('search') || visual).focus();
       return;
     }
+    activeFloorView = null;
+    activeFloorViewId = null;
     const visible = onlyFavorites ? plan.rooms.filter(room => plan.favorites.includes(room.id)) : plan.rooms;
     if (!visible.length) {
       const text = onlyFavorites ? 'Noch keine Favoriten.' : 'Keine Räume verfügbar.';
@@ -671,17 +720,21 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       editor.hidden = true;
       editorOpened = false;
       edit.setAttribute('aria-expanded', 'false');
-      edit.focus();
+      if (legacyActions) {
+        legacyActions.open = false;
+        legacyActions.querySelector('summary')?.focus();
+      } else edit.focus();
     };
     edit.disabled = true;
     edit.setAttribute('aria-controls', 'roomplan-editor');
     edit.setAttribute('aria-expanded', 'false');
     edit.addEventListener('click', async () => {
-      if (!plan || floorEditor) return;
+      if (!plan || floorEditor || editorOpening) return;
       if (editorOpened) {
         closeEditor();
         return;
       }
+      editorOpening = true;
       edit.disabled = true;
       try {
         const { mountEditor } = await import('./editor.js');
@@ -692,10 +745,13 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
           root: editor, api, initial: structuredClone(plan),
           onChange: () => loadPlan(), onClose: closeEditor,
         });
+        const heading = editor.querySelector('h2');
+        if (heading) { heading.tabIndex = -1; heading.focus(); }
       } catch (error) {
         closeEditor();
         status(error.message || 'Bearbeitung konnte nicht geöffnet werden.', true);
       } finally {
+        editorOpening = false;
         edit.disabled = false;
       }
     });
@@ -708,26 +764,32 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       floorEditorRoot.hidden = true;
       view.hidden = false;
       floorEdit.setAttribute('aria-expanded', 'false');
+      if (legacyActions) legacyActions.hidden = false;
+      floorEdit.disabled = false;
       floorEdit.focus();
     };
     floorEdit.addEventListener('click', async () => {
-      if (!plan || editorOpened) return;
+      if (!plan || editorOpened || editorOpening) return;
       if (floorEditor) { closeFloor(); return; }
+      editorOpening = true;
       floorEdit.disabled = true;
       try {
         const { mountFloorEditor } = await import('./floor-editor.js');
         floorEditorRoot.hidden = false;
         view.hidden = true;
+        if (legacyActions) { legacyActions.open = false; legacyActions.hidden = true; }
         floorEdit.setAttribute('aria-expanded', 'true');
         floorEditor = await mountFloorEditor({
           root: floorEditorRoot, api, plans: structuredClone(floors),
           initialId: activeFloor()?.id ?? floors[0]?.id, rooms: structuredClone(plan.rooms),
           onChange: id => reloadFloors(Number.isSafeInteger(id) ? id : null), onClose: closeFloor,
         });
+        const heading = floorEditorRoot.querySelector('h2');
+        if (heading) { heading.tabIndex = -1; heading.focus(); }
       } catch (error) {
         closeFloor();
         status(error.message || 'Bearbeitung konnte nicht geöffnet werden.', true);
-      } finally { floorEdit.disabled = false; }
+      } finally { editorOpening = false; floorEdit.disabled = false; }
     });
   }
   void loadPlan();

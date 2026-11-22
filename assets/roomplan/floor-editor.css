@@ -1,14 +1,19 @@
-.rp-floor-editor,.rp-fe-workspace {display:grid;gap:.85rem}
+.rp-floor-editor,.rp-fe-workspace {display:grid;min-width:0;gap:.85rem}
+.rp-floor-editor {
+    padding:clamp(.75rem, 2vw, 1.25rem);border:1px solid var(--roomplan-border);
+    border-radius:var(--roomplan-radius);background:var(--roomplan-surface);
+}
 .rp-floor-editor [hidden] {display:none}
 .rp-fe-toolbar,.rp-fe-tools {display:flex;align-items:end;gap:.5rem;flex-wrap:wrap}
-.rp-fe-toolbar h2 {font-size:1.1rem;font-weight:750;margin-inline-end:auto}
+.rp-fe-toolbar h2 {font-size:1.1rem;font-weight:750;margin:0 auto 0 0;align-self:center}
 .rp-fe-tools label {display:grid;gap:.2rem;max-width:100%;font-size:.875rem;font-weight:600}
-.rp-floor-editor button,.rp-floor-editor select,.rp-floor-editor input {min-height:2.65rem;border:1px solid #cbd5e1;background:#fff;border-radius:.5rem;padding:.4rem .6rem;color:#1e293b}
-.rp-floor-editor button {font-weight:650}
-.rp-floor-editor .rp-fe-primary {background:#1e40af;color:#fff;border-color:#1e40af}
+.rp-floor-editor button,.rp-floor-editor select,.rp-floor-editor input {min-height:2.75rem;max-width:100%;border:1px solid #cbd5e1;background:#fff;border-radius:.5rem;padding:.4rem .6rem;color:#1e293b}
+.rp-floor-editor button {font-weight:650;cursor:pointer}
+.rp-floor-editor .rp-fe-primary {background:var(--roomplan-brand);color:var(--roomplan-ink);border-color:transparent}
+.rp-floor-editor .rp-fe-primary:hover:not(:disabled) {background:var(--roomplan-brand-hover)}
 .rp-floor-editor button:disabled {opacity:.5;cursor:not-allowed}
-.rp-floor-editor :focus-visible {outline:3px solid #1d4ed8;outline-offset:2px}
-.rp-fe-status {font-size:.875rem;color:#475569}
+.rp-floor-editor :focus-visible {outline:3px solid #946700;outline-offset:2px}
+.rp-fe-status {font-size:.875rem;color:var(--roomplan-muted);margin:0}
 .rp-fe-error {color:#991b1b;border-left:3px solid #b91c1c;background:#fef2f2;padding:.5rem}
 .rp-fe-image {position:relative;width:max-content;max-width:100%;display:block}
 .rp-fe-image img {display:block;max-width:100%;height:auto}
@@ -19,4 +24,17 @@
 .rp-fe-point {position:absolute;width:.65rem;height:.65rem;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%);background:#1e40af}
 .rp-fe-coords input {width:5.5rem}
 
-.rp-fe-help { color: #52606d; font-size: .86rem; margin-block: .4rem; }
+
+.rp-fe-status {display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}
+.rp-fe-status-empty {display:none}
+.rp-fe-unsaved {padding:.1rem .5rem;border-radius:999px;color:#713f12;background:#fef3c7;font-weight:650}
+.rp-fe-image img {user-select:none}
+.rp-fe-zone.rp-fe-preview {border:2px dashed #1e40af;background:#93c5fda8}
+.rp-fe-workspace details > summary {width:fit-content;cursor:pointer;padding:.35rem 0;font-weight:650}
+.rp-fe-workspace details[open] > summary {margin-bottom:.35rem}
+.rp-fe-image.rp-fe-move {cursor:move}
+
+@media (max-width: 440px) {
+    .rp-fe-toolbar h2 {flex-basis:100%}
+    .rp-fe-tools select {width:100%}
+}

@@ -1,3 +1,5 @@
+import { createFloorUpload } from './floor-upload.js';
+
 const MIN = 0.01;
 const limit = n => Math.min(1, Math.max(0, n));
 const rounded = n => Number(n.toFixed(5));
@@ -51,6 +53,10 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     let draft = floor?.markers.map(m => ({...m})) ?? [];
     let selectedRoom = null;
     let start = null;
+    let gesture = null;
+    let suppressClick = false;
+    let history = [];
+    let renderedStatus;
     let pending = false;
     let alive = true;
     const controller = new AbortController();
@@ -60,7 +66,7 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     const panel = el('section', null, 'rp-floor-editor');
     const title = el('h2', 'Grundrisse bearbeiten');
     const finish = btn('Fertig');
-    const save = btn('Zonen speichern');
+    const save = btn('Speichern');
     save.className = 'rp-fe-primary';
     const toolbar = el('div', null, 'rp-fe-toolbar');
     toolbar.append(title, finish, save);
@@ -73,34 +79,21 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     error.setAttribute('role','alert');
     error.hidden = true;
 
-    const uploads = el('details');
-    uploads.append(el('summary', '+ Grundriss'));
-    uploads.open = floors.size === 0;
-    const uploadForm = el('form', null, 'rp-fe-tools');
-    const uploadTitle = el('input');
-    uploadTitle.type = 'text';
-    uploadTitle.maxLength = 120;
-    uploadTitle.required = true;
-    const imageFile = el('input');
-    imageFile.type = 'file';
-    imageFile.accept = 'image/png,image/jpeg';
-    imageFile.required = true;
-    const uploadBtn = btn('Hochladen');
-    uploadBtn.type = 'submit';
-    uploadForm.append(label('Name', uploadTitle), label('Bild', imageFile), uploadBtn);
-    uploads.append(uploadForm, el('p', 'PNG/JPEG bis 5 MiB. Das Bild ist für angemeldete Nutzer sichtbar.', 'rp-fe-help'));
+    const upload = createFloorUpload({open: !floors.size, onSubmit: submitUpload});
 
     const workspace = el('div', null, 'rp-fe-workspace');
     const zoneRoom = el('select');
     const deleteZone = btn('Zone entfernen');
     const cancelDraw = btn('Zeichnen abbrechen');
+    const undo = btn('Rückgängig');
     const zoneTools = el('div', null, 'rp-fe-tools');
-    zoneTools.append(label('Raum', zoneRoom), deleteZone, cancelDraw);
+    zoneTools.append(label('Raum', zoneRoom), cancelDraw, undo, deleteZone);
     const imageWrap = el('div', null, 'rp-fe-image');
     const image = el('img');
     image.alt = 'Grundriss';
     image.draggable = false;
     const overlay = el('div', null, 'rp-fe-overlay');
+    overlay.setAttribute('aria-hidden', 'true');
     imageWrap.append(image, overlay);
     const coordinateForm = el('form', null, 'rp-fe-tools rp-fe-coords');
     const coords = fields.map(([, display]) => {
@@ -116,8 +109,10 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     const apply = btn('Zone setzen');
     apply.type = 'submit';
     coordinateForm.append(apply);
-    workspace.append(zoneTools, imageWrap, coordinateForm);
-    panel.append(toolbar, planTools, uploads, error, status, workspace);
+    const precise = el('details');
+    precise.append(el('summary', 'Position & Größe'), coordinateForm);
+    workspace.append(zoneTools, imageWrap, precise);
+    panel.append(toolbar, planTools, upload.element, error, status, workspace);
     root.replaceChildren(panel);
 
     function showError(message) {
@@ -139,7 +134,13 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
             zone.classList.toggle('rp-fe-active', m.roomId === selectedRoom);
             return zone;
         }));
-        if (start) {
+        if (gesture?.preview) {
+            const [x, y, w, h] = gesture.preview;
+            const preview = el('span', null, 'rp-fe-zone rp-fe-preview');
+            Object.assign(preview.style, {left:`${x*100}%`, top:`${y*100}%`, width:`${w*100}%`, height:`${h*100}%`});
+            overlay.append(preview);
+        }
+        if (start && !gesture?.dragging) {
             const point = el('span', null, 'rp-fe-point');
             point.style.left = `${start.x*100}%`;
             point.style.top = `${start.y*100}%`;
@@ -170,22 +171,30 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
             coords[i].value = String(value);
         });
         drawOverlay();
-        status.textContent = !floor ? 'Lade zuerst einen Grundriss hoch.' : [
-            dirty() ? 'Zonen nicht gespeichert.' : '',
-            selectedRoom == null ? 'Raum auswählen.' : start ? 'Zweite Ecke wählen.' : 'Zwei Ecken wählen oder Maße eingeben.',
-        ].filter(Boolean).join(' ');
+        const instruction = !floor ? '' : start ? 'Zweite Ecke wählen.' : selectedRoom == null
+            ? 'Raum auswählen.' : item ? 'Zone ziehen oder neu markieren.' : 'Ziehen oder zwei Ecken wählen.';
+        const statusKey = `${instruction}:${dirty()}`;
+        if (statusKey !== renderedStatus) {
+            renderedStatus = statusKey;
+            status.replaceChildren();
+            if (instruction) status.append(el('span', instruction));
+            if (dirty()) status.append(el('span', 'Ungespeichert', 'rp-fe-unsaved'));
+            status.classList.toggle('rp-fe-status-empty', !instruction && !dirty());
+        }
         save.disabled = pending || !dirty();
         finish.disabled = pending;
         picker.disabled = pending || !floors.size;
         zoneRoom.disabled = pending || !floor;
+        deleteZone.hidden = !item;
         deleteZone.disabled = pending || !item;
+        undo.hidden = history.length === 0;
+        undo.disabled = pending;
+        precise.hidden = selectedRoom == null;
         cancelDraw.hidden = !start;
         cancelDraw.disabled = pending;
         apply.disabled = pending || selectedRoom == null;
         coords.forEach(c => c.disabled = pending || selectedRoom == null);
-        uploadBtn.disabled = pending;
-        imageFile.disabled = pending;
-        uploadTitle.disabled = pending;
+        upload.setPending(pending);
     }
 
     function choosePlan(next) {
@@ -193,6 +202,8 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
         draft = next.markers.map(m => ({...m}));
         selectedRoom = null;
         start = null;
+        gesture = null;
+        history = [];
         showError('');
         render();
     }
@@ -205,9 +216,17 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
         }
         showError('');
         const i = draft.findIndex(m => m.roomId === selectedRoom);
-        if (i === -1) draft.push(next);
-        else draft[i] = next;
+        if (i === -1 || !same([draft[i]], [next])) {
+            rememberDraft();
+            if (i === -1) draft.push(next);
+            else draft[i] = next;
+        }
         render();
+    }
+
+    function rememberDraft() {
+        if (history.length >= 24) history.shift();
+        history.push({draft:[...draft], selectedRoom});
     }
 
     function canClose() {
@@ -243,17 +262,85 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
         else picker.value = String(floor?.id ?? '');
     });
     listen(zoneRoom,'change', () => {
-        selectedRoom = roomNames.has(Number(zoneRoom.value)) ? Number(zoneRoom.value) : null;
+        selectRoom(roomNames.has(Number(zoneRoom.value)) ? Number(zoneRoom.value) : null);
+    });
+
+    function selectRoom(id) {
+        selectedRoom = id;
         start = null;
         showError('');
         render();
-    });
-    listen(imageWrap,'click', event => {
-        if (pending || selectedRoom == null || !floor || !image.complete || !image.naturalWidth) return;
+    }
+
+    function imagePoint(event) {
+        if (pending || !floor || !image.complete || !image.naturalWidth) return null;
         const bounds = image.getBoundingClientRect();
-        if (bounds.width <= 0 || bounds.height <= 0) return;
-        const point = {x:limit((event.clientX-bounds.left)/bounds.width), y:limit((event.clientY-bounds.top)/bounds.height)};
+        if (bounds.width <= 0 || bounds.height <= 0) return null;
+        return {x:limit((event.clientX-bounds.left)/bounds.width), y:limit((event.clientY-bounds.top)/bounds.height)};
+    }
+
+    function hitZone(point) {
+        return draft.findLast(m => roomNames.has(m.roomId) && point.x >= m.x && point.x <= m.x+m.w
+            && point.y >= m.y && point.y <= m.y+m.h);
+    }
+
+    // A drag draws a new zone on empty space, or moves the zone under the
+    // mouse. Touch retains two taps and never intercepts page scrolling.
+    listen(imageWrap,'pointerdown', event => {
+        suppressClick = false;
+        if (event.pointerType !== 'mouse' || event.button !== 0 || event.isPrimary === false) return;
+        const point = imagePoint(event);
+        if (!point) return;
+        const zone = start ? null : hitZone(point);
+        if (!zone && selectedRoom == null) return;
+        gesture = {id:event.pointerId, point, zone, clientX:event.clientX, clientY:event.clientY};
+        imageWrap.setPointerCapture?.(event.pointerId);
+    });
+    listen(imageWrap,'pointermove', event => {
+        if (event.pointerType !== 'mouse') return;
+        const p = imagePoint(event);
+        if (event.pointerId !== gesture?.id) {
+            imageWrap.classList.toggle('rp-fe-move', Boolean(p && !start && hitZone(p)));
+            return;
+        }
+        if (!p) return;
+        if (!gesture.dragging && Math.hypot(event.clientX-gesture.clientX, event.clientY-gesture.clientY) < 5) return;
+        gesture.dragging = true;
+        const zone = gesture.zone;
+        gesture.preview = zone ? [
+            Math.min(1-zone.w, limit(zone.x + p.x - gesture.point.x)),
+            Math.min(1-zone.h, limit(zone.y + p.y - gesture.point.y)),
+            zone.w, zone.h,
+        ] : rectangleBetween(start ?? gesture.point, p);
+        drawOverlay();
+    });
+    listen(imageWrap,'pointerup', event => {
+        if (event.pointerId !== gesture?.id) return;
+        const finished = gesture;
+        gesture = null;
+        if (!finished.dragging) return;
+        suppressClick = true;
+        start = null;
+        if (finished.zone) selectedRoom = finished.zone.roomId;
+        setZone(finished.preview);
+        render();
+    });
+    function abortGesture(event) {
+        if (event.pointerId !== gesture?.id) return;
+        gesture = null;
+        drawOverlay();
+    }
+    listen(imageWrap,'pointerleave', () => imageWrap.classList.remove('rp-fe-move'));
+    listen(imageWrap,'pointercancel', abortGesture);
+    listen(imageWrap,'lostpointercapture', abortGesture);
+    listen(imageWrap,'click', event => {
+        if (suppressClick) { suppressClick = false; return; }
+        const point = imagePoint(event);
+        if (!point) return;
         if (!start) {
+            const zone = hitZone(point);
+            if (zone) { selectRoom(zone.roomId); return; }
+            if (selectedRoom == null) return;
             start = point;
             render({refreshCoords:false});
         } else {
@@ -271,11 +358,22 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
         setZone(coords.map(control => control.valueAsNumber / 100));
         drawOverlay();
     });
+    listen(undo,'click', () => {
+        if (pending || !history.length) return;
+        ({draft, selectedRoom} = history.pop());
+        start = null;
+        showError('');
+        render();
+        if (undo.hidden) zoneRoom.focus();
+    });
     listen(deleteZone,'click', () => {
-        if (pending) return;
+        if (pending || !currentMarker()) return;
+        rememberDraft();
         draft = draft.filter(m => m.roomId !== selectedRoom);
         start = null;
+        showError('');
         render();
+        undo.focus();
     });
     listen(save,'click', () => {
         if (pending || !dirty()) return;
@@ -285,19 +383,15 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
         void perform(() => api.saveFloorMarkers({id, revision, markers}), newRevision => {
             floor = {...floor, revision:newRevision, markers};
             floors.set(id, floor);
+            history = [];
         });
     });
-    listen(uploadForm,'submit', event => {
-        event.preventDefault();
-        const name = uploadTitle.value.trim();
-        const file = imageFile.files?.[0];
-        if (!name || !file || !canClose()) return;
-        if (file.size > 5 * 1024 * 1024) {
-            showError('Bitte ein Bild bis 5 MiB auswählen.');
-            return;
-        }
+    function submitUpload({title, image}) {
+        if (!canClose()) return;
+        let imported = false;
         void perform(async () => {
-            const id = await api.uploadFloorplan({title:name,image:file});
+            const id = await api.uploadFloorplan({title,image});
+            if (alive) upload.reset();
             let refreshed;
             try { refreshed = await api.loadFloorplans(); }
             catch { throw new Error('Grundriss hochgeladen. Aktueller Stand konnte nicht geladen werden. Bitte Editor neu öffnen.'); }
@@ -306,11 +400,12 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
             const next = refreshed.find(plan => plan.id === id);
             if (!next) throw new Error('Grundriss hochgeladen. Bitte Editor neu öffnen.');
             floors = new Map(refreshed.map(f => [f.id,f]));
-            uploadForm.reset();
-            uploads.open = false;
             choosePlan(next);
+            imported = true;
+        }).then(() => {
+            if (alive && imported) zoneRoom.focus();
         });
-    });
+    }
     listen(window,'beforeunload', event => {
         if (!dirty() && !pending) return;
         event.preventDefault();
@@ -322,6 +417,7 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
         destroy() {
             alive = false;
             controller.abort();
+            upload.destroy();
             root.replaceChildren();
         },
     };

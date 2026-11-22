@@ -75,7 +75,27 @@ function percentage(num) {
   return (num * 100).toFixed(6) + '%';
 }
 
-export function renderFloorPosition({ floor, rooms, availability, onRoomSelect, imageUrl }) {
+function normalizeRoomSearch(value) {
+  return String(value ?? '').toLocaleLowerCase('de-DE')
+    .replaceAll('ß', 'ss').replaceAll('ä', 'ae').replaceAll('ö', 'oe').replaceAll('ü', 'ue')
+    .normalize('NFD').replace(/\p{M}/gu, '').trim().split(/\s+/).filter(Boolean);
+}
+
+function simplifyGerman(word) {
+  return word.replace(/([aou])e/g, '$1');
+}
+
+export function matchesRoomSearch(label, query) {
+  const words = normalizeRoomSearch(query).map(simplifyGerman);
+  const fields = normalizeRoomSearch(label).map(simplifyGerman);
+  return words.every(word => fields.some(field => field.includes(word)));
+}
+
+export function renderFloorPosition({
+  floor, rooms, availability, onRoomSelect, imageUrl, roomDetails,
+  filters = { query: '', onlyBookable: false }, canBook = () => true, availabilityStatus = 'ready',
+  onFilterChange = () => {},
+}) {
   const frame = el('section', 'rp-floor-position');
   const title = (typeof floor?.title === 'string' && floor.title.trim()) || 'Grundriss';
   frame.setAttribute('aria-label', title);
@@ -87,6 +107,20 @@ export function renderFloorPosition({ floor, rooms, availability, onRoomSelect, 
     return { ...marker, key, state: availabilityStates.get(key), label: markerLabel(marker.room) };
   });
 
+  const filtersRow = el('div', 'rp-floor-filters');
+  const search = el('input', 'rp-floor-search');
+  search.type = 'search';
+  search.placeholder = 'Raum suchen';
+  search.setAttribute('aria-label', 'Raum suchen');
+  search.dataset.floorFocusKey = 'search';
+  search.maxLength = 100;
+  search.value = filters.query;
+  const onlyBookable = button('Nur buchbar', 'roomplan-action roomplan-action-secondary rp-floor-available');
+  onlyBookable.dataset.floorFocusKey = 'available';
+  const resultCount = el('span', 'rp-floor-result-count');
+  resultCount.setAttribute('role', 'status');
+  filtersRow.append(search, onlyBookable, resultCount);
+
   const shortcuts = el('details', 'rp-floor-shortcuts');
   const shortcutTitle = el('summary', '', 'Räume im Grundriss');
   const shortcutList = el('ul', 'rp-floor-shortcut-list');
@@ -96,19 +130,24 @@ export function renderFloorPosition({ floor, rooms, availability, onRoomSelect, 
     tools.hidden = true;
     viewport.hidden = true;
     hint.textContent = 'Grundrissbild nicht verfügbar.';
-    shortcuts.open = markers.length > 0;
-    if (wasFocused) (markers.length > 0 ? shortcutTitle : frame).focus();
+    shortcuts.open = !shortcuts.hidden;
+    if (wasFocused) (!shortcuts.hidden ? shortcutTitle : frame).focus();
   };
+  const entries = new Map();
+  let selectedId = null;
   for (const item of markers) {
     const li = el('li');
-    const link = button(item.label, 'roomplan-action-secondary rp-floor-shortcut',
+    const link = button(item.label, 'roomplan-action roomplan-action-secondary rp-floor-shortcut',
       `${item.label} · ${item.state.label}`);
+    link.dataset.floorFocusKey = `list-${item.room.id}`;
+    if (roomDetails?.id) link.setAttribute('aria-controls', roomDetails.id);
     const icon = el('span', 'rp-floor-indicator', item.state.symbol);
     icon.setAttribute('aria-hidden', 'true');
     icon.dataset.availability = item.key;
     link.dataset.floorRoomId = String(item.room.id);
     link.prepend(icon);
-    link.addEventListener('click', () => onRoomSelect(item.room));
+    link.addEventListener('click', () => onRoomSelect(item.room, link));
+    entries.set(item.room.id, { item, li, link });
     li.append(link);
     shortcutList.append(li);
   }
@@ -118,7 +157,10 @@ export function renderFloorPosition({ floor, rooms, availability, onRoomSelect, 
   tools.setAttribute('aria-label', 'Grundriss vergrößern');
   const smaller = button('−', 'roomplan-action-secondary rp-floor-zoom', 'Verkleinern');
   const larger = button('+', 'roomplan-action-secondary rp-floor-zoom', 'Vergrößern');
+  smaller.dataset.floorFocusKey = 'minus';
+  larger.dataset.floorFocusKey = 'plus';
   const level = button('100 %', 'roomplan-action-secondary rp-floor-level', 'Zoom zurücksetzen: 100 Prozent');
+  level.dataset.floorFocusKey = 'zoom';
   const legend = el('ul', 'rp-floor-legend');
   legend.setAttribute('aria-label', 'Belegungsstatus');
   for (const [key, state] of availabilityStates) {
@@ -149,6 +191,9 @@ export function renderFloorPosition({ floor, rooms, availability, onRoomSelect, 
     marker.dataset.floorRoomId = String(item.room.id);
     marker.dataset.availability = item.key;
     marker.title = `${item.label} · ${item.state.label}`;
+    marker.dataset.floorFocusKey = `map-${item.room.id}`;
+    if (roomDetails?.id) marker.setAttribute('aria-controls', roomDetails.id);
+    entries.get(item.room.id).marker = marker;
     for (const [key, value] of Object.entries({ left: item.x, top: item.y, width: item.w, height: item.h })) {
       marker.style.setProperty(key, percentage(value));
     }
@@ -157,7 +202,7 @@ export function renderFloorPosition({ floor, rooms, availability, onRoomSelect, 
     const name = el('span', 'rp-floor-marker-name', item.label);
     name.setAttribute('aria-hidden', 'true');
     marker.append(indicator, name);
-    marker.addEventListener('click', () => onRoomSelect(item.room));
+    marker.addEventListener('click', () => onRoomSelect(item.room, marker));
     overlay.append(marker);
   }
   const hint = el('p', 'rp-floor-hint');
@@ -165,8 +210,56 @@ export function renderFloorPosition({ floor, rooms, availability, onRoomSelect, 
   if (markers.length === 0) hint.textContent = 'Keine Räume auf diesem Grundriss markiert.';
   canvas.append(image, overlay);
   viewport.append(canvas);
+  if (markers.length) frame.append(filtersRow, shortcuts);
+  if (roomDetails) frame.append(roomDetails);
   frame.append(tools, viewport, hint);
-  if (markers.length) frame.append(shortcuts);
+
+  function updateSelection(id) {
+    selectedId = id;
+    for (const [roomId, entry] of entries) {
+      if (roomDetails?.id) for (const control of [entry.link, entry.marker]) {
+        control.setAttribute('aria-expanded', String(roomId === id));
+      }
+    }
+  }
+
+  function applyFilters(resetOpen = false) {
+    const required = normalizeRoomSearch(filters.query);
+    let count = 0;
+    for (const { item, li, marker } of entries.values()) {
+      const matches = matchesRoomSearch(item.label, filters.query);
+      const bookable = !filters.onlyBookable || (availabilityStatus === 'ready' && canBook(item.room, item.key));
+      li.hidden = marker.hidden = !(matches && bookable);
+      if (!li.hidden) count++;
+    }
+    const active = required.length > 0 || filters.onlyBookable;
+    shortcuts.hidden = count === 0;
+    shortcutTitle.textContent = active ? 'Suchergebnisse' : 'Räume im Grundriss';
+    if (active) shortcuts.open = true;
+    else if (resetOpen && !viewport.hidden) shortcuts.open = false;
+    onlyBookable.setAttribute('aria-pressed', String(filters.onlyBookable));
+    resultCount.textContent = !active ? '' : filters.onlyBookable && availabilityStatus !== 'ready'
+      ? (availabilityStatus === 'error' ? 'Belegung unbekannt' : 'Belegung wird geladen …')
+      : count === 0 ? 'Keine Treffer' : count === 1 ? '1 Raum' : `${count} Räume`;
+  }
+  const notifyFilters = () => {
+    applyFilters(true);
+    onFilterChange(selectedId != null && entries.get(selectedId)?.marker.hidden);
+  };
+  search.addEventListener('input', () => { filters.query = search.value; notifyFilters(); });
+  onlyBookable.addEventListener('click', () => { filters.onlyBookable = !filters.onlyBookable; notifyFilters(); });
+  applyFilters();
+  updateSelection(null);
+  // Keep the renderer's DOM return contract; expose view state without a re-render.
+  frame.selectFloorRoom = updateSelection;
+  frame.isFloorRoomShown = id => entries.has(id) && !entries.get(id).marker.hidden;
+  frame.snapshot = () => ({ zoomIndex, x: viewport.scrollLeft, y: viewport.scrollTop, open: shortcuts.open });
+  frame.restore = position => {
+    setZoom(position.zoomIndex);
+    viewport.scrollLeft = position.x;
+    viewport.scrollTop = position.y;
+    if (!viewport.hidden) shortcuts.open = position.open;
+  };
 
   let zoomIndex = 0;
   function setZoom(index) {
