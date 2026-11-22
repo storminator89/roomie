@@ -170,3 +170,12 @@
     .rp-grid { grid-template-columns: repeat(var(--rp-cols, 3), minmax(10rem, 1fr)); gap: .45rem; }
     .rp-grid-empty { grid-template-columns: 1fr; }
 }
+
+.rp-floor-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.rp-floor-pick { align-items: start; display: grid; gap: .2rem; }
+.rp-floor-pick select {
+    min-height: 2.75rem; max-width: min(19rem, 100%); border: 1px solid #90918c;
+    border-radius: .65rem; background: #fff; color: inherit; padding: .45rem .65rem; font: inherit;
+}
+.rp-floor-focus { margin-top: .75rem; }
+.rp-floor-focus .rp-card { max-width: 36rem; }

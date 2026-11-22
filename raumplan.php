@@ -22,6 +22,8 @@ $roomiePlanToday = roomieBookingToday();
     <title>Raumplan · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/roomplan/editor.css">
+    <link rel="stylesheet" href="assets/roomplan/floor-view.css">
+    <?php if ($roomiePlanAdmin) : ?><link rel="stylesheet" href="assets/roomplan/floor-editor.css"><?php endif; ?>
     <script type="module" src="assets/roomplan/view.js"></script>
 </head>
 <body class="roomplan-page">
@@ -34,17 +36,22 @@ $roomiePlanToday = roomieBookingToday();
         <header class="roomplan-heading">
             <h1>Raumplan</h1>
             <?php if ($roomiePlanAdmin) : ?>
+                <div class="rp-floor-actions">
+                <button type="button" id="roomplan-floor-edit" class="roomplan-action"
+                        aria-controls="roomplan-floor-editor" aria-expanded="false" hidden>Grundrisse bearbeiten</button>
                 <button type="button" id="roomplan-edit" class="roomplan-action roomplan-action-secondary"
                         aria-controls="roomplan-editor" aria-expanded="false">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.5 5.5 3 3M5 19l4-.8L19.3 7.9a2.1 2.1 0 0 0-3-3L6 15.2 5 19Z" /></svg>
-                    Layout bearbeiten
+                    Raster bearbeiten
                 </button>
+                </div>
             <?php endif; ?>
         </header>
         <div id="roomplan-view">
             <p class="roomplan-panel roomplan-muted" role="status">Raumplan wird geladen …</p>
         </div>
         <div id="roomplan-editor" hidden></div>
+        <?php if ($roomiePlanAdmin) : ?><div id="roomplan-floor-editor" hidden></div><?php endif; ?>
         <noscript>
             <p class="roomplan-panel">Der interaktive Raumplan benötigt JavaScript. <a href="rooms.php">Raumliste öffnen</a></p>
         </noscript>

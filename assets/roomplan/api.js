@@ -103,6 +103,31 @@ export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
     }
     const jsonWrite = (path, body) => request(path, {body, asJson: true});
     return {
+        async loadFloorplans({signal} = {}) {
+            const payload = await request('floorplan_list.php', {signal});
+            if (!Array.isArray(payload.plans)) throw new Error('Grundrisse konnten nicht geladen werden.');
+            return payload.plans.filter(floor => positiveId(floor.id) && positiveId(floor.width)
+                && positiveId(floor.height) && isRevision(floor.revision) && Array.isArray(floor.markers));
+        },
+        floorplanImageUrl(id) {
+            if (!positiveId(id)) throw new Error('Grundriss nicht gefunden.');
+            return 'floorplan_image.php?' + new URLSearchParams({id});
+        },
+        async uploadFloorplan({title, image}) {
+            const body = new FormData();
+            body.append('title', title);
+            body.append('image', image);
+            const payload = await request('floorplan_upload.php', {body});
+            const id = positiveId(payload.id);
+            if (!id) throw new Error('Upload konnte nicht bestätigt werden. Bitte neu laden.');
+            return id;
+        },
+        async saveFloorMarkers(data) {
+            if (!positiveId(data.id) || !isRevision(data.revision)) throw new Error('Bitte den Grundriss neu laden.');
+            const payload = await jsonWrite('floorplan_markers.php', data);
+            if (!isRevision(payload.revision)) throw new Error('Speichern konnte nicht bestätigt werden. Bitte neu laden.');
+            return payload.revision;
+        },
         async loadPlan({signal} = {}) {
             const [plan, favorites] = await Promise.all([
                 request('load_grid.php', {signal}),

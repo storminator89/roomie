@@ -1,0 +1,63 @@
+.rp-floor-position { display:grid; gap:.7rem; min-width:0; }
+.rp-floor-position [hidden] { display:none !important; }
+.rp-floor-controls { display:flex; flex-wrap:wrap; align-items:center; gap:.35rem; }
+.rp-floor-zoom,.rp-floor-level { min-block-size:44px; min-inline-size:44px; }
+.rp-floor-level { font-variant-numeric:tabular-nums; }
+.rp-floor-legend {
+  display:flex; flex-wrap:wrap; gap:.3rem .9rem; margin:.15rem 0; padding:0; list-style:none;
+  color:var(--roomplan-muted,#525b65); font-size:.875rem;
+}
+.rp-floor-legend li { display:flex; align-items:center; gap:.3rem; }
+.rp-floor-indicator {
+  display:inline-grid; place-items:center; flex:none; width:1.25rem; height:1.25rem;
+  border-radius:50%; background:var(--rp-plan-ink,#34435b); color:#fff; font:700 .75rem/1 system-ui,sans-serif;
+}
+.rp-floor-position [data-availability="free"] { --rp-plan-ink:#075944; --rp-plan-overlay:rgba(16,185,129,.27); }
+.rp-floor-position [data-availability="partial"] { --rp-plan-ink:#704300; --rp-plan-overlay:rgba(255,194,38,.39); }
+.rp-floor-position [data-availability="busy"] { --rp-plan-ink:#8e263c; --rp-plan-overlay:rgba(251,113,133,.30); }
+.rp-floor-position [data-availability="unknown"] { --rp-plan-ink:#3e4d62; --rp-plan-overlay:rgba(100,116,139,.24); }
+
+.rp-floor-viewport {
+  min-width:0; max-block-size:clamp(18rem,65vh,44rem); overflow:auto; border:1px solid var(--roomplan-border,#dfe3e7);
+  border-radius:.75rem; background:#eef0f2; scrollbar-gutter:stable;
+}
+.rp-floor-canvas { position:relative; inline-size:100%; }
+.rp-floor-canvas[data-zoom="150"] { inline-size:150%; }
+.rp-floor-canvas[data-zoom="200"] { inline-size:200%; }
+.rp-floor-canvas[data-zoom="300"] { inline-size:300%; }
+.rp-floor-image { display:block; inline-size:100%; max-inline-size:none; block-size:auto; user-select:none; }
+.rp-floor-marker-layer { position:absolute; inset:0; pointer-events:none; }
+.rp-floor-marker {
+  pointer-events:auto; position:absolute; box-sizing:border-box;
+  display:flex; align-items:center; justify-content:center; gap:.2rem;
+  padding:0 .15rem; min-width:0; min-height:0; overflow:hidden;
+  border:2px solid var(--rp-plan-ink,#34435b); border-radius:.2rem;
+  color:var(--rp-plan-ink,#34435b); background:var(--rp-plan-overlay,rgba(100,116,139,.24));
+  cursor:pointer; touch-action:manipulation;
+}
+.rp-floor-marker:hover { z-index:1; border-width:3px; }
+.rp-floor-marker:focus-visible {
+  z-index:2; outline:3px solid #1c2e49; outline-offset:2px; box-shadow:0 0 0 2px white;
+}
+.rp-floor-marker-indicator { max-inline-size:100%; max-block-size:100%; }
+.rp-floor-marker-name {
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  background:#fff; border-radius:.2rem; padding:.02rem .2rem; font:700 clamp(.65rem,1.25vw,.8rem)/1.3 system-ui,sans-serif;
+}
+.rp-floor-hint { margin:0; color:var(--roomplan-muted,#525b65); }
+.rp-floor-hint:empty { display:none; }
+.rp-floor-shortcuts summary { cursor:pointer; padding:.55rem 0; font-weight:650; }
+.rp-floor-shortcut-list { display:flex; flex-wrap:wrap; gap:.35rem; margin:.2rem 0 0; padding:0; list-style:none; }
+.rp-floor-shortcut { min-block-size:44px; text-align:left; gap:.35rem; }
+.rp-floor-position button:focus-visible,.rp-floor-position summary:focus-visible,.rp-floor-viewport:focus-visible {
+  outline:3px solid #1c2e49;
+  outline-offset:2px;
+}
+@media (max-width:38rem) {
+  .rp-floor-legend { flex-basis:100%; }
+  .rp-floor-marker-name { display:none; }
+}
+@media (forced-colors:active) {
+  .rp-floor-marker { border:2px solid ButtonText; background:transparent; }
+  .rp-floor-marker-indicator { background:ButtonFace; color:ButtonText; border:1px solid ButtonText; }
+}

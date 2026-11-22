@@ -1,0 +1,22 @@
+.rp-floor-editor,.rp-fe-workspace {display:grid;gap:.85rem}
+.rp-floor-editor [hidden] {display:none}
+.rp-fe-toolbar,.rp-fe-tools {display:flex;align-items:end;gap:.5rem;flex-wrap:wrap}
+.rp-fe-toolbar h2 {font-size:1.1rem;font-weight:750;margin-inline-end:auto}
+.rp-fe-tools label {display:grid;gap:.2rem;max-width:100%;font-size:.875rem;font-weight:600}
+.rp-floor-editor button,.rp-floor-editor select,.rp-floor-editor input {min-height:2.65rem;border:1px solid #cbd5e1;background:#fff;border-radius:.5rem;padding:.4rem .6rem;color:#1e293b}
+.rp-floor-editor button {font-weight:650}
+.rp-floor-editor .rp-fe-primary {background:#1e40af;color:#fff;border-color:#1e40af}
+.rp-floor-editor button:disabled {opacity:.5;cursor:not-allowed}
+.rp-floor-editor :focus-visible {outline:3px solid #1d4ed8;outline-offset:2px}
+.rp-fe-status {font-size:.875rem;color:#475569}
+.rp-fe-error {color:#991b1b;border-left:3px solid #b91c1c;background:#fef2f2;padding:.5rem}
+.rp-fe-image {position:relative;width:max-content;max-width:100%;display:block}
+.rp-fe-image img {display:block;max-width:100%;height:auto}
+.rp-fe-image.rp-fe-draw {cursor:crosshair}
+.rp-fe-overlay {position:absolute;inset:0;pointer-events:none}
+.rp-fe-zone {position:absolute;box-sizing:border-box;overflow:hidden;border:2px solid #1e40af;background:#bfdbfe88;color:#172554;padding:.15rem;font-size:clamp(.55rem,1.2vw,.9rem);font-weight:750;overflow-wrap:anywhere}
+.rp-fe-zone.rp-fe-active {border-color:#92400e;background:#fcd34d99;color:#451a03}
+.rp-fe-point {position:absolute;width:.65rem;height:.65rem;border:2px solid #fff;border-radius:50%;transform:translate(-50%,-50%);background:#1e40af}
+.rp-fe-coords input {width:5.5rem}
+
+.rp-fe-help { color: #52606d; font-size: .86rem; margin-block: .4rem; }

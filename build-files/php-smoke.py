@@ -48,9 +48,11 @@ class Client:
             ProxyHandler({}), HTTPCookieProcessor(http.cookiejar.CookieJar()), NoRedirect()
         )
 
-    def request(self, resource, fields=None, *, data=None, content_type=None, binary=False):
+    def request(self, resource, fields=None, *, data=None, content_type=None, binary=False, csrf=None):
         payload = urlencode(fields).encode("utf-8") if fields is not None else data
         headers = {"Content-Type": content_type} if content_type else {}
+        if csrf is not None:
+            headers["X-CSRF-Token"] = csrf
         try:
             response = self.opener.open(Request(self.base_url + resource, data=payload, headers=headers), timeout=5)
         except HTTPError as error:
@@ -112,6 +114,54 @@ def smoke_avatar(command, root, env, guest, user, status):
     expect(code == 200 and headers.get("Content-Type") == "image/png" and data.startswith(b"\x89PNG\r\n\x1a\n")
            and struct.unpack(">II", data[16:24]) == (256, 128), "Expected private avatar re-encoded at 256×128")
     print("Avatar: upload, PNG resize, download and guest access restriction passed", flush=True)
+
+
+def smoke_floorplan(command, root, env, guest, admin, admin_status, user, room_id):
+    gd = run(command + ["-r", "echo extension_loaded('gd') && (imagetypes() & IMG_PNG) ? 'yes' : 'no';"], root, env)
+    if gd != "yes":
+        print("Floorplan: skipped (GD PNG not enabled)", flush=True)
+        return
+    private_room = int(run(command + ["-r", """
+        require 'database.php';
+        $db = getDatabaseConnection();
+        $db->exec("INSERT INTO rooms (name, type, capacity) VALUES ('Test Restricted', 'fk-office', 2)");
+        echo $db->lastInsertId();
+    """], root, env))
+    png = b64decode(run(command + ["-r", "ob_start(); imagepng(imagecreatetruecolor(480, 300)); echo base64_encode(ob_get_clean());"], root, env))
+    boundary = "RoomieSyntheticFloorplan"
+    token = admin_status["csrf_token"]
+    def upload(name):
+        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="title"\r\n\r\n{name}\r\n'
+                f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="floor.png"\r\n'
+                'Content-Type: image/png\r\n\r\n').encode() + png + f"\r\n--{boundary}--\r\n".encode()
+        code, _, raw = admin.request("floorplan_upload.php", data=body, content_type=f"multipart/form-data; boundary={boundary}", csrf=token)
+        expect(code == 200 and json.loads(raw).get("success") is True, "Expected administrator floorplan upload")
+        return json.loads(raw)["id"]
+    first, second = upload("Test floor A"), upload("Test floor B")
+    code, _, raw = admin.request("floorplan_list.php")
+    expect(code == 200, "Expected administrator plan list")
+    floors = {floor["id"]: floor for floor in json.loads(raw)["plans"]}
+    expect(set(floors) == {first, second}, "Both named floorplans must be retained")
+    expect((floors[first]["width"], floors[first]["height"]) == (480, 300), "Floorplan image dimensions must be preserved")
+    revision = floors[first]["revision"]
+    rooms = [
+        {"roomId": int(room_id), "x": 0.15, "y": 0.12, "w": 0.2, "h": 0.2},
+        {"roomId": private_room, "x": 0.55, "y": 0.12, "w": 0.2, "h": 0.2},
+    ]
+    payload = json.dumps({"id": first, "revision": revision, "markers": rooms}).encode()
+    code, _, raw = admin.request("floorplan_markers.php", data=payload, content_type="application/json", csrf=token)
+    expect(code == 200 and json.loads(raw)["revision"] != revision, "Saving markers must advance the plan revision")
+    expect(admin.request("floorplan_markers.php", data=payload, content_type="application/json", csrf=token)[0] == 409,
+           "Old marker revisions must not overwrite newer edits")
+    code, _, raw = user.request("floorplan_list.php")
+    expect(code == 200, "Expected member floorplan list")
+    visible = next(floor for floor in json.loads(raw)["plans"] if floor["id"] == first)
+    expect([marker["roomId"] for marker in visible["markers"]] == [int(room_id)], "Member marker list must respect room permissions")
+    expect(guest.request(f"floorplan_image.php?id={first}", binary=True)[0] == 401, "Floorplan image must not be public")
+    code, headers, data = user.request(f"floorplan_image.php?id={first}", binary=True)
+    expect(code == 200 and headers.get("Content-Type") == "image/png" and data.startswith(b"\x89PNG\r\n\x1a\n")
+           and "no-store" in headers.get("Cache-Control", ""), "Expected private PNG floorplan")
+    print("Floorplan: multiple uploads, saved markers, revision, room permissions and private image passed", flush=True)
 
 
 def smoke(php, root, scratch, expected_minor):
@@ -236,6 +286,7 @@ def smoke(php, root, scratch, expected_minor):
                 expect(all(len(line.encode("utf-8")) <= 75 for line in content), "ICS line length is out of bounds")
                 print("Local HTTP: authentication, floorplan roles, dashboard, booking, and ICS passed", flush=True)
                 smoke_avatar(command, root, env, guest, user, user_status)
+                smoke_floorplan(command, root, env, guest, admin, admin_status, user, room_id)
             finally:
                 server.terminate()
                 try:

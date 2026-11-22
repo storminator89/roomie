@@ -1,4 +1,5 @@
 import { createRoomplanApi } from './api.js';
+import { renderFloorPosition } from './floor-view.js';
 
 const types = new Map([
   ['mediaroom', 'Mediaraum'], ['office', 'Büro'], ['open-office', 'Großraumbüro'],
@@ -79,6 +80,8 @@ export function readViewLocation(href, fallbackDate) {
   return {
     date: dateValue(supplied) ? supplied : fallbackDate,
     list: url.searchParams.get('view') === 'list',
+    floorChoice: url.searchParams.get('view') === 'grid' ? 'grid'
+      : (/^[1-9]\d{0,15}$/.test(url.searchParams.get('floor') ?? '') ? Number(url.searchParams.get('floor')) : null),
     favorites: url.searchParams.get('favorites') === '1',
   };
 }
@@ -88,7 +91,10 @@ export function writeViewLocation(href, state, fallbackDate) {
   if (state.date === fallbackDate) next.searchParams.delete('date');
   else next.searchParams.set('date', state.date);
   if (state.list) next.searchParams.set('view', 'list');
+  else if (state.floorChoice === 'grid') next.searchParams.set('view', 'grid');
   else next.searchParams.delete('view');
+  if (!state.list && Number.isSafeInteger(state.floorChoice) && state.floorChoice > 0) next.searchParams.set('floor', String(state.floorChoice));
+  else next.searchParams.delete('floor');
   if (state.favorites) next.searchParams.set('favorites', '1');
   else next.searchParams.delete('favorites');
   return next;
@@ -124,6 +130,13 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   const initialView = readViewLocation(window.location.href, today);
   let onlyFavorites = initialView.favorites;
   let listMode = initialView.list;
+  let floorChoice = initialView.floorChoice;
+  let floors = [];
+  let floorLoadRun = 0;
+  let selectedFloorRoom = null;
+  const floorEdit = main.querySelector('#roomplan-floor-edit');
+  const floorEditorRoot = main.querySelector('#roomplan-floor-editor');
+  let floorEditor = null;
   let bookingRun = 0;
   let bookingController = null;
   let editorOpened = false;
@@ -149,7 +162,11 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   const mode = button('Listenansicht', 'roomplan-action-secondary rp-button rp-button-secondary');
   mode.setAttribute('aria-pressed', String(listMode));
   mode.hidden = true;
-  toolbar.append(dateControl, resetDate, filter, mode);
+  const floorPick = el('label', 'rp-floor-pick', 'Ansicht');
+  const floorSelect = el('select');
+  floorPick.append(floorSelect);
+  floorPick.hidden = true;
+  toolbar.append(dateControl, resetDate, filter, mode, floorPick);
 
   const notice = el('div', 'rp-status');
   notice.setAttribute('role', 'status');
@@ -166,10 +183,58 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
 
   function rememberView() {
     if (!dateValue(dateInput.value)) return;
-    const state = { date: dateInput.value, list: listMode, favorites: onlyFavorites };
+    const state = { date: dateInput.value, list: listMode, favorites: onlyFavorites, floorChoice };
     const target = writeViewLocation(window.location.href, state, today);
     if (target.href !== window.location.href) window.history.pushState(window.history.state, '', target);
   }
+
+  function activeFloor() {
+    if (listMode || floorChoice === 'grid') return null;
+    return floors.find(floor => floor.id === floorChoice) ?? floors[0] ?? null;
+  }
+
+  function syncFloorControl() {
+    floorPick.hidden = !floors.length || onlyFavorites;
+    const options = floors.map(floor => [String(floor.id), floor.title]);
+    options.push(['grid', 'Raster'], ['list', 'Liste']);
+    floorSelect.replaceChildren(...options.map(([id, label]) => {
+      const option = el('option', '', label);
+      option.value = id;
+      return option;
+    }));
+    floorSelect.value = listMode ? 'list' : String(activeFloor()?.id ?? 'grid');
+    if (floorEdit) floorEdit.hidden = !plan;
+  }
+
+  async function reloadFloors(intentId = null) {
+    const run = ++floorLoadRun;
+    try {
+      const next = await api.loadFloorplans();
+      if (run !== floorLoadRun) return;
+      floors = next;
+      if (intentId != null && floors.some(floor => floor.id === intentId)) {
+        floorChoice = intentId;
+        listMode = false;
+        selectedFloorRoom = null;
+        rememberView();
+      }
+    } catch (error) {
+      if (run !== floorLoadRun) return;
+      if (floorEdit) floorEdit.title = error.message;
+    }
+    syncFloorControl();
+    if (plan && dateValue(dateInput.value)) render();
+  }
+
+  floorSelect.addEventListener('change', () => {
+    const value = floorSelect.value;
+    listMode = value === 'list';
+    floorChoice = value === 'grid' || value === 'list' ? (value === 'grid' ? value : null) : Number(value);
+    selectedFloorRoom = null;
+    mode.setAttribute('aria-pressed', String(listMode));
+    rememberView();
+    render();
+  });
 
   function status(text, isError = false) {
     notice.textContent = text;
@@ -382,7 +447,41 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     );
     const { slots, unplaced } = groupRooms(plan);
     filter.disabled = !plan.rooms.length;
-    mode.hidden = onlyFavorites || !slots.some(Boolean);
+    syncFloorControl();
+    mode.hidden = onlyFavorites || Boolean(floors.length) || !slots.some(Boolean);
+    const floor = !onlyFavorites && activeFloor();
+    if (floor) {
+      const panel = section(floor.title);
+      const focus = el('div', 'rp-floor-focus');
+      function updateFocus(moveFocus = false) {
+        const room = plan.rooms.find(candidate => candidate.id === selectedFloorRoom);
+        if (!room || !floor.markers.some(marker => marker.roomId === room.id)) {
+          focus.replaceChildren();
+          return;
+        }
+        const selectedCard = card(room);
+        selectedCard.tabIndex = -1;
+        focus.replaceChildren(selectedCard);
+        if (moveFocus || String(room.id) === String(focusRoom)) {
+          (selectedCard.querySelector('[data-book-room-id]:enabled') || selectedCard).focus();
+        }
+      }
+      const visual = renderFloorPosition({
+        floor, rooms: plan.rooms,
+        availability(room) {
+          if (bookingStatus !== 'ready') return 'unknown';
+          const booked = bookingsByRoom?.get(room.id) ?? [];
+          const times = availablePeriods(room.capacity, booked);
+          return !times.length ? 'busy' : booked.length ? 'partial' : 'free';
+        },
+        onRoomSelect(room) { selectedFloorRoom = room.id; updateFocus(true); },
+        imageUrl: api.floorplanImageUrl(floor.id),
+      });
+      panel.append(visual, focus);
+      content.replaceChildren(panel);
+      updateFocus();
+      return;
+    }
     const visible = onlyFavorites ? plan.rooms.filter(room => plan.favorites.includes(room.id)) : plan.rooms;
     if (!visible.length) {
       const text = onlyFavorites ? 'Noch keine Favoriten.' : 'Keine Räume verfügbar.';
@@ -554,6 +653,8 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     dateInput.value = state.date;
     onlyFavorites = state.favorites;
     listMode = state.list;
+    floorChoice = state.floorChoice;
+    selectedFloorRoom = null;
     filter.setAttribute('aria-pressed', String(onlyFavorites));
     mode.setAttribute('aria-pressed', String(listMode));
     resetDate.disabled = state.date === today;
@@ -576,7 +677,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     edit.setAttribute('aria-controls', 'roomplan-editor');
     edit.setAttribute('aria-expanded', 'false');
     edit.addEventListener('click', async () => {
-      if (!plan) return;
+      if (!plan || floorEditor) return;
       if (editorOpened) {
         closeEditor();
         return;
@@ -599,7 +700,38 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       }
     });
   }
+  if (isAdmin && floorEdit && floorEditorRoot) {
+    const closeFloor = () => {
+      if (floorEditor?.canClose && !floorEditor.canClose()) return;
+      floorEditor?.destroy?.();
+      floorEditor = null;
+      floorEditorRoot.hidden = true;
+      view.hidden = false;
+      floorEdit.setAttribute('aria-expanded', 'false');
+      floorEdit.focus();
+    };
+    floorEdit.addEventListener('click', async () => {
+      if (!plan || editorOpened) return;
+      if (floorEditor) { closeFloor(); return; }
+      floorEdit.disabled = true;
+      try {
+        const { mountFloorEditor } = await import('./floor-editor.js');
+        floorEditorRoot.hidden = false;
+        view.hidden = true;
+        floorEdit.setAttribute('aria-expanded', 'true');
+        floorEditor = await mountFloorEditor({
+          root: floorEditorRoot, api, plans: structuredClone(floors),
+          initialId: activeFloor()?.id ?? floors[0]?.id, rooms: structuredClone(plan.rooms),
+          onChange: id => reloadFloors(Number.isSafeInteger(id) ? id : null), onClose: closeFloor,
+        });
+      } catch (error) {
+        closeFloor();
+        status(error.message || 'Bearbeitung konnte nicht geöffnet werden.', true);
+      } finally { floorEdit.disabled = false; }
+    });
+  }
   void loadPlan();
+  void reloadFloors();
 }
 
 if (typeof document !== 'undefined') {

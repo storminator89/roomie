@@ -128,3 +128,23 @@ It checks lint, session roles, dashboard room selection, booking, and ICS export
 When GD PNG is enabled it also checks private avatar upload and delivery. The
 test uses temporary data and localhost only and sends no email. It does not
 check an Apache/PHP-FPM installation or change the host's PHP selection.
+
+### Uploaded floorplans
+
+Admins open **Raumplan → Grundrisse bearbeiten** to add a named plan as PNG/JPEG
+(up to 5 MiB, 2400 px per side and 3 megapixels). Select an existing room and
+mark a rectangle with two clicks/taps, or enter the geometry as percentages.
+Save the zones explicitly. Each plan may have up to 200 marked rooms; up to
+12 plans are supported. The older grid and the room list remain available.
+
+GD must be enabled. Roomie decodes the upload, stores a new PNG in the
+private SQLite database and serves it only to signed-in users. Do not upload
+a drawing with labels or details that should be hidden from any signed-in user:
+room permissions filter interactive zones, not text baked into the image.
+The normal private SQLite backup also includes floorplans and zones.
+
+For an existing database, back up and run the additive `php schema_hardening.php`
+before using the new editor. It does not alter bookings or the existing grid.
+Allow enough room for multipart overhead in PHP `post_max_size` and set
+`upload_max_filesize` to at least 5 MiB. A new installation gets the tables
+through `init_db.php`.
