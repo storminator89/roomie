@@ -26,6 +26,7 @@ $roomiePlanToday = roomieBookingToday();
     <?php if ($roomiePlanAdmin) : ?>
         <link rel="stylesheet" href="assets/roomplan/floor-editor.css">
         <link rel="stylesheet" href="assets/roomplan/floor-upload.css">
+        <link rel="stylesheet" href="assets/roomplan/floor-rooms.css">
     <?php endif; ?>
     <script type="module" src="assets/roomplan/view.js"></script>
 </head>
@@ -43,7 +44,7 @@ $roomiePlanToday = roomieBookingToday();
                     <button type="button" id="roomplan-floor-edit" class="roomplan-action"
                             aria-controls="roomplan-floor-editor" aria-expanded="false" hidden>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18v18H3zM12 3v7h9M3 14h7v7" /></svg>
-                        Grundrisse bearbeiten
+                        Räume &amp; Grundrisse verwalten
                     </button>
                     <details class="rp-legacy-actions">
                         <summary class="roomplan-action roomplan-action-secondary" aria-label="Weitere Optionen">

@@ -212,12 +212,13 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     if (floorEdit) floorEdit.hidden = !plan;
   }
 
-  async function reloadFloors(intentId = null) {
+  async function reloadFloors(intentId = null, reportFailure = false) {
     const run = ++floorLoadRun;
     try {
       const next = await api.loadFloorplans();
       if (run !== floorLoadRun) return;
       floors = next;
+      if (floorEdit) floorEdit.removeAttribute('title');
       if (intentId != null && floors.some(floor => floor.id === intentId)) {
         floorChoice = intentId;
         listMode = false;
@@ -227,6 +228,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     } catch (error) {
       if (run !== floorLoadRun) return;
       if (floorEdit) floorEdit.title = error.message;
+      if (reportFailure) throw error;
     }
     syncFloorControl();
     if (plan && dateValue(dateInput.value)) render();
@@ -769,7 +771,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       floorEdit.focus();
     };
     floorEdit.addEventListener('click', async () => {
-      if (!plan || editorOpened || editorOpening) return;
+      if (!plan || loadPlanError || editorOpened || editorOpening) return;
       if (floorEditor) { closeFloor(); return; }
       editorOpening = true;
       floorEdit.disabled = true;
@@ -782,7 +784,12 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
         floorEditor = await mountFloorEditor({
           root: floorEditorRoot, api, plans: structuredClone(floors),
           initialId: activeFloor()?.id ?? floors[0]?.id, rooms: structuredClone(plan.rooms),
-          onChange: id => reloadFloors(Number.isSafeInteger(id) ? id : null), onClose: closeFloor,
+          onChange: id => reloadFloors(Number.isSafeInteger(id) ? id : null, true),
+          onRoomsChanged: async () => {
+            await loadPlan();
+            if (loadPlanError) throw new Error('Raumansicht nicht verfügbar.');
+          },
+          onClose: closeFloor,
         });
         const heading = floorEditorRoot.querySelector('h2');
         if (heading) { heading.tabIndex = -1; heading.focus(); }
@@ -792,8 +799,17 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       } finally { editorOpening = false; floorEdit.disabled = false; }
     });
   }
-  void loadPlan();
-  void reloadFloors();
+  const startup = Promise.all([loadPlan(), reloadFloors()]);
+  if (isAdmin && floorEdit && new URL(window.location.href).searchParams.get('manage') === '1') {
+    void startup.then(() => {
+      if (!plan || loadPlanError || floorEditor || editorOpened || editorOpening) return;
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('manage') !== '1') return;
+      url.searchParams.delete('manage');
+      window.history.replaceState(window.history.state, '', url);
+      floorEdit.click();
+    });
+  }
 }
 
 if (typeof document !== 'undefined') {

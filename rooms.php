@@ -106,7 +106,12 @@ $equipmentLabels = [
 <main class="roomplan-main rb-page" tabindex="-1">
     <header class="rb-header">
         <h1>Räume</h1>
-        <a class="roomplan-action roomplan-action-secondary" href="<?= roomsEscape($planUrl) ?>">Raumplan</a>
+        <div class="rp-floor-actions">
+            <?php if (isAdmin()) : ?>
+                <a class="roomplan-action" href="<?= roomsEscape($planUrl . (str_contains($planUrl, '?') ? '&' : '?') . 'manage=1') ?>">Räume verwalten</a>
+            <?php endif; ?>
+            <a class="roomplan-action roomplan-action-secondary" href="<?= roomsEscape($planUrl) ?>">Raumplan</a>
+        </div>
     </header>
     <nav class="rb-segments" aria-label="Raumauswahl">
         <a href="<?= roomsEscape(roomsListUrl($q, false, $date)) ?>"<?= !$onlyFavorites ? ' aria-current="page"' : '' ?>>Alle Räume</a>

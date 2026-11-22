@@ -1,4 +1,5 @@
 import { createFloorUpload } from './floor-upload.js';
+import { createFloorRoomManager } from './floor-rooms.js';
 
 const MIN = 0.01;
 const limit = n => Math.min(1, Math.max(0, n));
@@ -46,9 +47,11 @@ export function rectangleBetween(a, b) {
 const same = (a, b) => a.length === b.length && a.every((m, i) =>
     m.roomId === b[i].roomId && ['x','y','w','h'].every(k => m[k] === b[i][k]));
 
-export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, onClose}) {
+export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, onRoomsChanged, onClose}) {
     let floors = new Map(plans.map(floor => [floor.id, floor]));
-    const roomNames = new Map(rooms.map(r => [r.id, r.number ? `${r.name} · ${r.number}` : r.name]));
+    const roomData = new Map(rooms.map(room => [room.id, room]));
+    const roomLabel = room => room.number ? `${room.name} · ${room.number}` : room.name;
+    const roomNames = new Map(rooms.map(room => [room.id, roomLabel(room)]));
     let floor = floors.get(initialId) ?? floors.values().next().value ?? null;
     let draft = floor?.markers.map(m => ({...m})) ?? [];
     let selectedRoom = null;
@@ -72,7 +75,18 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     toolbar.append(title, finish, save);
     const picker = el('select');
     const planTools = el('div', null, 'rp-fe-tools');
-    planTools.append(label('Grundriss', picker));
+    const rename = el('details', null, 'rp-fe-rename');
+    const renameSummary = el('summary', 'Umbenennen');
+    const renameForm = el('form', null, 'rp-fe-tools');
+    const planName = el('input');
+    planName.type = 'text';
+    planName.required = true;
+    planName.maxLength = 120;
+    const renameSave = btn('Name speichern');
+    renameSave.type = 'submit';
+    renameForm.append(label('Neuer Name', planName), renameSave);
+    rename.append(renameSummary, renameForm);
+    planTools.append(label('Grundriss', picker), rename);
     const status = el('p', '', 'rp-fe-status');
     status.setAttribute('role','status');
     const error = el('p', '', 'rp-fe-error');
@@ -88,6 +102,12 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     const undo = btn('Rückgängig');
     const zoneTools = el('div', null, 'rp-fe-tools');
     zoneTools.append(label('Raum', zoneRoom), cancelDraw, undo, deleteZone);
+    const roomManager = createFloorRoomManager({
+        rooms,
+        getSelectedRoom: () => selectedRoom,
+        onSave: saveRoom,
+        onSaved: () => { if (alive) zoneRoom.focus(); },
+    });
     const imageWrap = el('div', null, 'rp-fe-image');
     const image = el('img');
     image.alt = 'Grundriss';
@@ -112,7 +132,7 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     const precise = el('details');
     precise.append(el('summary', 'Position & Größe'), coordinateForm);
     workspace.append(zoneTools, imageWrap, precise);
-    panel.append(toolbar, planTools, upload.element, error, status, workspace);
+    panel.append(toolbar, planTools, upload.element, roomManager.element, error, status, workspace);
     root.replaceChildren(panel);
 
     function showError(message) {
@@ -154,7 +174,7 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
         zoneRoom.replaceChildren(option('', 'Raum auswählen …'), ...[...roomNames].sort((a,b)=>a[1].localeCompare(b[1],'de'))
             .map(([id, name]) => option(id, draft.some(m => m.roomId === id) ? `${name} ✓` : name)));
         zoneRoom.value = selectedRoom == null ? '' : String(selectedRoom);
-        workspace.hidden = !floor;
+        imageWrap.hidden = !floor;
         imageWrap.classList.toggle('rp-fe-draw', selectedRoom != null && !pending);
         if (floor) {
             const imageUrl = api.floorplanImageUrl(floor.id);
@@ -184,21 +204,28 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
         save.disabled = pending || !dirty();
         finish.disabled = pending;
         picker.disabled = pending || !floors.size;
-        zoneRoom.disabled = pending || !floor;
+        rename.hidden = !floor;
+        planName.disabled = pending || !floor;
+        renameSave.disabled = pending || !floor || planName.value.trim() === floor.title || !planName.value.trim();
+        zoneRoom.disabled = pending || roomData.size === 0;
         deleteZone.hidden = !item;
         deleteZone.disabled = pending || !item;
         undo.hidden = history.length === 0;
         undo.disabled = pending;
-        precise.hidden = selectedRoom == null;
+        precise.hidden = !floor || selectedRoom == null;
         cancelDraw.hidden = !start;
         cancelDraw.disabled = pending;
         apply.disabled = pending || selectedRoom == null;
         coords.forEach(c => c.disabled = pending || selectedRoom == null);
         upload.setPending(pending);
+        roomManager.setPending(pending);
+        roomManager.refresh();
     }
 
     function choosePlan(next) {
         floor = next;
+        rename.open = false;
+        planName.value = next.title;
         draft = next.markers.map(m => ({...m}));
         selectedRoom = null;
         start = null;
@@ -254,6 +281,58 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
             }
         }
     }
+
+    async function saveRoom({id, room}) {
+        const creating = id == null;
+        if (pending || (!creating && !roomData.has(id))) return false;
+        pending = true;
+        showError('');
+        render({refreshCoords:false});
+        try {
+            let roomId = id;
+            if (creating) roomId = await api.createRoom(room);
+            else await api.updateRoom({id, ...room});
+            if (!alive) return true;
+            // Keep each floor's marker draft and optimistic revision. Room data is
+            // an independent write; use the acknowledged result even if refresh fails.
+            const savedRoom = {...roomData.get(roomId), ...room, id: roomId};
+            roomData.set(roomId, savedRoom);
+            roomNames.set(roomId, roomLabel(savedRoom));
+            selectedRoom = roomId;
+            if (creating) start = null;
+            roomManager.setRooms([...roomData.values()]);
+            try { await onRoomsChanged?.(); } catch {
+                if (alive) showError('Raum gespeichert. Die Übersicht konnte nicht aktualisiert werden.');
+            }
+            return true;
+        } finally {
+            if (alive) {
+                pending = false;
+                render({refreshCoords:creating});
+            }
+        }
+    }
+
+    planName.value = floor?.title ?? '';
+    listen(planName, 'input', () => {
+        renameSave.disabled = pending || !floor || !planName.value.trim() || planName.value.trim() === floor.title;
+    });
+    listen(renameForm, 'submit', event => {
+        event.preventDefault();
+        const title = planName.value.trim();
+        if (pending || !floor || !title || title === floor.title) return;
+        const {id, revision} = floor;
+        let renamed = false;
+        void perform(() => api.renameFloorplan({id, title, revision}), nextRevision => {
+            floor = {...floor, title, revision:nextRevision};
+            floors.set(id, floor);
+            planName.value = title;
+            rename.open = false;
+            renamed = true;
+        }).then(() => {
+            if (alive && renamed) renameSummary.focus();
+        });
+    });
 
     listen(finish,'click', () => onClose?.());
     listen(picker,'change', () => {
@@ -418,6 +497,7 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
             alive = false;
             controller.abort();
             upload.destroy();
+            roomManager.destroy();
             root.replaceChildren();
         },
     };

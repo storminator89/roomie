@@ -153,15 +153,28 @@ def smoke_floorplan(command, root, env, guest, admin, admin_status, user, room_i
     expect(code == 200 and json.loads(raw)["revision"] != revision, "Saving markers must advance the plan revision")
     expect(admin.request("floorplan_markers.php", data=payload, content_type="application/json", csrf=token)[0] == 409,
            "Old marker revisions must not overwrite newer edits")
+    current_revision = json.loads(raw)["revision"]
+    rename = json.dumps({"id": first, "revision": current_revision, "title": "Test floor A renamed"}).encode()
+    rename_args = {"data": rename, "content_type": "application/json"}
+    expect(user.request("floorplan_title.php", **rename_args)[0] == 403,
+           "Ordinary users must not rename floorplans")
+    expect(admin.request("floorplan_title.php", **rename_args)[0] == 403,
+           "Admin floorplan renames require CSRF")
+    code, _, renamed = admin.request("floorplan_title.php", csrf=token, **rename_args)
+    expect(code == 200 and json.loads(renamed)["revision"] != current_revision,
+           "Renaming a plan must advance its shared revision")
+    expect(admin.request("floorplan_title.php", csrf=token, **rename_args)[0] == 409,
+           "A stale rename must not overwrite newer edits")
     code, _, raw = user.request("floorplan_list.php")
     expect(code == 200, "Expected member floorplan list")
     visible = next(floor for floor in json.loads(raw)["plans"] if floor["id"] == first)
-    expect([marker["roomId"] for marker in visible["markers"]] == [int(room_id)], "Member marker list must respect room permissions")
+    expect(visible["title"] == "Test floor A renamed", "Expected changed title in viewer")
+    expect([marker["roomId"] for marker in visible["markers"]] == [int(room_id)], "Rename must preserve markers; room permissions still apply")
     expect(guest.request(f"floorplan_image.php?id={first}", binary=True)[0] == 401, "Floorplan image must not be public")
     code, headers, data = user.request(f"floorplan_image.php?id={first}", binary=True)
     expect(code == 200 and headers.get("Content-Type") == "image/png" and data.startswith(b"\x89PNG\r\n\x1a\n")
            and "no-store" in headers.get("Cache-Control", ""), "Expected private PNG floorplan")
-    print("Floorplan: multiple uploads, saved markers, revision, room permissions and private image passed", flush=True)
+    print("Floorplan: multiple uploads, rename, saved markers, revision, room permissions and private image passed", flush=True)
 
 
 def smoke(php, root, scratch, expected_minor):
@@ -272,6 +285,24 @@ def smoke(php, root, scratch, expected_minor):
                     if (count($rows) !== 1) { fwrite(STDERR, 'Expected exactly one booking'); exit(1); }
                     echo $rows[0];
                 """], root, env)
+                for actor, can_manage in ((admin, True), (user, False)):
+                    status, _, html = actor.request("rooms.php")
+                    expect(status == 200 and ('raumplan.php?manage=1' in html) == can_manage,
+                           "Only administrators should see the room-management shortcut")
+                seed_room = {"name": "Büro Verwaltung", "number": "QA-31", "type": "office",
+                             "capacity": 3, "amenities": ["display", "whiteboard", "monitor"]}
+                code, _, record = admin.request("add_room.php", data=json.dumps(seed_room).encode(),
+                                                content_type="application/json", csrf=admin_status["csrf_token"])
+                expect(code == 200 and int(json.loads(record)["roomId"]) > 0,
+                       "Admins should be able to create rooms with the displayed equipment")
+                seed_room["id"] = int(json.loads(record)["roomId"])
+                seed_room["name"] = "Büro Verwaltung Neu"
+                code, _, _ = admin.request("update_room.php", data=json.dumps(seed_room).encode(),
+                                           content_type="application/json", csrf=admin_status["csrf_token"])
+                expect(code == 200, "Room metadata edits should succeed through the existing API")
+                status, _, html = user.request("rooms.php?q=QA-31")
+                expect(status == 200 and 'Büro Verwaltung Neu' in html and 'Whiteboard' in html,
+                       "New room details and equipment should be visible in the directory")
                 room_name = 'Besprechung, Süd'
                 status, headers, html = user.request("bookings.php")
                 expect(status == 200 and room_name in html and 'Buchung stornieren' in html

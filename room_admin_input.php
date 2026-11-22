@@ -37,6 +37,11 @@ function roomieRoomId(mixed $value): int
     return $id;
 }
 
+const ROOMIE_ROOM_AMENITIES = [
+    'desk', 'monitor', 'dock', 'phone', 'whiteboard', 'projector', 'display',
+    'meeting', 'wifi', 'video-conference', 'docking-station', 'webcam',
+];
+
 function roomieRoomInput(array $data): array
 {
     $limits = ['name' => 160, 'number' => 40];
@@ -54,11 +59,11 @@ function roomieRoomInput(array $data): array
     $capacity = $data['capacity'] ?? null;
     $amenities = $data['amenities'] ?? null;
     if (!in_array($type, $types, true) || !is_int($capacity) || $capacity < 1 || $capacity > 500
-        || !is_array($amenities) || !array_is_list($amenities) || count($amenities) > 4) {
+        || !is_array($amenities) || !array_is_list($amenities) || count($amenities) > count(ROOMIE_ROOM_AMENITIES)) {
         roomieAdminError('Raumtyp, Kapazität oder Ausstattung ungültig.', 422);
     }
     foreach ($amenities as $item) {
-        if (!in_array($item, ['wifi', 'docking-station', 'desk', 'webcam'], true)) {
+        if (!in_array($item, ROOMIE_ROOM_AMENITIES, true)) {
             roomieAdminError('Unbekannte Ausstattung.', 422);
         }
     }

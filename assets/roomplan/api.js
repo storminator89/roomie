@@ -122,6 +122,12 @@ export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
             if (!id) throw new Error('Upload konnte nicht bestätigt werden. Bitte neu laden.');
             return id;
         },
+        async renameFloorplan({id, title, revision}) {
+            if (!positiveId(id) || !isRevision(revision)) throw new Error('Bitte den Grundriss neu laden.');
+            const payload = await jsonWrite('floorplan_title.php', {id, title, revision});
+            if (!isRevision(payload.revision)) throw new Error('Umbenennen konnte nicht bestätigt werden. Bitte neu laden.');
+            return payload.revision;
+        },
         async saveFloorMarkers(data) {
             if (!positiveId(data.id) || !isRevision(data.revision)) throw new Error('Bitte den Grundriss neu laden.');
             const payload = await jsonWrite('floorplan_markers.php', data);

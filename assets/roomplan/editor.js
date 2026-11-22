@@ -10,10 +10,10 @@ const labels = Object.freeze({
     'fk-buro': 'FK-Büro (Altbestand)',
 });
 const features = Object.freeze({
-    wifi: 'WLAN',
-    'docking-station': 'Dockingstation',
-    desk: 'Schreibtisch',
-    webcam: 'Kamera',
+    desk: 'Schreibtisch', monitor: 'Monitor', dock: 'Dockingstation (Altbestand)',
+    phone: 'Telefon', whiteboard: 'Whiteboard', projector: 'Beamer', display: 'Display',
+    meeting: 'Videokonferenz (Altbestand)', wifi: 'WLAN', 'video-conference': 'Videokonferenz',
+    'docking-station': 'Dockingstation', webcam: 'Kamera',
 });
 const roomId = value => Number.isSafeInteger(value) && value > 0 ? value : null;
 const dimension = value => Number.isInteger(value) && value >= 1 && value <= 20;
@@ -359,6 +359,10 @@ export function mountEditor({root, api, initial, onChange, onClose}) {
             return;
         }
         const id = editingId;
+        if (rooms.get(id)?.amenities?.some(key => !Object.hasOwn(features, key))) {
+            setError(dialogError, 'Unbekannte Ausstattung: Um die vorhandenen Daten zu schützen, wurde nichts gespeichert.');
+            return;
+        }
         void mutate(() => id == null ? api.createRoom(payload) : api.updateRoom({id, ...payload}), dialogError, result => {
             const key = id ?? roomId(result);
             if (key == null) throw new Error('Raum gespeichert. Bitte Seite neu laden.');

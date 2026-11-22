@@ -38,3 +38,9 @@
     .rp-fe-toolbar h2 {flex-basis:100%}
     .rp-fe-tools select {width:100%}
 }
+.rp-fe-rename {max-width:100%}
+.rp-fe-rename > summary {
+    min-height:2.75rem;padding:.55rem .7rem;border-radius:.5rem;
+    border:1px solid var(--roomplan-control-border);cursor:pointer;font-size:.875rem;font-weight:650;
+}
+.rp-fe-rename[open] > summary {width:fit-content;margin-bottom:.5rem;background:#fff8e6}

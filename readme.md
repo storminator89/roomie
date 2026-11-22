@@ -133,11 +133,15 @@ check an Apache/PHP-FPM installation or change the host's PHP selection.
 
 ### Uploaded floorplans
 
-Admins open **Raumplan → Grundrisse bearbeiten → + Grundriss** to drop a PNG/JPEG
+Admins open **Raumplan → Räume & Grundrisse verwalten** (also linked from
+**Räume → Räume verwalten**) to create a room or edit its details without
+opening the legacy grid. A new room is selected immediately for drawing its
+zone. Use **+ Grundriss** to drop a PNG/JPEG
 or select it from their device (up to 5 MiB, 2400 px per side and 3 megapixels).
 Select a room and draw its zone with the mouse or tap two corners on a
 touchscreen. Use **Position & Größe** for precise keyboard edits, then save the zones.
-Each plan may have up to 200 marked rooms; up to 12 plans are supported.
+Use the plan's rename action to update its title without replacing the image
+or its zones. Each plan may have up to 200 marked rooms; up to 12 plans are supported.
 
 Use **Raum suchen** to find a marked room and **Nur buchbar** to see which rooms
 have an available booking period on the selected date. Select a room to open
