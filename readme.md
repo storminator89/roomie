@@ -84,3 +84,20 @@ Roomie is a web application for managing and booking rooms in an office building
   configure PHP to mark the session cookie Secure.
 - Avatar uploads use PHP GD and private storage next to the configured database.
   Old public uploads are not reused.
+
+## Room plan
+
+Open `raumplan.php` from the Roomie navigation. The old `raumplan.html`
+bookmark forwards to the integrated page. No new database schema is needed.
+
+- The authenticated page renders the application shell and initial session state.
+- `assets/roomplan/api.js` handles HTTP, legacy grid normalization and CSRF.
+- `assets/roomplan/view.js` renders the room plan and booking controls.
+- `assets/roomplan/editor.js` loads only when an administrator opens edit mode.
+  Room changes are saved separately from layout changes; the new editor
+  detects concurrent layout saves rather than silently overwriting them.
+- Existing PHP endpoints remain authoritative for room visibility, user roles,
+  bookings and inventory. Layout dimensions and existing placements are retained.
+
+Run `node --test build-files/roomplan.test.mjs` to check the frontend data
+contract without a running PHP server.

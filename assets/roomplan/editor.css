@@ -1,0 +1,29 @@
+.rp-ed {display:grid;gap:1rem}
+.rp-ed-toolbar-actions,.rp-ed-toolbar,.rp-ed-tools,.rp-ed-dimensions,.rp-ed-dialog-actions {display:flex;flex-wrap:wrap;align-items:end;gap:.6rem}
+.rp-ed-toolbar {justify-content:space-between;align-items:center}
+.rp-ed-title {font-size:1.15rem;font-weight:750;color:#172033;margin:0}
+.rp-ed-status {font-size:.875rem;color:#475569;min-height:1.25rem}
+.rp-ed-error {border-left:3px solid #b91c1c;color:#991b1b;padding:.5rem .75rem;background:#fef2f2;border-radius:.3rem}
+.rp-ed-label {display:flex;flex-direction:column;gap:.2rem;font-size:.875rem;font-weight:600;max-width:100%}
+.rp-ed-input,.rp-ed-btn {min-height:2.75rem;border:1px solid #cbd5e1;border-radius:.55rem;padding:.45rem .65rem;background:#fff;color:#1e293b}
+.rp-ed-input[type=number] {width:5.35rem}
+.rp-ed-btn {font-size:.875rem;font-weight:650}
+.rp-ed-btn:not(:disabled):hover {background:#f1f5f9}
+.rp-ed-btn:disabled {opacity:.45;cursor:not-allowed}
+.rp-ed-btn.rp-ed-primary {background:#1e40af;border-color:#1e40af;color:#fff}
+.rp-ed-btn.rp-ed-primary:not(:disabled):hover {background:#1d4ed8}
+.rp-ed-btn.rp-ed-danger {color:#991b1b;margin-inline-end:auto}
+.rp-ed-scroll {overflow:auto;padding:.25rem}
+.rp-ed-grid {display:grid;grid-template-columns:repeat(var(--rp-ed-cols),minmax(5.8rem,1fr));gap:.45rem}
+.rp-ed-slot {min-width:0;min-height:3.4rem;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:.15rem;text-align:left;border:1px dashed #94a3b8;background:#f8fafc;color:#334155;border-radius:.55rem;padding:.35rem .5rem}
+.rp-ed-slot[aria-pressed] {background:#eef2ff;border-style:solid;border-color:#a5b4fc}
+.rp-ed-slot.rp-ed-selected {background:#dbeafe;border:2px solid #1d4ed8}
+.rp-ed-slot-number {font-size:.7rem;color:#475569}
+.rp-ed-slot-label {font-size:.825rem;font-weight:650;max-width:100%;overflow-wrap:anywhere}
+.rp-ed-dialog {border:1px solid #cbd5e1;border-radius:1rem;width:min(calc(100% - 1.5rem),29rem);max-height:calc(100% - 1.5rem);padding:1rem;overflow:auto;color:#1e293b;background:#fff}
+.rp-ed-dialog:not([open]),.rp-ed [hidden] {display:none}
+.rp-ed-dialog::backdrop {background:#0f172a99}
+.rp-ed-form {display:grid;gap:.7rem}
+.rp-ed-features {display:flex;flex-wrap:wrap;gap:.3rem 1rem}
+.rp-ed-check {display:inline-flex;align-items:center;gap:.35rem;min-height:2rem;font-size:.875rem}
+.rp-ed :focus-visible {outline:3px solid #1d4ed8;outline-offset:2px}

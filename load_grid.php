@@ -27,6 +27,7 @@ try {
         'success' => true, 
         'data' => [
             'gridConfig' => $gridConfig,
+            'revision' => (string) ($gridConfig['id'] ?? 0),
             'rooms' => $rooms
         ]
     ]);
