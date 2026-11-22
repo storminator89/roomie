@@ -6,9 +6,23 @@ if (!isLoggedIn() || !isAdmin()) {
     exit;
 }
 
-$user_name = $_SESSION['user_name'] ?? 'Admin';
-$current_page = basename($_SERVER['PHP_SELF']);
 $users = [];
+$selected = null;
+$search = is_string($_GET['search'] ?? null) ? trim(substr($_GET['search'], 0, 255)) : '';
+$page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
+$createOpen = false;
+$edit = filter_var($_GET['edit'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+$remove = filter_var($_GET['remove'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+$hasNext = false;
+function roomieUsersLink(array $extra = []): string
+{
+    global $page, $search;
+    return 'admin_users.php?' . http_build_query(array_merge(['search' => $search, 'page' => $page], $extra));
+}
+function adminHtml(string|int|null $value): string
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
 
 class RoomieAdminAccessChanged extends RuntimeException {}
 
@@ -98,9 +112,11 @@ try {
 
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $action = $_POST['action'] ?? null;
+        $createOpen = $action === 'create';
         try {
             manageRoomieUser($db, is_string($action) ? $action : '', $_POST);
-            header('Location: admin_users.php', true, 303);
+            $_SESSION['admin_user_status'] = 'Änderung gespeichert.';
+            header('Location: ' . roomieUsersLink(), true, 303);
             exit;
         } catch (RoomieAdminAccessChanged $e) {
             http_response_code(403);
@@ -111,217 +127,137 @@ try {
         }
     }
 
-    $search = is_string($_GET['search'] ?? null) ? substr($_GET['search'], 0, 255) : '';
-    $stmt = $db->prepare('SELECT id, name, email, is_admin FROM users WHERE name LIKE :search OR email LIKE :search ORDER BY name');
-    $stmt->execute(['search' => "%$search%"]);
+    $filter = "WHERE (:search = '' OR instr(lower(name), lower(:search)) > 0 OR instr(lower(email), lower(:search)) > 0)";
+    $count = $db->prepare("SELECT COUNT(*) FROM users $filter");
+    $count->execute(['search' => $search]);
+    $page = min($page, max(1, (int) ceil((int) $count->fetchColumn() / 25)));
+    $stmt = $db->prepare("SELECT id, name, email, is_admin FROM users $filter ORDER BY name COLLATE NOCASE, id LIMIT 26 OFFSET :offset");
+    $stmt->bindValue(':search', $search, PDO::PARAM_STR);
+    $stmt->bindValue(':offset', ($page - 1) * 25, PDO::PARAM_INT);
+    $stmt->execute();
     $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $hasNext = count($users) > 25;
+    $users = array_slice($users, 0, 25);
+    if ($edit || $remove) {
+        $target = $db->prepare('SELECT id, name, email, is_admin FROM users WHERE id = ?');
+        $target->execute([$edit ?: $remove]);
+        $selected = $target->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
 } catch (PDOException $e) {
     error_log('Roomie admin user operation failed');
     http_response_code(409);
     $error = "Das Konto konnte nicht gespeichert werden. Prüfen Sie die Angaben.";
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="de">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Benutzerverwaltung - Roomie</title>
-    <link rel="stylesheet" href="assets/roomie-tailwind.css">
-    <script defer src="assets/alpine-3.14.9.min.js"></script>
-    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">
-    <style>
-        .custom-input {
-            @apply block w-full px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500;
-        }
-
-        .custom-button {
-            @apply px-6 py-3 text-white bg-yellow-500 rounded-md hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors duration-300;
-        }
-
-        .custom-checkbox {
-            @apply h-5 w-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Benutzerverwaltung · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
+    <link rel="stylesheet" href="assets/admin/admin.css">
 </head>
+<body class="admin-page">
+<?php $roomieActivePage = 'admin_users.php'; require __DIR__ . '/roomplan_shell.php'; ?>
+<main class="admin-main">
+    <div class="admin-top"><h1>Verwaltung</h1></div>
+    <nav aria-label="Verwaltung">
+        <ul class="admin-tabs">
+            <li><a href="admin_users.php" aria-current="page">Benutzer</a></li>
+            <li><a href="admin_permissions.php">Berechtigungen</a></li>
+        </ul>
+    </nav>
+    <?php if (isset($error)) : ?>
+        <p class="admin-error" role="alert"><?= adminHtml($error) ?></p>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['admin_user_status'])) : ?>
+        <p class="admin-ok" role="status"><?= adminHtml($_SESSION['admin_user_status']) ?></p>
+        <?php unset($_SESSION['admin_user_status']); ?>
+    <?php endif; ?>
 
-<body class="bg-gray-100">
-    <?php $roomieActivePage = 'admin_users.php'; require __DIR__ . '/roomplan_shell.php'; ?>
-
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <h1 class="text-3xl font-bold text-gray-900 mb-6">
-                <i class="fas fa-users text-yellow-500 mr-2"></i>Benutzerverwaltung
-            </h1>
-
-            <?php if (isset($error)) : ?>
-                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
-                    <p><i class="fas fa-exclamation-circle mr-2"></i><?php echo htmlspecialchars($error); ?></p>
+    <?php if ($selected && $remove && !$edit) : ?>
+        <section class="admin-card" id="konto" aria-labelledby="remove-title">
+            <h2 id="remove-title">Konto löschen?</h2>
+            <p><?= adminHtml($selected['name']) ?> · <?= adminHtml($selected['email']) ?></p>
+            <form method="POST" action="<?= adminHtml(roomieUsersLink(['remove' => $selected['id']])) ?>" class="admin-actions">
+                <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" value="<?= (int) $selected['id'] ?>">
+                <button type="submit" class="admin-button admin-danger">Konto löschen</button>
+                <a href="<?= adminHtml(roomieUsersLink()) ?>" class="admin-button">Abbrechen</a>
+            </form>
+        </section>
+    <?php elseif ($selected && $edit) : ?>
+        <section class="admin-card" id="konto" aria-labelledby="edit-title">
+            <h2 id="edit-title">Konto bearbeiten</h2>
+            <form method="POST" action="<?= adminHtml(roomieUsersLink(['edit' => $selected['id']])) ?>">
+                <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="id" value="<?= (int) $selected['id'] ?>">
+                <div class="admin-fields">
+                    <label class="admin-field">Name<input name="name" required maxlength="255" value="<?= adminHtml($selected['name']) ?>"></label>
+                    <label class="admin-field">E-Mail<input type="email" name="email" required maxlength="254" value="<?= adminHtml($selected['email']) ?>"></label>
+                    <label class="admin-field">Neues Passwort (optional)<input type="password" name="password" autocomplete="new-password" minlength="12"></label>
                 </div>
-            <?php endif; ?>
-
-            <!-- Suchformular -->
-            <form action="admin_users.php" method="GET" class="mb-6">
-                <div class="flex items-center">
-                    <input type="text" name="search" value="<?php echo htmlspecialchars($search); ?>" placeholder="Suche nach Namen oder E-Mail" class="flex-grow px-4 py-2 rounded-l-lg border-t border-b border-l text-gray-800 border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500">
-                    <button type="submit" class="px-4 py-2 rounded-r-lg bg-yellow-500 text-white font-bold hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500">
-                        <i class="fas fa-search"></i> Suchen
-                    </button>
+                <label class="admin-check"><input type="checkbox" name="is_admin" <?= $selected['is_admin'] ? 'checked' : '' ?>> Admin</label>
+                <div class="admin-actions">
+                    <button type="submit" class="admin-button admin-primary">Speichern</button>
+                    <a href="<?= adminHtml(roomieUsersLink()) ?>" class="admin-button">Abbrechen</a>
                 </div>
             </form>
-            <!-- Formular zum Erstellen eines neuen Benutzers -->
-            <div class="bg-white shadow-md rounded-lg mb-6 p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Neuen Benutzer erstellen</h3>
-                <form action="admin_users.php" method="POST" class="space-y-4">
-                    <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
-                    <input type="hidden" name="action" value="create">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
-                            <input type="text" name="name" id="name" required placeholder="Name" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
-                        </div>
-                        <div>
-                            <label for="email" class="block text-sm font-medium text-gray-700">E-Mail</label>
-                            <input type="email" name="email" id="email" required placeholder="E-Mail" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
-                        </div>
-                    </div>
-                    <div>
-                        <label for="password" class="block text-sm font-medium text-gray-700">Passwort</label>
-                        <input type="password" name="password" id="password" autocomplete="new-password" required placeholder="Passwort" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
-                    </div>
-                    <div class="flex items-center">
-                        <input type="checkbox" name="is_admin" id="is_admin" class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded">
-                        <label for="is_admin" class="ml-2 block text-sm text-gray-900">
-                            Admin
-                        </label>
-                    </div>
-                    <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-500 hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
-                        Erstellen
-                    </button>
-                </form>
-            </div>
+        </section>
+    <?php endif; ?>
 
-            <!-- Benutzerliste -->
-            <div class="bg-white shadow-md rounded-lg overflow-hidden">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">E-Mail</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rolle</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aktionen</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <?php foreach ($users as $user) : ?>
-                            <tr>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($user['name']); ?></div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-500"><?php echo htmlspecialchars($user['email']); ?></div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <?php if ($user['is_admin']) : ?>
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                            Admin
-                                        </span>
-                                    <?php else : ?>
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                                            Benutzer
-                                        </span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <button onclick="openEditModal(<?php echo htmlspecialchars(json_encode($user)); ?>)" class="text-yellow-600 hover:text-yellow-900 mr-2">
-                                        <i class="fas fa-edit"></i> Bearbeiten
-                                    </button>
-                                    <form action="admin_users.php" method="POST" class="inline" onsubmit="return confirm('Sind Sie sicher, dass Sie diesen Benutzer löschen möchten?');">
-                                        <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
-                                        <input type="hidden" name="action" value="delete">
-                                        <input type="hidden" name="id" value="<?php echo $user['id']; ?>">
-                                        <button type="submit" class="text-red-600 hover:text-red-900">
-                                            <i class="fas fa-trash-alt"></i> Löschen
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+    <section class="admin-card">
+        <details <?= $createOpen ? 'open' : '' ?>>
+            <summary>Benutzer hinzufügen</summary>
+            <form method="POST" action="<?= adminHtml(roomieUsersLink()) ?>">
+                <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
+                <input type="hidden" name="action" value="create">
+                <div class="admin-fields">
+                    <label class="admin-field">Name<input name="name" required maxlength="255"></label>
+                    <label class="admin-field">E-Mail<input type="email" name="email" required maxlength="254"></label>
+                    <label class="admin-field">Passwort<input type="password" name="password" autocomplete="new-password" minlength="12" required></label>
+                </div>
+                <label class="admin-check"><input type="checkbox" name="is_admin"> Admin</label>
+                <button class="admin-button admin-primary" type="submit">Hinzufügen</button>
+            </form>
+        </details>
+    </section>
 
-    <!-- Modal für Benutzer bearbeiten -->
-    <div id="editModal" class="fixed z-10 inset-0 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                <form id="editForm" action="admin_users.php" method="POST">
-                    <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
-                    <input type="hidden" name="action" value="edit">
-                    <input type="hidden" name="id" id="editUserId">
-                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                        <div class="sm:flex sm:items-start">
-                            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                                <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                                    Benutzer bearbeiten
-                                </h3>
-                                <div class="mt-2 space-y-4">
-                                    <div>
-                                        <label for="editName" class="block text-sm font-medium text-gray-700">Name</label>
-                                        <input type="text" name="name" id="editName" required placeholder="Name" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
-                                    </div>
-                                    <div>
-                                        <label for="editEmail" class="block text-sm font-medium text-gray-700">E-Mail</label>
-                                        <input type="email" name="email" id="editEmail" required placeholder="E-Mail" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
-                                    </div>
-                                    <div>
-                                        <label for="editPassword" class="block text-sm font-medium text-gray-700">Neues Passwort (leer lassen für keine Änderung)</label>
-                                        <input type="password" name="password" id="editPassword" autocomplete="new-password" placeholder="Neues Passwort" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
-                                    </div>
-                                    <div class="flex items-center">
-                                        <input type="checkbox" name="is_admin" id="editIsAdmin" class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded">
-                                        <label for="editIsAdmin" class="ml-2 block text-sm text-gray-900">
-                                            Admin
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+    <section class="admin-card" aria-labelledby="users-title">
+        <h2 id="users-title">Benutzer</h2>
+        <form method="GET" action="admin_users.php" class="admin-toolbar">
+            <label class="admin-field">Name oder E-Mail
+                <input type="search" name="search" class="admin-search" maxlength="255" value="<?= adminHtml($search) ?>">
+            </label>
+            <button type="submit" class="admin-button">Suchen</button>
+            <?php if ($search !== '') : ?><a href="admin_users.php" class="admin-button">Zurücksetzen</a><?php endif; ?>
+        </form>
+        <ul class="admin-list">
+            <?php foreach ($users as $user) : ?>
+                <li>
+                    <div class="admin-entry">
+                        <strong><?= adminHtml($user['name']) ?><?php if ($user['is_admin']) : ?><span class="admin-badge">Admin</span><?php endif; ?></strong>
+                        <span class="admin-sub"><?= adminHtml($user['email']) ?></span>
                     </div>
-                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                        <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-yellow-500 text-base font-medium text-white hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 sm:ml-3 sm:w-auto sm:text-sm">
-                            Speichern
-                        </button>
-                        <button type="button" onclick="closeEditModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                            Abbrechen
-                        </button>
+                    <div class="admin-actions">
+                        <a href="<?= adminHtml(roomieUsersLink(['edit' => $user['id']])) ?>#konto" class="admin-button" aria-label="<?= adminHtml($user['name']) ?> bearbeiten">Bearbeiten</a>
+                        <a href="<?= adminHtml(roomieUsersLink(['remove' => $user['id']])) ?>#konto" class="admin-button admin-danger" aria-label="<?= adminHtml($user['name']) ?> löschen">Löschen</a>
                     </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function openEditModal(user) {
-            document.getElementById('editUserId').value = user.id;
-            document.getElementById('editName').value = user.name;
-            document.getElementById('editEmail').value = user.email;
-            document.getElementById('editIsAdmin').checked = user.is_admin == 1;
-            document.getElementById('editModal').classList.remove('hidden');
-        }
-
-        function closeEditModal() {
-            document.getElementById('editModal').classList.add('hidden');
-        }
-    </script>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+        <?php if (!$users) : ?><p class="admin-note">Keine Benutzer gefunden.</p><?php endif; ?>
+        <?php if ($page > 1 || $hasNext) : ?>
+            <nav class="admin-paging" aria-label="Benutzerliste">
+                <?php if ($page > 1) : ?><a class="admin-button" href="<?= adminHtml(roomieUsersLink(['page' => $page - 1])) ?>">Zurück</a><?php endif; ?>
+                <span>Seite <?= $page ?></span>
+                <?php if ($hasNext) : ?><a class="admin-button" href="<?= adminHtml(roomieUsersLink(['page' => $page + 1])) ?>">Weiter</a><?php endif; ?>
+            </nav>
+        <?php endif; ?>
+    </section>
+</main>
 </body>
-
 </html>

@@ -4,11 +4,11 @@ Roomie is a web application for managing and booking rooms in an office building
 
 ## Features
 
-- **📊 Dashboard**: Get an instant overview of all available rooms and their current occupancy. Never miss a free room again!
-- **🗺️ Interactive Room Plan with Room Management**: Use our visually appealing grid to see rooms at a glance. Admins can easily add new rooms and manage existing ones.
-- **📅 Bookings**: Plan and manage your room reservations with ease. Receive ICS files and automatic email notifications to stay updated.
-- **🏢 Rooms**: Maintain control over all available rooms and their usage. Efficiently manage capacities, equipment, and availability.
-- **👥 User Management**: Quickly and easily manage your users. Add new users, update information, and assign permissions in no time.
+- **Dashboard:** See your current or next booking, jump to the floor plan, or book several days.
+- **Floor plans:** Upload PNG/JPEG plans, draw room zones and find available rooms directly on the plan. The room list and the legacy grid remain available.
+- **Bookings:** View your bookings first, export an ICS file and cancel when eligible. Book a free time window from a room's details.
+- **Rooms:** Find rooms by name or number and keep frequently used rooms in Favorites.
+- **Administration:** Search and page through accounts and room permissions. Account deletion has a separate confirmation.
 
 ## Technologies
 
@@ -16,6 +16,8 @@ Roomie is a web application for managing and booking rooms in an office building
 - **Backend**: PHP, SQLite
 
 ## Screenshots
+
+Older screenshots, for reference:
 
 ### Home Page
 ![Screenshot](screenshot/main.png)

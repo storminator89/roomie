@@ -1,0 +1,42 @@
+.rb-page { display:grid; gap:1rem; min-width:0; }
+.rb-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.6rem 1rem; }
+.rb-page h1,.rb-page h2,.rb-page h3,.rb-page p { margin:0; }
+.rb-page h1 { font-size:clamp(1.7rem,4vw,2.5rem); line-height:1.15; overflow-wrap:anywhere; }
+.rb-page h2 { font-size:1.2rem; }
+.rb-page h3 { font-size:1.05rem; overflow-wrap:anywhere; }
+.rb-segments,.rb-filter,.rb-pagination,.rb-entry-actions,.rb-tags { display:flex; flex-wrap:wrap; gap:.5rem; }
+.rb-segments a,.rb-more summary { display:inline-flex; align-items:center; min-height:44px; padding:.35rem .65rem; border-radius:.55rem; }
+.rb-segments a { border:1px solid var(--roomplan-border,#dfe3e7); color:inherit; text-decoration:none; }
+.rb-segments a[aria-current="page"] { border-color:#d49b00; background:#ffefbc; font-weight:700; }
+.rb-inline-link { align-self:center; color:inherit; font-weight:650; text-underline-offset:.17em; }
+.rb-back { justify-self:start; }
+.rb-filter { align-items:end; }
+.rb-filter label { display:grid; gap:.2rem; max-width:100%; font-size:.875rem; font-weight:650; }
+.rb-filter input { min-width:0; max-width:100%; min-height:44px; padding:.35rem .5rem; border:1px solid var(--roomplan-border,#dfe3e7); border-radius:.55rem; background:#fff; font:inherit; font-weight:400; color:inherit; }
+.rb-notice { padding:.65rem .8rem; border-radius:.55rem; color:#14532d; background:#dcfce7; }
+.rb-notice-error { color:#831843; background:#fce7f3; }
+.rb-empty { color:var(--roomplan-muted,#525b65); }
+.rb-day,.rb-room-panel,#rb-room-book { display:grid; align-content:start; gap:.65rem; min-width:0; }
+.rb-list,.rb-room-list { list-style:none; margin:0; padding:0; display:grid; gap:.5rem; }
+.rb-entry { padding:.7rem; border:1px solid var(--roomplan-border,#dfe3e7); border-radius:.7rem; background:#fff; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:start; gap:.6rem; }
+.rb-entry-main { min-width:0; flex:1 1 11rem; }
+.rb-entry-main p { color:var(--roomplan-muted,#525b65); margin-top:.16rem; overflow-wrap:anywhere; }
+.rb-more summary { font-weight:650; cursor:pointer; }
+.rb-more summary::before { content:'▸'; padding-inline-end:.3rem; }
+.rb-more[open] summary::before { content:'▾'; }
+.rb-more form + form { margin-top:.3rem; }
+.rb-entry-actions > a { align-self:start; }
+.rb-danger { color:#9f1239 !important; }
+.rb-tags { list-style:none; margin:0; padding:0; }
+.rb-tags > * { padding:.2rem .55rem; border-radius:999px; font-size:.875rem; background:#eceff2; }
+.rb-room-columns { display:grid; gap:.7rem; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.rb-room-list li { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.3rem; align-items:baseline; padding:.4rem 0; border-bottom:1px solid var(--roomplan-border,#dfe3e7); }
+.rb-room-list span { overflow-wrap:anywhere; }
+.rb-periods { display:grid; gap:.35rem; border:0; padding:0; margin:0; }
+.rb-periods legend { font-weight:650; margin-bottom:.2rem; }
+.rb-periods label { display:flex; gap:.5rem; align-items:center; min-height:44px; }
+.rb-periods small { font-size:.8rem; color:var(--roomplan-muted,#525b65); }
+.rb-periods input:disabled + span { color:var(--roomplan-muted,#525b65); }
+.rb-page :focus-visible { outline:2px solid #255b91; outline-offset:3px; }
+.rb-page [hidden] { display:none !important; }
+@media (max-width:38rem) { .rb-room-columns { grid-template-columns:minmax(0,1fr); } .rb-entry-actions { width:100%; } }

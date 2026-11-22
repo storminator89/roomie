@@ -1,0 +1,8 @@
+.rr-rooms { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr)); gap:.65rem; list-style:none; margin:0; padding:0; }
+.rr-card { min-width:0; display:grid; gap:.4rem; align-content:start; }
+.rr-card-heading { display:flex; align-items:start; justify-content:space-between; gap:.45rem; }
+.rr-card-heading h2 { min-width:0; }
+.rr-card-heading a,.rr-equipment { overflow-wrap:anywhere; }
+.rr-card-heading a { display:inline-block; padding:.3rem 0; }
+.rr-star { min-inline-size:44px; min-block-size:44px; font-size:1.15rem; background:#fff; }
+.rr-star[aria-pressed="true"] { color:#704300; background:#fff5d5; }

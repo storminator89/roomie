@@ -1,123 +1,171 @@
 <?php
+declare(strict_types=1);
+
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/room_access.php';
 
 if (!isLoggedIn()) {
-    header("Location: login.php");
+    header('Location: login.php');
+    exit;
+}
+header('Cache-Control: private, no-store');
+
+function roomsEscape(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+function roomsListUrl(string $query, bool $onlyFavorites, string $date): string
+{
+    $params = [];
+    if ($query !== '') $params['q'] = $query;
+    if ($onlyFavorites) $params['favorites'] = '1';
+    if ($date !== '') $params['date'] = $date;
+    return 'rooms.php' . ($params ? '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986) : '');
+}
+
+function roomsTypeLabel(string $type): string
+{
+    return match ($type) {
+        'shared-desk' => 'Shared Desk',
+        'fk-office', 'fk-buro' => 'FK-Büro',
+        'spez-abt-buero', 'spez-abt-buro' => 'Abteilungsbüro',
+        'office' => 'Büro',
+        'open-office' => 'Großraumbüro',
+        'meeting' => 'Besprechungsraum',
+        'mediaroom' => 'Mediaraum',
+        default => 'Sonstiger Raum',
+    };
+}
+
+$q = $_GET['q'] ?? '';
+$q = is_string($q) && strlen($q) <= 120 && preg_match('/\A[^\p{C}]*\z/u', $q) === 1 ? trim($q) : '';
+$onlyFavorites = ($_GET['favorites'] ?? null) === '1';
+$date = parseBookingDate($_GET['date'] ?? null)?->format('Y-m-d') ?? '';
+$replyUrl = roomsListUrl($q, $onlyFavorites, $date);
+$userId = (int) $_SESSION['user_id'];
+$admin = isAdmin();
+$rooms = [];
+$error = $_SESSION['roomie_rooms_error'] ?? null;
+$notice = $_SESSION['roomie_rooms_notice'] ?? null;
+unset($_SESSION['roomie_rooms_error'], $_SESSION['roomie_rooms_notice']);
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    requireCsrfToken($_POST['csrf_token'] ?? null);
+    try {
+        $favorited = roomieToggleFavorite(getDatabaseConnection(), $userId, $admin, $_POST['favorite_room_id'] ?? null);
+        $_SESSION['roomie_rooms_notice'] = $favorited ? 'Zu Favoriten hinzugefügt.' : 'Aus Favoriten entfernt.';
+    } catch (Throwable $exception) {
+        error_log('Roomie room favorite failed');
+        $_SESSION['roomie_rooms_error'] = 'Favorit konnte nicht geändert werden.';
+    }
+    header('Location: ' . $replyUrl, true, 303);
     exit;
 }
 
-$user_name = $_SESSION['user_name'] ?? 'Benutzer';
-$current_page = basename($_SERVER['PHP_SELF']);
-
 try {
     $db = getDatabaseConnection();
-
-    $userId = (int) $_SESSION['user_id'];
-    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
-        requireCsrfToken($_POST['csrf_token'] ?? null);
-        roomieToggleFavorite($db, $userId, isAdmin(), $_POST['favorite_room_id'] ?? null);
-        header('Location: rooms.php', true, 303);
-        exit;
+    // Restrict to visible rooms before applying viewer-controlled filters.
+    $visible = roomieListRooms($db, $userId, $admin);
+    $favoriteSet = array_fill_keys(roomieFavoriteIds($db, $userId), true);
+    $needle = '/' . preg_quote($q, '/') . '/iu';
+    foreach ($visible as $room) {
+        $isFavorite = isset($favoriteSet[(int) $room['id']]);
+        if ($onlyFavorites && !$isFavorite) continue;
+        if ($q !== '' && preg_match($needle, (string) $room['name']) !== 1
+            && preg_match($needle, (string) ($room['number'] ?? '')) !== 1) continue;
+        $room['viewer_favorite'] = $isFavorite;
+        $rooms[] = $room;
     }
-    $favorites = array_fill_keys(roomieFavoriteIds($db, $userId), true);
-    $rooms = roomieListRooms($db, (int) $_SESSION['user_id'], isAdmin());
-    foreach ($rooms as &$record) {
-        $record['is_favorite'] = isset($favorites[(int) $record['id']]);
-    }
-    unset($record);
-    usort($rooms, static fn ($a, $b) => ($b['is_favorite'] <=> $a['is_favorite']) ?: strcasecmp($a['name'], $b['name']));
-} catch (Throwable $error) {
-    $rooms = [];
-    $error = $error instanceof DomainException ? $error->getMessage() : 'Raumübersicht nicht verfügbar.';
+    usort($rooms, static fn(array $a, array $b): int =>
+        ($b['viewer_favorite'] <=> $a['viewer_favorite']) ?: strnatcasecmp($a['name'], $b['name']));
+} catch (Throwable $exception) {
+    error_log('Roomie room overview failed');
+    $error = 'Raumübersicht nicht verfügbar.';
 }
 
-function getRoomTypeName($type)
-{
-    switch ($type) {
-        case 'shared-desk':
-            return 'Shared Desk Büro';
-        case 'fk-buro':
-            return 'FK-Büro';
-        case 'spez-abt-buro':
-            return 'Spez. Abt-Büro';
-        default:
-            return 'Sonstiger Raum';
-    }
-}
+$planUrl = 'raumplan.php' . ($date !== '' ? '?date=' . rawurlencode($date) : '');
+$equipmentLabels = [
+    'wifi' => 'WLAN', 'projector' => 'Beamer', 'whiteboard' => 'Whiteboard',
+    'desk' => 'Schreibtisch', 'monitor' => 'Monitor', 'phone' => 'Telefon', 'dock' => 'Dockingstation',
+    'display' => 'Display', 'video-conference' => 'Videokonferenz',
+];
 ?>
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Räume - Roomie</title>
-    <link rel="stylesheet" href="assets/roomie-tailwind.css">
-    <script defer src="assets/alpine-3.14.9.min.js"></script>
-    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Räume · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
+    <link rel="stylesheet" href="assets/bookings/booking-pages.css">
+    <link rel="stylesheet" href="assets/rooms/rooms.css">
 </head>
+<body class="roomplan-page">
+<?php $roomieActivePage = 'rooms.php'; require __DIR__ . '/roomplan_shell.php'; ?>
+<main class="roomplan-main rb-page" tabindex="-1">
+    <header class="rb-header">
+        <h1>Räume</h1>
+        <a class="roomplan-action roomplan-action-secondary" href="<?= roomsEscape($planUrl) ?>">Raumplan</a>
+    </header>
+    <nav class="rb-segments" aria-label="Raumauswahl">
+        <a href="<?= roomsEscape(roomsListUrl($q, false, $date)) ?>"<?= !$onlyFavorites ? ' aria-current="page"' : '' ?>>Alle Räume</a>
+        <a href="<?= roomsEscape(roomsListUrl($q, true, $date)) ?>"<?= $onlyFavorites ? ' aria-current="page"' : '' ?>>Favoriten</a>
+    </nav>
+    <form action="rooms.php" method="get" class="rb-filter">
+        <?php if ($onlyFavorites) : ?><input type="hidden" name="favorites" value="1"><?php endif; ?>
+        <?php if ($date !== '') : ?><input type="hidden" name="date" value="<?= roomsEscape($date) ?>"><?php endif; ?>
+        <label>Raum suchen<input type="search" name="q" value="<?= roomsEscape($q) ?>" placeholder="Name oder Nummer" maxlength="120"></label>
+        <button class="roomplan-action roomplan-action-secondary" type="submit">Suchen</button>
+        <?php if ($q !== '') : ?><a class="rb-inline-link" href="<?= roomsEscape(roomsListUrl('', $onlyFavorites, $date)) ?>">Suche zurücksetzen</a><?php endif; ?>
+    </form>
 
-<body class="bg-custom-background">
-    <?php $roomieActivePage = 'rooms.php'; require __DIR__ . '/roomplan_shell.php'; ?>
-
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <h1 class="text-3xl font-bold text-gray-900 mb-6">
-                <i class="fas fa-door-open text-yellow-500 mr-2"></i>Verfügbare Räume
-            </h1>
-
-            <?php if (isset($error)) : ?>
-                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
-                    <p><i class="fas fa-exclamation-circle mr-2"></i><?php echo htmlspecialchars($error); ?></p>
+    <?php if (is_string($notice)) : ?><p class="rb-notice" role="status"><?= roomsEscape($notice) ?></p><?php endif; ?>
+    <?php if (is_string($error)) : ?><p class="rb-notice rb-notice-error" role="alert"><?= roomsEscape($error) ?></p><?php endif; ?>
+    <?php if (!$rooms && !is_string($error)) : ?>
+        <p class="roomplan-panel rb-empty"><?=
+            $q !== '' ? 'Keine Räume für diese Suche.'
+            : ($onlyFavorites ? 'Du hast noch keine Favoriten.' : 'Keine Räume verfügbar.') ?></p>
+    <?php elseif ($rooms) : ?>
+        <ul class="rr-rooms">
+        <?php foreach ($rooms as $room) :
+            $name = (string) $room['name'];
+            $number = (string) ($room['number'] ?? '');
+            $capacity = max(0, (int) $room['capacity']);
+            $detailsUrl = 'room_details.php?' . http_build_query(
+                ['id' => (int) $room['id']] + ($date !== '' ? ['date' => $date] : []), '', '&', PHP_QUERY_RFC3986
+            );
+            $equipment = json_decode((string) $room['equipment'], true);
+            $equipment = is_array($equipment) ? array_slice(array_unique(array_filter($equipment, 'is_string')), 0, 8) : [];
+        ?>
+            <li class="roomplan-panel rr-card">
+                <div class="rr-card-heading">
+                    <h2><a class="rb-inline-link" href="<?= roomsEscape($detailsUrl) ?>"><?= roomsEscape($name) ?></a></h2>
+                    <form action="<?= roomsEscape($replyUrl) ?>" method="post">
+                        <input type="hidden" name="csrf_token" value="<?= roomsEscape(csrfToken()) ?>">
+                        <input type="hidden" name="favorite_room_id" value="<?= (int) $room['id'] ?>">
+                        <button class="roomplan-action roomplan-action-secondary rr-star" type="submit"
+                                aria-label="Favorit: <?= roomsEscape($name) ?>"
+                                aria-pressed="<?= $room['viewer_favorite'] ? 'true' : 'false' ?>">
+                            <span aria-hidden="true"><?= $room['viewer_favorite'] ? '★' : '☆' ?></span>
+                        </button>
+                    </form>
                 </div>
-            <?php endif; ?>
-
-            <div class="bg-white shadow overflow-hidden sm:rounded-lg">
-                <ul class="divide-y divide-gray-200">
-                    <?php foreach ($rooms as $room) : ?>
-                        <li class="hover:bg-gray-50 transition duration-150 ease-in-out">
-                            <div class="px-4 py-4 sm:px-6 flex justify-between items-center">
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center">
-                                        <a href="room_details.php?id=<?php echo $room['id']; ?>" class="text-lg font-medium text-yellow-600 truncate hover:underline">
-                                            <?php echo htmlspecialchars($room['name']); ?>
-                                        </a>
-                                        <form method="POST" action="rooms.php" class="ml-2">
-                                            <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
-                                            <input type="hidden" name="favorite_room_id" value="<?php echo $room['id']; ?>">
-                                            <button type="submit" class="focus:outline-none">
-                                                <i class="<?php echo $room['is_favorite'] ? 'fas' : 'far'; ?> fa-star text-yellow-400 hover:text-yellow-500 transition duration-150 ease-in-out"></i>
-                                            </button>
-                                        </form>
-                                    </div>
-                                    <div class="mt-2 flex items-center text-sm text-gray-500">
-                                        <i class="fas fa-building mr-2"></i>
-                                        <?php echo htmlspecialchars(getRoomTypeName($room['type'])); ?>
-                                    </div>
-                                    <div class="mt-2 flex items-center text-sm text-gray-500">
-                                        <i class="fas fa-tools mr-2"></i>
-                                        <?php echo htmlspecialchars(implode(', ', array_filter((array) json_decode((string) $room['equipment'], true), 'is_string'))); ?>
-                                    </div>
-                                </div>
-                                <div class="ml-4 flex-shrink-0 flex flex-col items-end">
-                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                        <i class="fas fa-users mr-1"></i><?php echo (int) $room['capacity']; ?> Plätze
-                                    </span>
-                                    <a href="room_details.php?id=<?php echo $room['id']; ?>" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
-                                        <i class="fas fa-info-circle mr-1"></i>Details anzeigen
-                                    </a>
-                                </div>
-                            </div>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-        </div>
-    </div>
+                <div class="rb-tags">
+                    <?php if ($number !== '') : ?><span>Nr. <?= roomsEscape($number) ?></span><?php endif; ?>
+                    <span><?= roomsEscape(roomsTypeLabel((string) $room['type'])) ?></span>
+                    <span><?= $capacity === 1 ? '1 Platz' : $capacity . ' Plätze' ?></span>
+                </div>
+                <?php if ($equipment) : ?>
+                <p class="rb-empty rr-equipment"><?= roomsEscape(implode(' · ', array_map(
+                    static fn(string $item): string => $equipmentLabels[$item] ?? $item,
+                    $equipment
+                ))) ?></p>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</main>
 </body>
-
 </html>

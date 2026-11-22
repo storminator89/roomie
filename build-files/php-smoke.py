@@ -272,6 +272,26 @@ def smoke(php, root, scratch, expected_minor):
                     if (count($rows) !== 1) { fwrite(STDERR, 'Expected exactly one booking'); exit(1); }
                     echo $rows[0];
                 """], root, env)
+                room_name = 'Besprechung, Süd'
+                status, headers, html = user.request("bookings.php")
+                expect(status == 200 and room_name in html and 'Buchung stornieren' in html
+                       and 'private' in headers.get("Cache-Control", ""),
+                       "Owners should see their own booking and its controls")
+                status, _, html = admin.request("bookings.php")
+                expect(status == 200 and room_name not in html,
+                       "The default booking view must not list other people's bookings")
+                status, _, html = admin.request("bookings.php?scope=all")
+                expect(status == 200 and room_name in html
+                       and 'Buchung stornieren' not in html,
+                       "The full admin view must not expose cancellation controls for others")
+                status, _, html = user.request("rooms.php?q=SMOKE")
+                expect(status == 200 and room_name in html, "Search must find the room number")
+                status, _, html = user.request("rooms.php?q=DefinitelyNotARoom")
+                expect(status == 200 and room_name not in html, "Search must filter unrelated rooms")
+                status, _, html = user.request(f"room_details.php?id={room_id}&date={date}")
+                expect(status == 200 and 'id="rb-room-book"' in html and 'name="csrf_token"' in html,
+                       "Eligible users should get the direct, CSRF-protected booking form")
+                print("App UX: own booking default, admin overview, room search and direct booking passed", flush=True)
                 status, headers, ics = user.request(f"bookings.php?download=calendar&booking_id={booking_id}")
                 expect(status == 200 and "text/calendar" in headers.get("Content-Type", ""),
                        f"Expected booking ICS response, got HTTP {status}")

@@ -81,7 +81,8 @@ if ($download || $resend) {
 }
 
 $filterDate = parseBookingDate($_GET['date'] ?? null)?->format('Y-m-d') ?? '';
-$searchName = $isAdmin && is_string($_GET['search'] ?? null) ? substr(trim($_GET['search']), 0, 100) : '';
+$scope = ($_GET['scope'] ?? null) === 'all' ? 'all' : 'mine';
+$searchName = $scope === 'all' && $isAdmin && is_string($_GET['search'] ?? null) ? substr(trim($_GET['search']), 0, 100) : '';
 $page = min(201, roomiePositiveId($_GET['page'] ?? null) ?? 1);
 $perPage = 50;
 $offset = ($page - 1) * $perPage;
@@ -93,19 +94,20 @@ try {
     $db = getDatabaseConnection();
     [$rule, $params] = roomieBookingAccessSql('r', $user_id, $isAdmin);
     $query = "SELECT b.id, r.name AS room_name, b.date, b.start_time, b.end_time, b.user_id,
-                CASE WHEN b.user_id = :viewer_id OR :show_details = 1 THEN u.name ELSE 'Belegt' END AS user_name,
-                CASE WHEN b.user_id = :viewer_picture OR :show_pictures = 1 THEN u.profile_image ELSE NULL END AS profile_image
+                CASE WHEN b.user_id = :viewer_id OR :show_details = 1 THEN u.name ELSE 'Belegt' END AS user_name
               FROM bookings b JOIN rooms r ON b.room_id = r.id JOIN users u ON b.user_id = u.id
               WHERE b.date >= :current_date AND ((b.date <= :last_date AND $rule) OR b.user_id = :owner_id)";
     $params += [
         'viewer_id' => $user_id,
         'show_details' => $isAdmin ? 1 : 0,
-        'viewer_picture' => $user_id,
-        'show_pictures' => $isAdmin ? 1 : 0,
         'owner_id' => $user_id,
         'current_date' => $today->format('Y-m-d'),
         'last_date' => $today->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days')->format('Y-m-d'),
     ];
+    if ($scope === 'mine') {
+        $query .= ' AND b.user_id = :own_scope_id';
+        $params['own_scope_id'] = $user_id;
+    }
     if ($filterDate !== '') {
         $query .= ' AND b.date = :filter_date';
         $params['filter_date'] = $filterDate;
@@ -128,143 +130,111 @@ try {
     error_log('Roomie bookings list read failed');
     $error = 'Buchungen nicht verfügbar.';
 }
+function bookingPageUrl(string $scope, string $date = '', string $search = '', int $page = 1): string
+{
+    $params = [];
+    if ($scope === 'all') $params['scope'] = 'all';
+    if ($date !== '') $params['date'] = $date;
+    if ($search !== '') $params['search'] = $search;
+    if ($page > 1) $params['page'] = $page;
+    return 'bookings.php' . ($params ? '?' . http_build_query($params) : '');
+}
+function bookingEscape(string $content): string
+{
+    return htmlspecialchars($content, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+$groups = [];
+foreach ($bookings as $booking) {
+    $groups[$booking['date']][] = $booking;
+}
+$planUrl = 'raumplan.php' . ($filterDate !== '' ? '?date=' . rawurlencode($filterDate) : '');
+$hasMail = roomieMailFrom() !== null;
 ?>
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buchungen - Roomie</title>
-    <link rel="stylesheet" href="assets/roomie-tailwind.css">
-    <script defer src="assets/alpine-3.14.9.min.js"></script>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Buchungen · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
+    <link rel="stylesheet" href="assets/bookings/booking-pages.css">
 </head>
+<body class="roomplan-page">
+<?php $roomieActivePage = 'bookings.php'; require __DIR__ . '/roomplan_shell.php'; ?>
+<main id="roomplan" class="roomplan-main rb-page" tabindex="-1">
+    <header class="rb-header">
+        <h1>Buchungen</h1>
+        <a class="roomplan-action" href="<?= bookingEscape($planUrl) ?>">Raum buchen</a>
+    </header>
+    <nav class="rb-segments" aria-label="Buchungsansicht">
+        <a href="<?= bookingEscape(bookingPageUrl('mine', $filterDate)) ?>"<?= $scope === 'mine' ? ' aria-current="page"' : '' ?>>Meine Buchungen</a>
+        <a href="<?= bookingEscape(bookingPageUrl('all', $filterDate)) ?>"<?= $scope === 'all' ? ' aria-current="page"' : '' ?>>Alle Buchungen</a>
+    </nav>
+    <form class="rb-filter" method="get" action="bookings.php">
+        <?php if ($scope === 'all') : ?><input type="hidden" name="scope" value="all"><?php endif; ?>
+        <label>Datum<input type="date" name="date" value="<?= bookingEscape($filterDate) ?>"></label>
+        <?php if ($scope === 'all' && $isAdmin) : ?>
+        <label>Name<input type="search" name="search" maxlength="100" value="<?= bookingEscape($searchName) ?>"></label>
+        <?php endif; ?>
+        <button class="roomplan-action roomplan-action-secondary" type="submit">Filtern</button>
+        <?php if ($filterDate !== '' || $searchName !== '') : ?>
+        <a class="rb-inline-link" href="<?= bookingEscape(bookingPageUrl($scope)) ?>">Filter zurücksetzen</a>
+        <?php endif; ?>
+    </form>
 
-<body class="bg-custom-background">
-    <?php $roomieActivePage = 'bookings.php'; require __DIR__ . '/roomplan_shell.php'; ?>
+    <?php if ($successMessage) : ?><p class="rb-notice" role="status"><?= bookingEscape($successMessage) ?></p><?php endif; ?>
+    <?php if ($error) : ?><p class="rb-notice rb-notice-error" role="alert"><?= bookingEscape($error) ?></p><?php endif; ?>
 
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
-                <h1 class="text-3xl font-bold text-gray-900">Buchungen</h1>
-                <form action="" method="GET" class="filter-container space-y-2 sm:space-y-0 sm:space-x-2 flex items-center">
-                    <label for="date" class="sr-only">Datum filtern</label>
-                    <input type="date" name="date" id="date" value="<?= htmlspecialchars($filterDate, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" class="border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 w-full sm:w-auto" placeholder="Datum">
-                    <?php if ($isAdmin) : ?>
-                    <label for="search" class="sr-only">Namen suchen</label>
-                    <input type="text" name="search" id="search" value="<?php echo htmlspecialchars($searchName); ?>" placeholder="Namen suchen" class="border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 w-full sm:w-auto">
+    <?php if (!$groups) : ?>
+        <p class="roomplan-panel rb-empty"><?= $error ? 'Liste nicht verfügbar.'
+            : ($filterDate !== '' || $searchName !== '' ? 'Keine Buchungen für diesen Filter.'
+            : ($scope === 'mine' ? 'Du hast keine anstehenden Buchungen.' : 'Keine anstehenden Buchungen.')) ?></p>
+    <?php endif; ?>
+
+    <?php foreach ($groups as $date => $entries) : ?>
+        <section class="rb-day">
+            <h2><time datetime="<?= bookingEscape((string) $date) ?>"><?= $date === $today->format('Y-m-d') ? 'Heute · ' : '' ?><?= bookingEscape(roomieDateLabel($date)) ?></time></h2>
+            <ul class="rb-list">
+            <?php foreach ($entries as $booking) : $owner = (int) $booking['user_id'] === $user_id; ?>
+                <li class="rb-entry">
+                    <div class="rb-entry-main">
+                        <h3><?= bookingEscape((string) $booking['room_name']) ?></h3>
+                        <p><?= bookingEscape(substr((string) $booking['start_time'], 0, 5) . '–' . substr((string) $booking['end_time'], 0, 5)) ?> Uhr
+                        <?php if ($scope === 'all') : ?> · <?= $owner ? 'Eigene Buchung' : bookingEscape((string) $booking['user_name']) ?><?php endif; ?></p>
+                    </div>
+                    <?php if ($owner) : ?>
+                    <div class="rb-entry-actions">
+                        <a class="roomplan-action roomplan-action-secondary" href="bookings.php?download=calendar&amp;booking_id=<?= (int) $booking['id'] ?>" aria-label="Kalenderdatei für <?= bookingEscape((string) $booking['room_name']) ?> herunterladen">Kalender</a>
+                        <details class="rb-more">
+                            <summary aria-label="Optionen für <?= bookingEscape((string) $booking['room_name']) ?>">Optionen</summary>
+                            <?php if ($hasMail) : ?>
+                            <form method="post" action="bookings.php">
+                                <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">
+                                <input type="hidden" name="action" value="send_email">
+                                <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>">
+                                <button type="submit" class="roomplan-action roomplan-action-secondary">Bestätigung erneut senden</button>
+                            </form>
+                            <?php endif; ?>
+                            <form method="post" action="cancel_booking.php">
+                                <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">
+                                <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>">
+                                <button type="submit" class="roomplan-action roomplan-action-secondary rb-danger">Buchung stornieren</button>
+                            </form>
+                        </details>
+                    </div>
                     <?php endif; ?>
-                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 w-full sm:w-auto">
-                        <i class="fas fa-filter"></i>&nbsp;Filtern
-                    </button>
-                    <a href="bookings.php" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 w-full sm:w-auto">
-                        <i class="fas fa-times"></i>&nbsp;Löschen
-                    </a>
-                </form>
-            </div>
+                </li>
+            <?php endforeach; ?>
+            </ul>
+        </section>
+    <?php endforeach; ?>
 
-            <?php if ($successMessage) : ?>
-                <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
-                    <p><?php echo htmlspecialchars($successMessage); ?></p>
-                </div>
-            <?php endif; ?>
-
-            <?php if (isset($error)) : ?>
-                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
-                    <p><?php echo htmlspecialchars($error); ?></p>
-                </div>
-            <?php endif; ?>
-
-            <?php if (empty($bookings)) : ?>
-                <p class="text-gray-600">Keine Buchungen gefunden.</p>
-            <?php else : ?>
-                <div class="bg-white shadow overflow-hidden sm:rounded-md">
-                    <ul class="divide-y divide-gray-200">
-                        <?php foreach ($bookings as $booking) : ?>
-                            <li>
-                                <div class="px-4 py-4 sm:px-6">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center">
-                                            <div class="flex-shrink-0 h-10 w-10">
-                                                <?php if (!empty($booking['profile_image'])) : ?>
-                                                    <img class="h-10 w-10 rounded-full" src="avatar.php?user_id=<?= (int) $booking['user_id'] ?>" alt="">
-                                                <?php else : ?>
-                                                    <i class="fas fa-user-circle fa-2x text-gray-300"></i>
-                                                <?php endif; ?>
-                                            </div>
-                                            <div class="ml-4">
-                                                <p class="text-sm font-medium text-yellow-600 truncate">
-                                                    <?php echo htmlspecialchars($booking['room_name']); ?>
-                                                </p>
-                                                <p class="text-sm text-gray-500">
-                                                    <?php echo htmlspecialchars($booking['user_name']); ?>
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div class="ml-2 flex-shrink-0 flex">
-                                            <p class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                                Bestätigt
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div class="mt-2 sm:flex sm:justify-between">
-                                        <div class="sm:flex">
-                                            <p class="flex items-center text-sm text-gray-500">
-                                                <i class="fas fa-calendar-day mr-1.5"></i>
-                                                <?php echo roomieDateLabel($booking['date']); ?>
-                                            </p>
-                                            <p class="mt-2 flex items-center text-sm text-gray-500 sm:mt-0 sm:ml-6">
-                                                <i class="fas fa-clock mr-1.5"></i>
-                                                <?php echo htmlspecialchars($booking['start_time'] . ' - ' . $booking['end_time']); ?>
-                                            </p>
-                                        </div>
-                                        <?php if ($booking['user_id'] == $user_id) : ?>
-                                            <div class="mt-2 flex items-center text-sm text-gray-500 sm:mt-0 space-x-2">
-                                                <form action="cancel_booking.php" method="POST" onsubmit="return confirm('Sind Sie sicher, dass Sie diese Buchung stornieren möchten?');">
-                                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8') ?>">
-                                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
-                                                    <button type="submit" class="icon-btn">
-                                                        <i class="fas fa-times icon"></i>
-                                                    </button>
-                                                </form>
-                                                <a href="?download=calendar&booking_id=<?php echo $booking['id']; ?>" class="icon-btn">
-                                                    <i class="fas fa-download icon"></i>
-                                                </a>
-                                                <?php if (roomieMailFrom() !== null) : ?>
-                                                <form action="bookings.php" method="POST">
-                                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8') ?>">
-                                                    <input type="hidden" name="action" value="send_email">
-                                                    <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>">
-                                                    <button type="submit" class="icon-btn" aria-label="Bestätigung erneut senden">
-                                                        <i class="fas fa-envelope icon" aria-hidden="true"></i>
-                                                    </button>
-                                                </form>
-                                                <?php endif; ?>
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-            <?php endif; ?>
-            <?php if ($page > 1 || $hasNext) : ?>
-            <nav class="flex items-center gap-4 mt-4" aria-label="Buchungsseiten">
-                <?php if ($page > 1) : ?>
-                <a href="?<?= htmlspecialchars(http_build_query(['date' => $filterDate, 'search' => $searchName, 'page' => $page - 1]), ENT_QUOTES, 'UTF-8') ?>">Zurück</a>
-                <?php endif; ?>
-                <?php if ($hasNext) : ?>
-                <a href="?<?= htmlspecialchars(http_build_query(['date' => $filterDate, 'search' => $searchName, 'page' => $page + 1]), ENT_QUOTES, 'UTF-8') ?>">Weiter</a>
-                <?php endif; ?>
-            </nav>
-            <?php endif; ?>
-        </div>
-    </div>
+    <?php if ($page > 1 || $hasNext) : ?>
+    <nav class="rb-pagination" aria-label="Buchungsseiten">
+        <?php if ($page > 1) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= bookingEscape(bookingPageUrl($scope, $filterDate, $searchName, $page - 1)) ?>">Zurück</a><?php endif; ?>
+        <?php if ($hasNext) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= bookingEscape(bookingPageUrl($scope, $filterDate, $searchName, $page + 1)) ?>">Weiter</a><?php endif; ?>
+    </nav>
+    <?php endif; ?>
+</main>
 </body>
-
 </html>

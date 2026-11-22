@@ -1,0 +1,35 @@
+.rm-dashboard { max-width:72rem; }
+.rm-dashboard h1 {
+  margin:0 0 clamp(.9rem,3vw,1.6rem);
+  font-size:clamp(1.75rem,4.5vw,2.55rem); line-height:1.15; letter-spacing:-.035em;
+}
+.rm-dashboard h2 { margin:0; font-size:clamp(1.12rem,2.6vw,1.4rem); line-height:1.25; }
+.rm-dash-overview { display:grid; grid-template-columns:minmax(0,1fr); gap:.8rem; }
+.rm-dash-overview > section {
+  display:flex; flex-direction:column; justify-content:center; align-items:flex-start;
+  gap:.5rem; min-inline-size:0; position:relative; padding:clamp(1rem,3vw,1.55rem);
+}
+.rm-dash-overview > section p { margin:0; overflow-wrap:anywhere; }
+.rm-dash-overview > section a { margin-top:.45rem; }
+.rm-dash-overview > .rm-dash-hero { background:#fff7df; border-color:#e8d8a7; padding-inline-end:min(28%,7rem); }
+.rm-dash-hero > p { color:#52431f; }
+.rm-dash-illustration {
+  width:clamp(2.4rem,9vw,5rem); height:auto; position:absolute; right:clamp(.7rem,3vw,1.5rem);
+  top:50%; transform:translateY(-50%); color:#a16d12; pointer-events:none;
+}
+.rm-dash-room { font-weight:700; font-size:1.03rem; }
+.rm-dash-meta { color:var(--roomplan-muted); }
+.rm-dash-range { margin-top:.8rem; padding-block:.35rem; }
+.rm-dash-range summary { min-height:2.75rem; padding:.6rem .15rem; font-weight:650; cursor:pointer; }
+.rm-dash-range form { padding:.4rem 0 .75rem; }
+.rm-dash-form-fields {
+  display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%,9.5rem),1fr)); gap:.6rem;
+}
+.rm-dash-form-fields :is(input,select) { width:100%; min-width:0; font:inherit; color:inherit; background:var(--roomplan-surface); }
+.rm-dash-form-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; margin-top:.75rem; }
+.rm-dash-feedback { margin:0; color:var(--roomplan-muted); }
+.rm-dash-feedback:empty { display:none; }
+.rm-dash-feedback[data-error="true"] { color:#90271b; }
+@media (min-width:48rem) {
+  .rm-dash-overview { grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); }
+}
