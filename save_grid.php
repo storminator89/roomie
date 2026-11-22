@@ -1,42 +1,40 @@
 <?php
-header('Content-Type: application/json');
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/room_admin_input.php';
 
-require_once 'auth.php';
-
-if (!isAdmin()) {
-    echo json_encode(['success' => false, 'message' => 'Nur Administratoren können das Grid-Layout speichern.']);
-    exit;
+$data = roomieAdminJson();
+$rows = $data['rows'] ?? null;
+$cols = $data['cols'] ?? null;
+$layout = $data['layout'] ?? null;
+if (!is_int($rows) || !is_int($cols) || $rows < 1 || $rows > 20 || $cols < 1 || $cols > 20
+    || !is_array($layout) || !array_is_list($layout) || count($layout) !== $rows * $cols) {
+    roomieAdminError('Ungültige Abmessungen oder Anordnung.', 422);
 }
-
-requireCsrfToken($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null, true);
-
-$data = json_decode(file_get_contents('php://input'), true);
-
-if (!isset($data['layout']) || !isset($data['rows']) || !isset($data['cols'])) {
-    echo json_encode(['success' => false, 'message' => 'Unvollständige Daten']);
-    exit;
+$ids = [];
+foreach ($layout as &$entry) {
+    if ($entry !== null) {
+        $entry = roomieRoomId($entry);
+        if (isset($ids[$entry])) {
+            roomieAdminError('Ein Raum darf nur einmal platziert werden.', 422);
+        }
+        $ids[$entry] = true;
+    }
 }
-
-try {
-    $db = getDatabaseConnection();
-
-    // Speichern der Grid-Konfiguration
-    $stmt = $db->prepare("INSERT INTO grid_config (rows, cols, room_layout) VALUES (:rows, :cols, :room_layout)");
-    $stmt->execute([
-        ':rows' => $data['rows'],
-        ':cols' => $data['cols'],
-        ':room_layout' => json_encode($data['layout'])
-    ]);
-
-    // Aktualisieren der Raumpositionen
-    $stmt = $db->prepare("UPDATE rooms SET grid_position = :position WHERE id = :id");
-    foreach ($data['layout'] as $position => $roomId) {
-        if ($roomId !== null) {
-            $stmt->execute([':position' => $position, ':id' => $roomId]);
+unset($entry);
+roomieAdminWrite(static function (PDO $db) use ($rows, $cols, $layout): array {
+    $existingIds = array_fill_keys($db->query('SELECT id FROM rooms')->fetchAll(PDO::FETCH_COLUMN), true);
+    foreach ($layout as $id) {
+        if ($id !== null && !isset($existingIds[$id])) {
+            throw new DomainException('Raum nicht gefunden. Bitte Seite neu laden.', 409);
         }
     }
-
-    echo json_encode(['success' => true]);
-} catch (PDOException $e) {
-    echo json_encode(['success' => false, 'message' => 'Datenbankfehler: ' . $e->getMessage()]);
-}
+    $db->prepare('INSERT INTO grid_config (rows, cols, room_layout) VALUES (?, ?, ?)')->execute([$rows, $cols, json_encode($layout, JSON_THROW_ON_ERROR)]);
+    $db->exec('UPDATE rooms SET grid_position = NULL');
+    $move = $db->prepare('UPDATE rooms SET grid_position = ? WHERE id = ?');
+    foreach ($layout as $position => $id) {
+        if ($id !== null) {
+            $move->execute([$position, $id]);
+        }
+    }
+    return [];
+});

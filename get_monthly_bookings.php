@@ -1,30 +1,33 @@
 <?php
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/booking_helpers.php';
 
-if (!isLoggedIn()) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Nicht autorisiert']);
+$userId = roomieRequireBookingViewer();
+$roomId = roomiePositiveId($_GET['room_id'] ?? null);
+$year = $_GET['year'] ?? null;
+$month = $_GET['month'] ?? null;
+if ($roomId === null || !is_string($year) || !preg_match('/\A[0-9]{4}\z/', $year)
+    || !is_string($month) || !preg_match('/\A(?:0?[1-9]|1[0-2])\z/', $month)
+    || !($start = parseBookingDate(sprintf('%04d-%02d-01', (int) $year, (int) $month)))) {
+    roomieBookingJson(['error' => 'Ungültige Parameter.'], 400);
     exit;
 }
-
-if (!isset($_GET['room_id']) || !isset($_GET['year']) || !isset($_GET['month'])) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Ungültige Parameter']);
-    exit;
-}
-
-$roomId = $_GET['room_id'];
-$year = $_GET['year'];
-$month = $_GET['month'];
-
 try {
     $db = getDatabaseConnection();
-    $stmt = $db->prepare("SELECT date FROM bookings WHERE strftime('%Y', date) = :year AND strftime('%m', date) = :month AND room_id = :room_id");
-    $stmt->execute(['year' => $year, 'month' => sprintf('%02d', $month), 'room_id' => $roomId]);
-    $bookedDates = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
-    echo json_encode($bookedDates);
+    [$rule, $params] = roomieBookingAccessSql('r', $userId, isAdmin());
+    if (!roomieVisibleRoom($db, $roomId, $userId, isAdmin())) {
+        roomieBookingJson(['error' => 'Raum nicht gefunden.'], 404);
+        exit;
+    }
+    $stmt = $db->prepare("SELECT DISTINCT b.date FROM bookings b JOIN rooms r ON r.id = b.room_id
+        WHERE r.id = :room_id AND b.date BETWEEN :start_date AND :end_date AND $rule ORDER BY b.date");
+    $stmt->execute($params + [
+        'room_id' => $roomId,
+        'start_date' => $start->format('Y-m-d'),
+        'end_date' => $start->modify('last day of this month')->format('Y-m-d'),
+    ]);
+    roomieBookingJson($stmt->fetchAll(PDO::FETCH_COLUMN));
 } catch (PDOException $e) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Datenbankfehler: ' . $e->getMessage()]);
+    error_log('Roomie monthly booking availability read failed');
+    roomieBookingJson(['error' => 'Buchungen nicht verfügbar.'], 500);
 }
-?>

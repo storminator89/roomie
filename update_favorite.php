@@ -1,44 +1,23 @@
 <?php
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/room_access.php';
 
+header('Content-Type: application/json');
+header('Cache-Control: private, no-store');
 if (!isLoggedIn()) {
-    header('Content-Type: application/json');
+    http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'Nicht eingeloggt']);
     exit;
 }
-
-header('Content-Type: application/json');
 requireCsrfToken($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null, true);
 
 try {
-    $db = getDatabaseConnection();
-    $userId = $_SESSION['user_id']; // Annahme: Die Benutzer-ID ist in der Session gespeichert
-
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['favorite_room_id'])) {
-        $favoriteRoomId = $_POST['favorite_room_id'];
-        
-        // Überprüfen, ob der Raum bereits ein Favorit ist
-        $stmt = $db->prepare('SELECT * FROM user_favorites WHERE user_id = :user_id AND room_id = :room_id');
-        $stmt->execute(['user_id' => $userId, 'room_id' => $favoriteRoomId]);
-        $existingFavorite = $stmt->fetch();
-
-        if ($existingFavorite) {
-            // Wenn es bereits ein Favorit ist, entfernen wir ihn
-            $stmt = $db->prepare('DELETE FROM user_favorites WHERE user_id = :user_id AND room_id = :room_id');
-            $stmt->execute(['user_id' => $userId, 'room_id' => $favoriteRoomId]);
-            $newFavoriteStatus = false;
-        } else {
-            // Wenn es kein Favorit ist, fügen wir ihn hinzu
-            $stmt = $db->prepare('INSERT INTO user_favorites (user_id, room_id) VALUES (:user_id, :room_id)');
-            $stmt->execute(['user_id' => $userId, 'room_id' => $favoriteRoomId]);
-            $newFavoriteStatus = true;
-        }
-        
-        echo json_encode(['success' => true, 'is_favorite' => $newFavoriteStatus]);
-    } else {
-        echo json_encode(['success' => false, 'error' => 'Ungültige Anfrage']);
-    }
-} catch (PDOException $e) {
+    $favorite = roomieToggleFavorite(getDatabaseConnection(), (int) $_SESSION['user_id'], isAdmin(), $_POST['favorite_room_id'] ?? null);
+    echo json_encode(['success' => true, 'is_favorite' => $favorite]);
+} catch (DomainException $error) {
+    http_response_code(422);
+    echo json_encode(['success' => false, 'error' => $error->getMessage()]);
+} catch (Throwable $error) {
     error_log('Roomie favorite update failed');
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => 'Favorit konnte nicht aktualisiert werden.']);

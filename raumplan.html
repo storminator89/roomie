@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interaktiver Raumplan</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/roomie-tailwind.css">
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <style>
         #floorplan {
             display: grid;
@@ -378,6 +378,11 @@
                         <option value="office">Büro</option>
                         <option value="open-office">Großraumbüro</option>
                         <option value="spez-abt-buero">Spez. Abt. Büro</option>
+                        <option value="spez-abt-buro">Spez. Abt. Büro (Altbestand)</option>
+                        <option value="fk-office">FK-Büro</option>
+                        <option value="fk-buro">FK-Büro (Altbestand)</option>
+                        <option value="shared-desk">Shared Desk</option>
+                        <option value="default">Sonstiger Raum</option>
                     </select>
                 </div>
                 <div class="mb-4">
@@ -470,6 +475,10 @@
             'office': { name: 'Büro', color: '#10b981' },
             'open-office': { name: 'Großraumbüro', color: '#f59e0b' },
             'spez-abt-buero': { name: 'Spez. Abt. Büro', color: '#8b5cf6' },
+            'spez-abt-buro': { name: 'Spez. Abt. Büro', color: '#8b5cf6' },
+            'fk-office': { name: 'FK-Büro', color: '#b45309' },
+            'fk-buro': { name: 'FK-Büro', color: '#b45309' },
+            'shared-desk': { name: 'Shared Desk', color: '#0891b2' },
             'default': { name: 'Sonstiger Raum', color: '#6b7280' }
         };
 
@@ -686,7 +695,7 @@
             // Buchungen
             const bookingsDiv = document.createElement('div');
             bookingsDiv.className = 'bookings';
-            const roomBookings = bookings.filter(booking => booking.room === room.name);
+            const roomBookings = bookings.filter(booking => booking.room_id == null ? booking.room === room.name : String(booking.room_id) === String(room.id));
             if (roomBookings.length > 0) {
                 bookingsDiv.appendChild(textElement('span', 'font-semibold', 'Buchungen:'));
                 roomBookings.forEach(booking => {
@@ -694,7 +703,7 @@
                     const end = String(booking.end_time ?? '').slice(0, 5);
                     bookingsDiv.append(
                         document.createElement('br'),
-                        textElement('span', 'booking-item', `${booking.user_name ?? ''}: ${start}-${end}`)
+                        textElement('span', 'booking-item', `${booking.user_name ?? 'Belegt'}: ${start}-${end}`)
                     );
                 });
             } else {
@@ -1206,7 +1215,7 @@
             legendContainer.replaceChildren(); // Leert den Container
 
             Object.entries(roomTypes).forEach(([type, info]) => {
-                if (type !== 'default') {
+                if (!['default', 'spez-abt-buro', 'fk-buro'].includes(type)) {
                     const legendItem = document.createElement('div');
                     legendItem.className = 'legend-item';
                     const swatch = textElement('div', 'legend-color', '');
@@ -1274,7 +1283,7 @@
                     const roomNumber = room.number.toLowerCase();
                     const matchesFilter = roomName.includes(filterText) || roomNumber.includes(filterText);
 
-                    const roomBookings = bookings.filter(booking => booking.room === room.name);
+                    const roomBookings = bookings.filter(booking => booking.room_id == null ? booking.room === room.name : String(booking.room_id) === String(room.id));
                     const occupiedSeats = calculateOccupiedSeats(roomBookings, selectedDate);
                     const availableSeats = Math.max(0, room.capacity - occupiedSeats);
                     const isAvailable = availableSeats > 0;

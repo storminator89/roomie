@@ -1,5 +1,6 @@
 <?php
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/room_access.php';
 
 if (!isLoggedIn()) {
     header("Location: login.php");
@@ -12,18 +13,23 @@ $current_page = basename($_SERVER['PHP_SELF']);
 try {
     $db = getDatabaseConnection();
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['favorite_room_id'])) {
-        $favoriteRoomId = $_POST['favorite_room_id'];
-        $stmt = $db->prepare('UPDATE rooms SET is_favorite = 1 - is_favorite WHERE id = :id');
-        $stmt->execute(['id' => $favoriteRoomId]);
+    $userId = (int) $_SESSION['user_id'];
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        requireCsrfToken($_POST['csrf_token'] ?? null);
+        roomieToggleFavorite($db, $userId, isAdmin(), $_POST['favorite_room_id'] ?? null);
+        header('Location: rooms.php', true, 303);
+        exit;
     }
-
-    $stmt = $db->query('SELECT r.id, r.name, r.type, r.capacity, r.equipment, r.is_favorite
-                        FROM rooms r
-                        ORDER BY r.is_favorite DESC, r.name');
-    $rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $error = "Datenbankfehler: " . $e->getMessage();
+    $favorites = array_fill_keys(roomieFavoriteIds($db, $userId), true);
+    $rooms = roomieListRooms($db, (int) $_SESSION['user_id'], isAdmin());
+    foreach ($rooms as &$record) {
+        $record['is_favorite'] = isset($favorites[(int) $record['id']]);
+    }
+    unset($record);
+    usort($rooms, static fn ($a, $b) => ($b['is_favorite'] <=> $a['is_favorite']) ?: strcasecmp($a['name'], $b['name']));
+} catch (Throwable $error) {
+    $rooms = [];
+    $error = $error instanceof DomainException ? $error->getMessage() : 'Raumübersicht nicht verfügbar.';
 }
 
 function getRoomTypeName($type)
@@ -48,10 +54,9 @@ function getRoomTypeName($type)
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Räume - Roomie</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/roomie-tailwind.css">
+    <script defer src="assets/alpine-3.14.9.min.js"></script>
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -90,13 +95,13 @@ function getRoomTypeName($type)
                         <div>
                             <button @click="open = !open" class="bg-white rounded-full flex text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500" id="user-menu" aria-haspopup="true" x-bind:aria-expanded="open">
                                 <span class="sr-only">Open user menu</span>
-                                <img class="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
+                                <img class="h-8 w-8 rounded-full" src="assets/avatar-placeholder.svg" alt="">
                             </button>
                         </div>
                         <div x-show="open" @click.away="open = false" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="transform opacity-100 scale-100" x-transition:leave-end="transform opacity-0 scale-95" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
                             <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-user mr-2"></i>Ihr Profil</a>
                             <a href="settings.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-cog mr-2"></i>Einstellungen</a>
-                            <a href="logout.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</a>
+                            <form method="post" action="logout.php"><input type="hidden" name="csrf_token" value="<?= csrfToken() ?>"><button type="submit" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</button></form>
                         </div>
                     </div>
                 </div>
@@ -123,7 +128,7 @@ function getRoomTypeName($type)
             <div class="pt-4 pb-3 border-t border-gray-200">
                 <div class="flex items-center px-4">
                     <div class="flex-shrink-0">
-                        <img class="h-10 w-10 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
+                        <img class="h-10 w-10 rounded-full" src="assets/avatar-placeholder.svg" alt="">
                     </div>
                     <div class="ml-3">
                         <div class="text-base font-medium text-gray-800"><?php echo htmlspecialchars($user_name); ?></div>
@@ -133,7 +138,7 @@ function getRoomTypeName($type)
                 <div class="mt-3 space-y-1">
                     <a href="profile.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-user mr-2"></i>Ihr Profil</a>
                     <a href="settings.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-cog mr-2"></i>Einstellungen</a>
-                    <a href="logout.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</a>
+                    <form method="post" action="logout.php"><input type="hidden" name="csrf_token" value="<?= csrfToken() ?>"><button type="submit" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</button></form>
                 </div>
             </div>
         </div>
@@ -162,6 +167,7 @@ function getRoomTypeName($type)
                                             <?php echo htmlspecialchars($room['name']); ?>
                                         </a>
                                         <form method="POST" action="rooms.php" class="ml-2">
+                                            <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
                                             <input type="hidden" name="favorite_room_id" value="<?php echo $room['id']; ?>">
                                             <button type="submit" class="focus:outline-none">
                                                 <i class="<?php echo $room['is_favorite'] ? 'fas' : 'far'; ?> fa-star text-yellow-400 hover:text-yellow-500 transition duration-150 ease-in-out"></i>
@@ -174,12 +180,12 @@ function getRoomTypeName($type)
                                     </div>
                                     <div class="mt-2 flex items-center text-sm text-gray-500">
                                         <i class="fas fa-tools mr-2"></i>
-                                        <?php echo htmlspecialchars(implode(', ', json_decode($room['equipment'], true) ?? [])); ?>
+                                        <?php echo htmlspecialchars(implode(', ', array_filter((array) json_decode((string) $room['equipment'], true), 'is_string'))); ?>
                                     </div>
                                 </div>
                                 <div class="ml-4 flex-shrink-0 flex flex-col items-end">
                                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                        <i class="fas fa-users mr-1"></i><?php echo $room['capacity']; ?> Plätze
+                                        <i class="fas fa-users mr-1"></i><?php echo (int) $room['capacity']; ?> Plätze
                                     </span>
                                     <a href="room_details.php?id=<?php echo $room['id']; ?>" class="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
                                         <i class="fas fa-info-circle mr-1"></i>Details anzeigen

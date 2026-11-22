@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/room_access.php';
 header('Content-Type: application/json');
 header('Cache-Control: private, no-store');
 if (!isLoggedIn()) {
@@ -12,17 +13,11 @@ try {
     // Verbindung zur SQLite-Datenbank herstellen
     $db = getDatabaseConnection();
 
-    // Abfrage, um die Raumdaten abzurufen
-    $stmt = $db->query('SELECT * FROM rooms');
-
-    $rooms = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        // Decodiere das equipment-Feld
-        $row['equipment'] = json_decode($row['equipment'], true);
-        $rooms[] = $row;
+    $rooms = roomieListRooms($db, (int) $_SESSION['user_id'], isAdmin());
+    foreach ($rooms as &$room) {
+        $room['equipment'] = json_decode((string) $room['equipment'], true);
     }
-
-    // JSON-Ausgabe der Raumdaten
+    unset($room);
     echo json_encode($rooms);
 } catch(PDOException $e) {
     // Fehlerbehandlung bei Datenbankfehlern

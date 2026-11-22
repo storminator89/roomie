@@ -5,7 +5,7 @@ if (PHP_SAPI !== 'cli') {
     http_response_code(404);
     exit;
 }
-require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/schema_hardening.php';
 
 $name = getenv('ROOMIE_ADMIN_NAME');
 $email = getenv('ROOMIE_ADMIN_EMAIL');
@@ -27,6 +27,7 @@ try {
     }
     fclose($created);
     $db = new PDO('sqlite:' . $file, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $db->exec('PRAGMA foreign_keys = ON');
     $db->beginTransaction();
     // Tabelle für Benutzer (mit is_admin Feld)
     $db->exec("CREATE TABLE IF NOT EXISTS users (
@@ -35,6 +36,7 @@ try {
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         is_admin INTEGER DEFAULT 0,
+        session_version INTEGER NOT NULL DEFAULT 1,
         profile_image VARCHAR(255),
         notifications BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -101,6 +103,7 @@ try {
 
 
 
+    roomieInstallSecuritySchema($db);
     $db->prepare('INSERT INTO users (name, email, password, is_admin) VALUES (?, ?, ?, 1)')
         ->execute([trim($name), $email, $hash]);
     $db->commit();

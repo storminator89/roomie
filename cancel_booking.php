@@ -1,5 +1,6 @@
 <?php
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/booking_calendar.php';
 
 if (!isLoggedIn()) {
     header("Location: login.php");
@@ -8,9 +9,9 @@ if (!isLoggedIn()) {
 
 requireCsrfToken($_POST['csrf_token'] ?? null);
 
-$bookingId = filter_var($_POST['booking_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+$bookingId = roomiePositiveId($_POST['booking_id'] ?? null);
 
-if ($bookingId === false) {
+if ($bookingId === null) {
     die("Fehler: Keine Buchungs-ID angegeben.");
 }
 
@@ -44,8 +45,8 @@ try {
     }
 
     // E-Mail-Benachrichtigung senden
-    if ($bookingDetails && filter_var($bookingDetails['user_email'], FILTER_VALIDATE_EMAIL) !== false) {
-        sendCancellationEmail($bookingDetails, $bookingDetails['user_email']);
+    if ($bookingDetails) {
+        roomieSendBookingMail([$bookingDetails], (string) $bookingDetails['user_email'], true);
     }
 
     header("Location: bookings.php?cancelled=1");
@@ -55,22 +56,3 @@ try {
     http_response_code(500);
     exit('Stornierung fehlgeschlagen.');
 }
-
-function sendCancellationEmail($booking, $recipientEmail) {
-    $subject = "Stornierung Ihrer Buchung für " . $booking['room_name'];
-    $message = "Sehr geehrte/r " . $booking['user_name'] . ",\n\n" .
-               "Ihre Buchung für den Raum " . $booking['room_name'] . " am " .
-               formatGermanDate($booking['date']) . " von " . $booking['start_time'] . " bis " .
-               $booking['end_time'] . " wurde erfolgreich storniert.\n\n" .
-               "Mit freundlichen Grüßen,\nIhr Roomie Team";
-
-    $headers = "From: Roomie Booking System <your-email@example.com>\r\n" .
-               "Content-Type: text/plain; charset=UTF-8\r\n";
-
-    mail($recipientEmail, "=?UTF-8?B?".base64_encode($subject)."?=", $message, $headers);
-}
-
-function formatGermanDate($date) {
-    return date('d.m.Y', strtotime($date));
-}
-?>

@@ -8,6 +8,86 @@ if (!isLoggedIn() || !isAdmin()) {
 
 $user_name = $_SESSION['user_name'] ?? 'Admin';
 $current_page = basename($_SERVER['PHP_SELF']);
+$users = [];
+
+class RoomieAdminAccessChanged extends RuntimeException {}
+
+function manageRoomieUser(PDO $db, string $action, array $input): void
+{
+    if (!in_array($action, ['create', 'edit', 'delete'], true)) {
+        throw new DomainException('Unbekannte Aktion.');
+    }
+
+    $id = $action === 'create' ? null
+        : filter_var($input['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    if ($id === false) {
+        throw new DomainException('Ungültiges Konto.');
+    }
+
+    $name = $email = $hash = null;
+    $isAdmin = ($input['is_admin'] ?? null) === 'on' ? 1 : 0;
+    if ($action !== 'delete') {
+        $name = validatedRoomieName($input['name'] ?? null);
+        $email = validatedRoomieEmail($input['email'] ?? null);
+        $password = $input['password'] ?? '';
+        if ($name === null || $email === null) {
+            throw new DomainException('Bitte gültigen Namen und gültige E-Mail eingeben.');
+        }
+        if ($action === 'create' || $password !== '') {
+            if (!validRoomiePassword($password)) {
+                throw new DomainException('Das Passwort muss 12 bis 72 Bytes lang sein.');
+            }
+            $hash = password_hash($password, PASSWORD_DEFAULT);
+        }
+    }
+
+    $db->exec('PRAGMA busy_timeout = 5000');
+    $db->exec('BEGIN IMMEDIATE');
+    try {
+        if ((int) (currentRoomieUser(true)['is_admin'] ?? 0) !== 1) {
+            throw new RoomieAdminAccessChanged();
+        }
+        if ($action === 'create') {
+            $stmt = $db->prepare('INSERT INTO users (name, email, password, is_admin) VALUES (?, ?, ?, ?)');
+            $stmt->execute([$name, $email, $hash, $isAdmin]);
+        } else {
+            $stmt = $db->prepare('SELECT email, is_admin FROM users WHERE id = ?');
+            $stmt->execute([$id]);
+            $target = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->closeCursor();
+            if (!$target) {
+                throw new DomainException('Das Konto ist nicht mehr verfügbar.');
+            }
+            if ((int) $target['is_admin'] === 1 && ($action === 'delete' || $isAdmin === 0)
+                && (int) $db->query('SELECT COUNT(*) FROM users WHERE is_admin = 1')->fetchColumn() <= 1) {
+                throw new DomainException('Das letzte Administratorkonto muss erhalten bleiben.');
+            }
+            if ($action === 'edit') {
+                $revoke = $email !== $target['email'] || $isAdmin !== (int) $target['is_admin'] || $hash !== null;
+                $stmt = $db->prepare(
+                    'UPDATE users SET name = ?, email = ?, is_admin = ?, password = COALESCE(?, password),
+                     session_version = session_version + ? WHERE id = ?'
+                );
+                $stmt->execute([$name, $email, $isAdmin, $hash, (int) $revoke, $id]);
+            } else {
+                $stmt = $db->prepare('SELECT EXISTS(SELECT 1 FROM bookings WHERE user_id = ?)');
+                $stmt->execute([$id]);
+                $hasBookings = (bool) $stmt->fetchColumn();
+                $stmt->closeCursor();
+                if ($hasBookings) {
+                    throw new DomainException('Das Konto kann nicht gelöscht werden, solange Buchungen zugeordnet sind.');
+                }
+                $db->prepare('DELETE FROM permissions WHERE user_id = ?')->execute([$id]);
+                $db->prepare('DELETE FROM user_favorites WHERE user_id = ?')->execute([$id]);
+                $db->prepare('DELETE FROM users WHERE id = ?')->execute([$id]);
+            }
+        }
+        $db->exec('COMMIT');
+    } catch (Throwable $error) {
+        $db->exec('ROLLBACK');
+        throw $error;
+    }
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     requireCsrfToken($_POST['csrf_token'] ?? null);
@@ -16,49 +96,29 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 try {
     $db = getDatabaseConnection();
 
-    // Benutzer erstellen
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create') {
-        $name = $_POST['name'];
-        $email = $_POST['email'];
-        $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-        $is_admin = isset($_POST['is_admin']) ? 1 : 0;
-
-        $stmt = $db->prepare('INSERT INTO users (name, email, password, is_admin) VALUES (:name, :email, :password, :is_admin)');
-        $stmt->execute(['name' => $name, 'email' => $email, 'password' => $password, 'is_admin' => $is_admin]);
-    }
-
-    // Benutzer bearbeiten
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit') {
-        $id = $_POST['id'];
-        $name = $_POST['name'];
-        $email = $_POST['email'];
-        $is_admin = isset($_POST['is_admin']) ? 1 : 0;
-
-        $stmt = $db->prepare('UPDATE users SET name = :name, email = :email, is_admin = :is_admin WHERE id = :id');
-        $stmt->execute(['id' => $id, 'name' => $name, 'email' => $email, 'is_admin' => $is_admin]);
-
-        if (!empty($_POST['password'])) {
-            $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-            $stmt = $db->prepare('UPDATE users SET password = :password WHERE id = :id');
-            $stmt->execute(['id' => $id, 'password' => $password]);
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        $action = $_POST['action'] ?? null;
+        try {
+            manageRoomieUser($db, is_string($action) ? $action : '', $_POST);
+            header('Location: admin_users.php', true, 303);
+            exit;
+        } catch (RoomieAdminAccessChanged $e) {
+            http_response_code(403);
+            exit('Diese Aktion erfordert Administratorrechte.');
+        } catch (DomainException $e) {
+            http_response_code(409);
+            $error = $e->getMessage();
         }
     }
 
-    // Benutzer löschen
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete') {
-        $id = $_POST['id'];
-        $stmt = $db->prepare('DELETE FROM users WHERE id = :id');
-        $stmt->execute(['id' => $id]);
-    }
-
-    // Suchfunktion
-    $search = $_GET['search'] ?? '';
-    $query = 'SELECT id, name, email, is_admin FROM users WHERE name LIKE :search OR email LIKE :search ORDER BY name';
-    $stmt = $db->prepare($query);
+    $search = is_string($_GET['search'] ?? null) ? substr($_GET['search'], 0, 255) : '';
+    $stmt = $db->prepare('SELECT id, name, email, is_admin FROM users WHERE name LIKE :search OR email LIKE :search ORDER BY name');
     $stmt->execute(['search' => "%$search%"]);
     $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $error = "Datenbankfehler: " . $e->getMessage();
+    error_log('Roomie admin user operation failed');
+    http_response_code(409);
+    $error = "Das Konto konnte nicht gespeichert werden. Prüfen Sie die Angaben.";
 }
 ?>
 
@@ -69,10 +129,9 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Benutzerverwaltung - Roomie</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/roomie-tailwind.css">
+    <script defer src="assets/alpine-3.14.9.min.js"></script>
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
     <style>
         .custom-input {
@@ -124,13 +183,13 @@ try {
                         <div>
                             <button @click="open = !open" class="bg-white rounded-full flex text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500" id="user-menu" aria-haspopup="true" x-bind:aria-expanded="open">
                                 <span class="sr-only">Open user menu</span>
-                                <img class="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
+                                <img class="h-8 w-8 rounded-full" src="assets/avatar-placeholder.svg" alt="">
                             </button>
                         </div>
                         <div x-show="open" @click.away="open = false" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="transform opacity-100 scale-100" x-transition:leave-end="transform opacity-0 scale-95" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
                             <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-user mr-2"></i>Ihr Profil</a>
                             <a href="settings.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-cog mr-2"></i>Einstellungen</a>
-                            <a href="logout.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</a>
+                            <form method="POST" action="logout.php"><input type="hidden" name="csrf_token" value="<?= csrfToken() ?>"><button type="submit" class="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</button></form>
                         </div>
                     </div>
                 </div>
@@ -157,7 +216,7 @@ try {
             <div class="pt-4 pb-3 border-t border-gray-200">
                 <div class="flex items-center px-4">
                     <div class="flex-shrink-0">
-                        <img class="h-10 w-10 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
+                        <img class="h-10 w-10 rounded-full" src="assets/avatar-placeholder.svg" alt="">
                     </div>
                     <div class="ml-3">
                         <div class="text-base font-medium text-gray-800"><?php echo htmlspecialchars($user_name); ?></div>
@@ -167,7 +226,7 @@ try {
                 <div class="mt-3 space-y-1">
                     <a href="profile.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-user mr-2"></i>Ihr Profil</a>
                     <a href="settings.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-cog mr-2"></i>Einstellungen</a>
-                    <a href="logout.php" class="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</a>
+                    <form method="POST" action="logout.php"><input type="hidden" name="csrf_token" value="<?= csrfToken() ?>"><button type="submit" class="w-full text-left block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</button></form>
                 </div>
             </div>
         </div>
@@ -212,7 +271,7 @@ try {
                     </div>
                     <div>
                         <label for="password" class="block text-sm font-medium text-gray-700">Passwort</label>
-                        <input type="password" name="password" id="password" required placeholder="Passwort" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
+                        <input type="password" name="password" id="password" autocomplete="new-password" required placeholder="Passwort" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
                     </div>
                     <div class="flex items-center">
                         <input type="checkbox" name="is_admin" id="is_admin" class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded">
@@ -305,7 +364,7 @@ try {
                                     </div>
                                     <div>
                                         <label for="editPassword" class="block text-sm font-medium text-gray-700">Neues Passwort (leer lassen für keine Änderung)</label>
-                                        <input type="password" name="password" id="editPassword" placeholder="Neues Passwort" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
+                                        <input type="password" name="password" id="editPassword" autocomplete="new-password" placeholder="Neues Passwort" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
                                     </div>
                                     <div class="flex items-center">
                                         <input type="checkbox" name="is_admin" id="editIsAdmin" class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded">

@@ -13,9 +13,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = $_POST['email'] ?? '';
     $password = $_POST['password'] ?? '';
 
-    if (loginUser($email, $password)) {
+    $result = loginUser($email, $password);
+    if ($result === 'authenticated') {
         header("Location: index.php");
         exit;
+    }
+    if ($result === 'throttled') {
+        http_response_code(429);
+        header('Retry-After: 900');
+        $error = "Zu viele Anmeldeversuche. Bitte später erneut versuchen.";
+    } elseif ($result === 'unavailable') {
+        http_response_code(503);
+        $error = "Anmeldung derzeit nicht verfügbar.";
     } else {
         $error = "Ungültige E-Mail oder Passwort.";
     }
@@ -28,9 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roomie Login</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/roomie-tailwind.css">
+    <script defer src="assets/alpine-3.14.9.min.js"></script>
     <style>
         body {
             font-family: 'Source Sans 3', sans-serif;
@@ -68,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="rounded-md shadow-sm -space-y-px">
                         <div>
                             <label for="email-address" class="sr-only">E-Mail Adresse</label>
-                            <input id="email-address" name="email" type="email" autocomplete="email" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm" placeholder="E-Mail Adresse" value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
+                            <input id="email-address" name="email" type="email" autocomplete="email" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm" placeholder="E-Mail Adresse" value="<?php echo htmlspecialchars(is_string($_POST['email'] ?? null) ? substr($_POST['email'], 0, 254) : ''); ?>">
                         </div>
                         <div>
                             <label for="password" class="sr-only">Passwort</label>
@@ -98,10 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 text-center">
                 <p class="text-sm text-gray-600">
-                    Noch kein Konto?
-                    <a href="register.php" class="font-medium text-yellow-600 hover:text-yellow-500 transition duration-150 ease-in-out">
-                        Hier registrieren
-                    </a>
+                    Noch kein Konto? Wenden Sie sich an die Roomie-Administration.
                 </p>
             </div>
         </div>

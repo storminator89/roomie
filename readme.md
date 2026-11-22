@@ -61,3 +61,26 @@ Roomie is a web application for managing and booking rooms in an office building
 - Do not deploy or commit SQLite files. The bundled demo database was removed
   from the current branch; older commits and copies are unaffected. Never use
   a database from the Git history for deployment.
+
+## Accounts, visibility and mail
+
+- The administrator provisions accounts. Public registration is disabled.
+  Use verified organizational addresses before enabling mail. Only administrators
+  can correct an account's address. Password and role changes revoke old sessions.
+- Members see availability, not the identity of other people booking a room.
+  Only a member with an explicit grant (or an administrator for room management)
+  can see a restricted room. Keep at least one administrator. Accounts and rooms
+  with booking history cannot be deleted through the app.
+- Set `ROOMIE_MAIL_FROM` to an authorized sender address to enable transactional
+  mail; otherwise booking and calendar downloads still work without sending mail.
+- For an existing private database, take the app offline, preserve a verified
+  backup, and run `php schema_hardening.php` with the existing private path and
+  document-root environment, using the app account, before starting the new app.
+  The check refuses inconsistent references and does not delete existing rows.
+  Fresh installs use `init_db.php` only. Existing sessions must sign in again.
+- Publish only the application, not `.git`, build tools, private data or old
+  uploads. If the server does not honor `.htaccess`, apply equivalent path denies
+  and security headers in the web server. Force HTTPS; behind a trusted proxy
+  configure PHP to mark the session cookie Secure.
+- Avatar uploads use PHP GD and private storage next to the configured database.
+  Old public uploads are not reused.

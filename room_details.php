@@ -1,47 +1,55 @@
 <?php
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/booking_helpers.php';
 
 if (!isLoggedIn()) {
     header("Location: login.php");
     exit;
 }
 
+$current_page = 'room_details.php';
+$userId = (int) $_SESSION['user_id'];
 $user_name = $_SESSION['user_name'] ?? 'Benutzer';
-$room_id = $_GET['id'] ?? null;
-
+$room_id = roomiePositiveId($_GET['id'] ?? null);
+$selected_date = $_GET['date'] ?? roomieBookingToday()->format('Y-m-d');
 if (!$room_id) {
-    header("Location: rooms.php");
-    exit;
+    http_response_code(404);
+    exit('Raum nicht gefunden.');
 }
-
-$selected_date = $_GET['date'] ?? date('Y-m-d'); // Standardmäßig heute
+$parsedDate = parseBookingDate($selected_date);
+if (!$parsedDate) {
+    http_response_code(400);
+    exit('Ungültiges Datum.');
+}
 
 try {
     $db = getDatabaseConnection();
-
-    $stmt = $db->prepare('SELECT r.*
-                          FROM rooms r
-                          WHERE r.id = :id');
-    $stmt->execute(['id' => $room_id]);
-    $room = $stmt->fetch(PDO::FETCH_ASSOC);
-
+    $admin = isAdmin();
+    $room = roomieVisibleRoom($db, $room_id, $userId, $admin);
     if (!$room) {
-        throw new Exception("Raum nicht gefunden");
+        http_response_code(404);
+        exit('Raum nicht gefunden.');
     }
-
-    // Hole die Buchungen für das ausgewählte Datum
-    $stmt = $db->prepare('SELECT b.*, u.name as user_name
-                          FROM bookings b
-                          JOIN users u ON b.user_id = u.id
+    $stmt = $db->prepare('SELECT b.start_time, b.end_time,
+                         CASE WHEN :canSeeNames = 1 OR b.user_id = :viewer THEN u.name END AS user_name
+                          FROM bookings b JOIN users u ON b.user_id = u.id
                           WHERE b.room_id = :room_id AND b.date = :selected_date
-                          ORDER BY b.start_time');
-    $stmt->execute(['room_id' => $room_id, 'selected_date' => $selected_date]);
+                          ORDER BY b.start_time LIMIT 501');
+    $stmt->bindValue(':canSeeNames', (int) $admin, PDO::PARAM_INT);
+    $stmt->bindValue(':viewer', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':room_id', $room_id, PDO::PARAM_INT);
+    $stmt->bindValue(':selected_date', $selected_date, PDO::PARAM_STR);
+    $stmt->execute();
     $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Formatiere das ausgewählte Datum im deutschen Format
-    $selected_date_formatted = (new DateTime($selected_date))->format('d.m.Y');
-} catch (Exception $e) {
-    $error = $e->getMessage();
+    if (count($bookings) > 500) {
+        http_response_code(422);
+        exit('Zu viele Buchungen für dieses Datum.');
+    }
+    $selected_date_formatted = $parsedDate->format('d.m.Y');
+} catch (Throwable) {
+    error_log('Roomie could not load room details');
+    http_response_code(503);
+    exit('Raumdetails nicht verfügbar.');
 }
 
 function getRoomTypeName($type)
@@ -66,11 +74,10 @@ function getRoomTypeName($type)
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($room['name'] ?? 'Raumdetails'); ?> - Roomie</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/roomie-tailwind.css">
+    <script defer src="assets/alpine-3.14.9.min.js"></script>
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <style>
         body {
             font-family: 'Source Sans 3', sans-serif;
@@ -110,13 +117,13 @@ function getRoomTypeName($type)
                         <div>
                             <button @click="open = !open" class="bg-white rounded-full flex text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500" id="user-menu" aria-haspopup="true" x-bind:aria-expanded="open">
                                 <span class="sr-only">Open user menu</span>
-                                <img class="h-8 w-8 rounded-full" src="<?php echo !empty($user['profile_image']) ? 'uploads/' . htmlspecialchars($user['profile_image']) : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'; ?>" alt="">
+                                <span class="h-8 w-8 rounded-full flex items-center justify-center bg-gray-200 text-gray-700" aria-hidden="true"><i class="fas fa-user"></i></span>
                             </button>
                         </div>
                         <div x-show="open" @click.away="open = false" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="transform opacity-100 scale-100" x-transition:leave-end="transform opacity-0 scale-95" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
                             <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-user"></i>&nbsp;Ihr Profil</a>
                             <a href="settings.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-cog"></i>&nbsp;Einstellungen</a>
-                            <a href="logout.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</a>
+                            <form method="post" action="logout.php"><input type="hidden" name="csrf_token" value="<?= csrfToken() ?>"><button type="submit" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</button></form>
                         </div>
                     </div>
                 </div>
@@ -143,7 +150,7 @@ function getRoomTypeName($type)
             <div class="pt-4 pb-3 border-t border-gray-200">
                 <div class="flex items-center px-4">
                     <div class="flex-shrink-0">
-                        <img class="h-10 w-10 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
+                        <img class="h-10 w-10 rounded-full" src="assets/avatar-placeholder.svg" alt="">
                     </div>
                     <div class="ml-3">
                         <div class="text-base font-medium text-gray-100"><?php echo htmlspecialchars($user_name); ?></div>
@@ -153,7 +160,7 @@ function getRoomTypeName($type)
                 <div class="mt-3 space-y-1">
                     <a href="profile.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700"><i class="fas fa-user"></i>&nbsp;Ihr Profil</a>
                     <a href="settings.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700"><i class="fas fa-cog"></i>&nbsp;Einstellungen</a>
-                    <a href="logout.php" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</a>
+                    <form method="post" action="logout.php"><input type="hidden" name="csrf_token" value="<?= csrfToken() ?>"><button type="submit" class="block px-4 py-2 text-base font-medium text-gray-100 hover:text-gray-300 hover:bg-gray-700"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</button></form>
                 </div>
             </div>
         </div>
@@ -189,7 +196,7 @@ function getRoomTypeName($type)
                                     Kapazität
                                 </dt>
                                 <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                                    <?php echo $room['capacity']; ?> Plätze
+                                    <?php echo (int) $room['capacity']; ?> Plätze
                                 </dd>
                             </div>
                             <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
@@ -199,7 +206,8 @@ function getRoomTypeName($type)
                                 <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                                     <?php
                                     $equipment = json_decode($room['equipment'], true);
-                                    echo $equipment ? implode(', ', $equipment) : 'Keine spezielle Ausstattung';
+                                    $equipment = is_array($equipment) ? array_filter($equipment, 'is_string') : [];
+                                    echo $equipment ? htmlspecialchars(implode(', ', $equipment), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') : 'Keine spezielle Ausstattung';
                                     ?>
                                 </dd>
                             </div>
@@ -230,7 +238,7 @@ function getRoomTypeName($type)
                                     <div class="px-4 py-4 sm:px-6">
                                         <div class="flex items-center justify-between">
                                             <p class="text-sm font-medium text-yellow-600 truncate">
-                                                <?php echo htmlspecialchars($booking['user_name']); ?>
+                                                <?php echo htmlspecialchars($booking['user_name'] ?? 'Belegt', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>
                                             </p>
                                         </div>
                                         <div class="mt-2 sm:flex sm:justify-between">
@@ -239,7 +247,7 @@ function getRoomTypeName($type)
                                                     <svg class="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
                                                     </svg>
-                                                    <?php echo $booking['start_time'] . ' - ' . $booking['end_time']; ?>
+                                                    <?php echo htmlspecialchars($booking['start_time'] . ' - ' . $booking['end_time'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>
                                                 </p>
                                             </div>
                                         </div>

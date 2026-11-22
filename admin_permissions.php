@@ -10,29 +10,50 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     requireCsrfToken($_POST['csrf_token'] ?? null);
 }
 
-try {
-    $db = getDatabaseConnection();
-
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (isset($_POST['add_permission'])) {
-            $userId = $_POST['user_id'];
-            $roomId = $_POST['room_id'];
-
-            $stmt = $db->prepare("INSERT INTO permissions (user_id, room_id) VALUES (:user_id, :room_id)");
-            $stmt->execute(['user_id' => $userId, 'room_id' => $roomId]);
-
-            $_SESSION['success'] = "Berechtigung hinzugefügt.";
-        } elseif (isset($_POST['remove_permission'])) {
-            $permissionId = $_POST['permission_id'];
-
-            $stmt = $db->prepare("DELETE FROM permissions WHERE id = :id");
-            $stmt->execute(['id' => $permissionId]);
-
-            $_SESSION['success'] = "Berechtigung entfernt.";
+$db = getDatabaseConnection();
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    try {
+        $db->exec('BEGIN IMMEDIATE');
+        $actor = currentRoomieUser(true);
+        if (!$actor || (int) $actor['is_admin'] !== 1) {
+            throw new DomainException('Admin-Sitzung ist nicht mehr gültig.');
         }
+        if (isset($_POST['add_permission'])) {
+            $userId = filter_var($_POST['user_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            $roomId = filter_var($_POST['room_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            $room = $db->prepare('SELECT type FROM rooms WHERE id = ?');
+            $room->execute([$roomId]);
+            $type = $room->fetchColumn();
+            $room->closeCursor();
+            if (!$userId || !$roomId || !in_array($type, ROOMIE_RESTRICTED_ROOM_TYPES, true)) {
+                throw new DomainException('Bitte einen Benutzer und einen eingeschränkten Raum auswählen.');
+            }
+            $permission = $db->prepare('INSERT INTO permissions (user_id, room_id)
+                SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE user_id = ? AND room_id = ?)');
+            $permission->execute([$userId, $roomId, $userId, $roomId]);
+            $_SESSION['success'] = 'Berechtigung gespeichert.';
+        } elseif (isset($_POST['remove_permission'])) {
+            $id = filter_var($_POST['permission_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (!$id) {
+                throw new DomainException('Ungültige Berechtigung.');
+            }
+            $db->prepare('DELETE FROM permissions WHERE id = ?')->execute([$id]);
+            $_SESSION['success'] = 'Berechtigung entfernt.';
+        }
+        $db->exec('COMMIT');
+    } catch (Throwable $error) {
+        try {
+            $db->exec('ROLLBACK');
+        } catch (PDOException) {
+            // No open write transaction.
+        }
+        if (!$error instanceof DomainException) {
+            error_log('Roomie permission write failed');
+        }
+        $_SESSION['error'] = $error instanceof DomainException ? $error->getMessage() : 'Berechtigung konnte nicht gespeichert werden.';
     }
-} catch (PDOException $e) {
-    $_SESSION['error'] = "Fehler bei der Berechtigungsverwaltung: " . $e->getMessage();
+    header('Location: admin_permissions.php', true, 303);
+    exit;
 }
 
 $users = $db->query('SELECT id, name FROM users')->fetchAll(PDO::FETCH_ASSOC);
@@ -55,10 +76,9 @@ $permissions = $db->query("
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Berechtigungen verwalten</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link rel="stylesheet" href="assets/roomie-tailwind.css">
+    <script defer src="assets/alpine-3.14.9.min.js"></script>
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -97,13 +117,13 @@ $permissions = $db->query("
                         <div>
                             <button @click="open = !open" class="bg-white rounded-full flex text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500" id="user-menu" aria-haspopup="true" x-bind:aria-expanded="open">
                                 <span class="sr-only">Open user menu</span>
-                                <img class="h-8 w-8 rounded-full" src="<?php echo !empty($_SESSION['user_profile_image']) ? 'uploads/' . htmlspecialchars($_SESSION['user_profile_image']) : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'; ?>" alt="">
+                                <img class="h-8 w-8 rounded-full" src="assets/avatar-placeholder.svg" alt="">
                             </button>
                         </div>
                         <div x-show="open" @click.away="open = false" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="transform opacity-100 scale-100" x-transition:leave-end="transform opacity-0 scale-95" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
                             <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-user"></i>&nbsp;Ihr Profil</a>
                             <a href="settings.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-cog"></i>&nbsp;Einstellungen</a>
-                            <a href="logout.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</a>
+                            <form method="post" action="logout.php"><input type="hidden" name="csrf_token" value="<?= csrfToken() ?>"><button type="submit" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</button></form>
                         </div>
                     </div>
                 </div>
@@ -130,7 +150,7 @@ $permissions = $db->query("
             <div class="pt-4 pb-3 border-t border-gray-200">
                 <div class="flex items-center px-4">
                     <div class="flex-shrink-0">
-                        <img class="h-10 w-10 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
+                        <img class="h-10 w-10 rounded-full" src="assets/avatar-placeholder.svg" alt="">
                     </div>
                     <div class="ml-3">
                         <div class="text-base font-medium text-white"><?php echo htmlspecialchars($_SESSION['user_name']); ?></div>
@@ -140,7 +160,7 @@ $permissions = $db->query("
                 <div class="mt-3 space-y-1">
                     <a href="profile.php" class="block px-4 py-2 text-base font-medium text-white hover:text-white hover:bg-gray-700"><i class="fas fa-user"></i>&nbsp;Ihr Profil</a>
                     <a href="settings.php" class="block px-4 py-2 text-base font-medium text-white hover:text-white hover:bg-gray-700"><i class="fas fa-cog"></i>&nbsp;Einstellungen</a>
-                    <a href="logout.php" class="block px-4 py-2 text-base font-medium text-white hover:text-white hover:bg-gray-700"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</a>
+                    <form method="post" action="logout.php"><input type="hidden" name="csrf_token" value="<?= csrfToken() ?>"><button type="submit" class="block px-4 py-2 text-base font-medium text-white hover:text-white hover:bg-gray-700"><i class="fas fa-sign-out-alt"></i>&nbsp;Abmelden</button></form>
                 </div>
             </div>
         </div>

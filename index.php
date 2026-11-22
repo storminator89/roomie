@@ -1,5 +1,6 @@
 <?php
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/room_access.php';
 
 if (!isLoggedIn()) {
     header("Location: login.php");
@@ -15,23 +16,10 @@ try {
     exit;
 }
 
-$rooms = $db->query('SELECT * FROM rooms');
+$rooms = roomieListRooms($db, (int) $_SESSION['user_id'], isAdmin());
 
 $current_page = basename($_SERVER['PHP_SELF']);
 
-function getBookingsForDate($db, $date, $roomId)
-{
-    $stmt = $db->prepare("SELECT bookings.*, users.name AS user_name FROM bookings JOIN users ON bookings.user_id = users.id WHERE date = :date AND room_id = :room_id");
-    $stmt->execute(['date' => $date, 'room_id' => $roomId]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-function getMonthlyBookings($db, $year, $month, $roomId)
-{
-    $stmt = $db->prepare("SELECT date FROM bookings WHERE strftime('%Y', date) = :year AND strftime('%m', date) = :month AND room_id = :room_id");
-    $stmt->execute(['year' => $year, 'month' => sprintf('%02d', $month), 'room_id' => $roomId]);
-    return $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
-}
 ?>
 
 <!DOCTYPE html>
@@ -41,12 +29,9 @@ function getMonthlyBookings($db, $year, $month, $roomId)
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roomie Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intro.js/5.1.0/introjs.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/intro.js/5.1.0/intro.min.js"></script>
+    <link rel="stylesheet" href="assets/roomie-tailwind.css">
+    <script defer src="assets/alpine-3.14.9.min.js"></script>
+    <link rel="stylesheet" href="assets/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -86,13 +71,13 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                         <div>
                             <button @click="open = !open" class="bg-white rounded-full flex text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500" id="user-menu" aria-haspopup="true" x-bind:aria-expanded="open">
                                 <span class="sr-only">Open user menu</span>
-                                <img class="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
+                                <img class="h-8 w-8 rounded-full" src="assets/avatar-placeholder.svg" alt="">
                             </button>
                         </div>
                         <div x-show="open" @click.away="open = false" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="transform opacity-100 scale-100" x-transition:leave-end="transform opacity-0 scale-95" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
                             <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-user mr-2"></i>Ihr Profil</a>
                             <a href="settings.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-cog mr-2"></i>Einstellungen</a>
-                            <a href="logout.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</a>
+                            <form method="post" action="logout.php"><input type="hidden" name="csrf_token" value="<?= csrfToken() ?>"><button type="submit" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</button></form>
                         </div>
                     </div>
                 </div>
@@ -119,7 +104,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
             <div class="pt-4 pb-3 border-t border-gray-200">
                 <div class="flex items-center px-4">
                     <div class="flex-shrink-0">
-                        <img class="h-10 w-10 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="">
+                        <img class="h-10 w-10 rounded-full" src="assets/avatar-placeholder.svg" alt="">
                     </div>
                     <div class="ml-3">
                         <div class="text-base font-medium text-gray-800"><?php echo htmlspecialchars($user_name); ?></div>
@@ -133,9 +118,9 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                     <a href="settings.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium inactive">
                         <i class="fas fa-cog mr-2"></i>Einstellungen
                     </a>
-                    <a href="logout.php" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium inactive">
+                    <form method="post" action="logout.php"><input type="hidden" name="csrf_token" value="<?= csrfToken() ?>"><button type="submit" class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium inactive">
                         <i class="fas fa-sign-out-alt mr-2"></i>Abmelden
-                    </a>
+                    </button></form>
                 </div>
             </div>
         </div>
@@ -252,7 +237,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
                                     <td class="border px-4 py-2" x-text="formatDateToGerman(booking.date)"></td>
                                     <td class="border px-4 py-2" x-text="booking.start_time"></td>
                                     <td class="border px-4 py-2" x-text="booking.end_time"></td>
-                                    <td class="border px-4 py-2" x-text="booking.user_name"></td>
+                                    <td class="border px-4 py-2" x-text="booking.user_name ?? 'Belegt'"></td>
                                 </tr>
                             </template>
                             <tr x-show="filteredBookings.length === 0">
@@ -339,19 +324,9 @@ function getMonthlyBookings($db, $year, $month, $roomId)
             const left = (screen.width - width) / 2;
             const top = (screen.height - height) / 2;
 
-            popup = window.open('raumplan.html?floor=' + floor, 'PopupWindow', `width=${width},height=${height},top=${top},left=${left}`);
+            popup = window.open('raumplan.html?floor=' + floor, '_blank', `noopener,width=${width},height=${height},top=${top},left=${left}`);
         }
 
-        window.addEventListener('message', function(event) {
-            if (event.data.type === 'roomSelected') {
-                const selectedWorkspace = document.getElementById('selectedWorkspace');
-                selectedWorkspace.value = event.data.roomId;
-                selectedWorkspace.dispatchEvent(new Event('change'));
-                if (popup) {
-                    popup.close();
-                }
-            }
-        });
     </script>
     <script src="app.js"></script>
 </body>

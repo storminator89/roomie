@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 // Canonical restricted types and the spelling used by older room records.
-const ROOMIE_RESTRICTED_ROOM_TYPES = ['spez-abt-buero', 'spez-abt-buro', 'fk-office'];
+const ROOMIE_RESTRICTED_ROOM_TYPES = ['spez-abt-buero', 'spez-abt-buro', 'fk-office', 'fk-buro'];
 
 function roomieDatabasePath(bool $create = false): string
 {
@@ -54,6 +54,8 @@ function getDatabaseConnection(): PDO
     }
     try {
         $db = new PDO('sqlite:' . roomieDatabasePath(), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $db->exec('PRAGMA foreign_keys = ON');
+        $db->exec('PRAGMA busy_timeout = 5000');
     } catch (Throwable $error) {
         error_log('Roomie database connection failed');
         http_response_code(503);

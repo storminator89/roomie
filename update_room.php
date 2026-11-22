@@ -1,30 +1,26 @@
 <?php
-header('Content-Type: application/json');
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/room_admin_input.php';
 
-if (!isAdmin()) {
-    echo json_encode(['success' => false, 'message' => 'Nur Administratoren können Räume bearbeiten.']);
-    exit;
-}
-
-requireCsrfToken($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null, true);
-
-$data = json_decode(file_get_contents('php://input'), true);
-
-try {
-    $db = getDatabaseConnection();
-    
-    $stmt = $db->prepare("UPDATE rooms SET name = :name, number = :number, type = :type, capacity = :capacity, equipment = :equipment WHERE id = :id");
-    $stmt->execute([
-        ':id' => $data['id'],
-        ':name' => $data['name'],
-        ':number' => $data['number'],
-        ':type' => $data['type'],
-        ':capacity' => $data['capacity'],
-        ':equipment' => json_encode($data['amenities'])
-    ]);
-
-    echo json_encode(['success' => true]);
-} catch (PDOException $e) {
-    echo json_encode(['success' => false, 'message' => 'Datenbankfehler: ' . $e->getMessage()]);
-}
+$data = roomieAdminJson();
+$id = roomieRoomId($data['id'] ?? null);
+$values = roomieRoomInput($data);
+roomieAdminWrite(static function (PDO $db) use ($id, $values): array {
+    $lookup = $db->prepare('SELECT type, capacity FROM rooms WHERE id = ?');
+    $lookup->execute([$id]);
+    $room = $lookup->fetch(PDO::FETCH_ASSOC);
+    $lookup->closeCursor();
+    if (!$room) {
+        throw new DomainException('Raum nicht gefunden.', 404);
+    }
+    if ($values[3] < (int) $room['capacity'] || $values[2] !== $room['type']) {
+        $future = $db->prepare('SELECT 1 FROM bookings WHERE room_id = ? AND date >= ? LIMIT 1');
+        $future->execute([$id, (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->format('Y-m-d')]);
+        if ($future->fetchColumn()) {
+            throw new DomainException('Kapazität oder Raumtyp kann bei bevorstehenden Buchungen nicht eingeschränkt werden.', 409);
+        }
+        $future->closeCursor();
+    }
+    $db->prepare('UPDATE rooms SET name = ?, number = ?, type = ?, capacity = ?, equipment = ? WHERE id = ?')->execute([...$values, $id]);
+    return [];
+});

@@ -1,47 +1,49 @@
 <?php
 require_once __DIR__ . '/auth.php';
-header('Content-Type: application/json');
-header('Cache-Control: private, no-store');
-if (!isLoggedIn()) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Nicht angemeldet.']);
+require_once __DIR__ . '/booking_helpers.php';
+
+$userId = roomieRequireBookingViewer();
+$isAdmin = isAdmin();
+$roomId = isset($_GET['room_id']) ? roomiePositiveId($_GET['room_id']) : null;
+$start = parseBookingDate($_GET['start_date'] ?? roomieBookingToday()->format('Y-m-d'));
+$end = parseBookingDate($_GET['end_date'] ?? ($start ? $start->format('Y-m-d') : null));
+if ((isset($_GET['room_id']) && $roomId === null) || !$start || !$end ||
+    $start > $end || $start->diff($end)->days > 30) {
+    roomieBookingJson(['error' => 'Ungültiger Raum oder Zeitraum (höchstens 31 Tage).'], 400);
     exit;
 }
 
 try {
     $db = getDatabaseConnection();
-
-    $roomId = $_GET['room_id'] ?? null;
-    $startDate = $_GET['start_date'] ?? date('Y-m-d');
-    $endDate = $_GET['end_date'] ?? $startDate;
-
-    error_log("Room ID: " . ($roomId ?? 'not set'));
-    error_log("Start Date: " . $startDate);
-    error_log("End Date: " . $endDate);
-
-    if ($roomId) {
-        $stmt = $db->prepare('SELECT b.id, b.user_id, u.name as user_name, r.name as room, b.date, b.start_time, b.end_time, b.seat_id 
-                              FROM bookings b 
-                              JOIN rooms r ON b.room_id = r.id 
-                              JOIN users u ON b.user_id = u.id 
-                              WHERE b.room_id = :room_id AND b.date BETWEEN :start_date AND :end_date');
-        $stmt->execute(['room_id' => $roomId, 'start_date' => $startDate, 'end_date' => $endDate]);
-    } else {
-        $stmt = $db->prepare('SELECT b.id, b.user_id, u.name as user_name, r.name as room, b.date, b.start_time, b.end_time, b.seat_id 
-                              FROM bookings b 
-                              JOIN rooms r ON b.room_id = r.id 
-                              JOIN users u ON b.user_id = u.id 
-                              WHERE b.date BETWEEN :start_date AND :end_date');
-        $stmt->execute(['start_date' => $startDate, 'end_date' => $endDate]);
+    if ($roomId !== null && !roomieVisibleRoom($db, $roomId, $userId, $isAdmin)) {
+        roomieBookingJson(['error' => 'Raum nicht gefunden.'], 404);
+        exit;
     }
-
+    [$rule, $params] = roomieBookingAccessSql('r', $userId, $isAdmin);
+    $sql = "SELECT b.id, b.user_id, u.name AS user_name, r.name AS room, r.id AS room_id,
+            b.date, b.start_time, b.end_time, b.seat_id FROM bookings b
+            JOIN rooms r ON b.room_id = r.id JOIN users u ON b.user_id = u.id
+            WHERE b.date BETWEEN :start_date AND :end_date AND $rule";
+    $params += ['start_date' => $start->format('Y-m-d'), 'end_date' => $end->format('Y-m-d')];
+    if ($roomId !== null) {
+        $sql .= ' AND r.id = :room_id';
+        $params['room_id'] = $roomId;
+    }
+    $stmt = $db->prepare($sql . ' ORDER BY b.date, b.start_time, b.id LIMIT 2001');
+    $stmt->execute($params);
     $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    error_log("Number of bookings found: " . count($bookings));
-
-    echo json_encode($bookings);
-} catch(PDOException $e) {
-    error_log("Database error: " . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['error' => 'Datenbankabfrage fehlgeschlagen.']);
+    if (count($bookings) > 2000) {
+        roomieBookingJson(['error' => 'Zu viele Einträge. Bitte Raum oder Zeitraum eingrenzen.'], 422);
+        exit;
+    }
+    foreach ($bookings as &$booking) {
+        if (!$isAdmin && (int) $booking['user_id'] !== $userId) {
+            unset($booking['id'], $booking['user_id'], $booking['seat_id'], $booking['user_name']);
+        }
+    }
+    unset($booking);
+    roomieBookingJson($bookings);
+} catch (PDOException $e) {
+    error_log('Roomie booking availability read failed');
+    roomieBookingJson(['error' => 'Buchungen nicht verfügbar.'], 500);
 }
