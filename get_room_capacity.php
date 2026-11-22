@@ -1,9 +1,15 @@
 <?php
+require_once __DIR__ . '/auth.php';
 header('Content-Type: application/json');
+header('Cache-Control: private, no-store');
+if (!isLoggedIn()) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Nicht angemeldet.']);
+    exit;
+}
 
 try {
-    $db = new PDO('sqlite:roomie.db');
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db = getDatabaseConnection();
 
     $roomId = $_GET['room_id'] ?? null;
 
@@ -21,5 +27,6 @@ try {
         echo json_encode(['error' => 'Ungültige Raum-ID']);
     }
 } catch(PDOException $e) {
-    echo json_encode(['error' => $e->getMessage()]);
+    http_response_code(500);
+    echo json_encode(['error' => 'Datenbankabfrage fehlgeschlagen.']);
 }

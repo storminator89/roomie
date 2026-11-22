@@ -1,8 +1,33 @@
 <?php
-try {
-    $db = new PDO('sqlite:roomie.db');
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+declare(strict_types=1);
 
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+require_once __DIR__ . '/database.php';
+
+$name = getenv('ROOMIE_ADMIN_NAME');
+$email = getenv('ROOMIE_ADMIN_EMAIL');
+$hash = getenv('ROOMIE_ADMIN_PASSWORD_HASH');
+if (!is_string($name) || trim($name) === '' || strlen($name) > 255
+    || !is_string($email) || filter_var($email, FILTER_VALIDATE_EMAIL) === false
+    || !is_string($hash) || !in_array(password_get_info($hash)['algoName'], ['bcrypt', 'argon2i', 'argon2id'], true)) {
+    fwrite(STDERR, "Name, E-Mail und ein PHP-Passworthash für den ersten Administrator werden benötigt.\n");
+    exit(1);
+}
+
+try {
+    $file = roomieDatabasePath(true);
+    // Allow only the first creation; suppress filesystem details in the CLI response.
+    umask(0077);
+    $created = @fopen($file, 'x');
+    if ($created === false) {
+        throw new RuntimeException('Die private Datenbankdatei konnte nicht angelegt werden.');
+    }
+    fclose($created);
+    $db = new PDO('sqlite:' . $file, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $db->beginTransaction();
     // Tabelle für Benutzer (mit is_admin Feld)
     $db->exec("CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,29 +100,15 @@ try {
 )");
 
 
-    $db->exec("INSERT OR IGNORE INTO seats (room_id, top, left_pos) VALUES 
-        (5, '20%', '20%'),
-        (5, '20%', '80%'),
-        (5, '80%', '20%'),
-        (5, '80%', '80%'),
-        (6, '20%', '20%'),
-        (6, '20%', '80%'),
-        (6, '80%', '20%'),
-        (6, '80%', '80%')");
 
-    // Beispielbenutzer einfügen (Passwort: 'password')
-    $hashedPassword = password_hash('password', PASSWORD_DEFAULT);
-    $db->exec("INSERT OR IGNORE INTO users (name, email, password, is_admin) VALUES 
-        ('Max Mustermann', 'max@example.com', '$hashedPassword', 0),
-        ('Erika Musterfrau', 'erika@example.com', '$hashedPassword', 0),
-        ('Admin User', 'admin@example.com', '$hashedPassword', 1)");
-
-    // Beispielbuchungen einfügen
-    $db->exec("INSERT OR IGNORE INTO bookings (user_id, room_id, seat_id, date, start_time, end_time) VALUES 
-        (1, 5, 1, '2024-07-10', '09:00', '17:00'),
-        (2, 6, 5, '2024-07-11', '10:00', '16:00')");
-
-    echo "Datenbank wurde initialisiert und mit Beispieldaten gefüllt.";
-} catch (PDOException $e) {
-    echo "Fehler bei der Datenbankinitialisierung: " . $e->getMessage();
+    $db->prepare('INSERT INTO users (name, email, password, is_admin) VALUES (?, ?, ?, 1)')
+        ->execute([trim($name), $email, $hash]);
+    $db->commit();
+    echo "Private Datenbank initialisiert.\n";
+} catch (Throwable $error) {
+    if (isset($db) && $db->inTransaction()) {
+        $db->rollBack();
+    }
+    fwrite(STDERR, "Initialisierung fehlgeschlagen. Pfad, Berechtigungen und bestehende Datenbank prüfen.\n");
+    exit(1);
 }

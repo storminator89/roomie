@@ -1,7 +1,13 @@
 <?php
 header('Content-Type: application/json');
 
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
+header('Cache-Control: private, no-store');
+if (!isLoggedIn()) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Nicht angemeldet.']);
+    exit;
+}
 
 try {
     $db = getDatabaseConnection();
@@ -22,5 +28,6 @@ try {
         ]
     ]);
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'message' => 'Datenbankfehler: ' . $e->getMessage()]);
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Datenbankabfrage fehlgeschlagen.']);
 }

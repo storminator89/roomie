@@ -1,5 +1,4 @@
 <?php
-session_start();
 require_once 'auth.php';
 
 if (!isAdmin()) {
@@ -8,8 +7,7 @@ if (!isAdmin()) {
 }
 
 try {
-    $db = new PDO('sqlite:roomie.db');
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db = getDatabaseConnection();
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['add_permission'])) {

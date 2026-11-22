@@ -1,15 +1,7 @@
 <?php
 session_start();
 
-function getDatabaseConnection() {
-    try {
-        $db = new PDO('sqlite:roomie.db');
-        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        return $db;
-    } catch(PDOException $e) {
-        die("Connection failed: " . $e->getMessage());
-    }
-}
+require_once __DIR__ . '/database.php';
 
 function registerUser($name, $email, $password) {
     $db = getDatabaseConnection();
@@ -41,6 +33,7 @@ function loginUser($email, $password) {
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($user && password_verify($password, $user['password'])) {
+        session_regenerate_id(true);
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['user_name'] = $user['name'];
         $_SESSION['is_admin'] = $user['is_admin'];
@@ -61,20 +54,4 @@ function isAdmin() {
 function logoutUser() {
     session_unset();
     session_destroy();
-}
-
-// Ensure tables exist when this file is included
-ensureTablesExist();
-
-function ensureTablesExist() {
-    $db = getDatabaseConnection();
-    $db->exec("CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        is_admin INTEGER DEFAULT 0,
-        profile_image TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )");
 }

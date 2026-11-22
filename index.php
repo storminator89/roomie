@@ -1,5 +1,4 @@
 <?php
-session_start();
 require_once 'auth.php';
 
 if (!isLoggedIn()) {
@@ -10,8 +9,7 @@ if (!isLoggedIn()) {
 $user_name = $_SESSION['user_name'] ?? 'Benutzer';
 
 try {
-    $db = new PDO('sqlite:roomie.db');
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db = getDatabaseConnection();
 } catch (PDOException $e) {
     echo "Connection failed: " . $e->getMessage();
     exit;

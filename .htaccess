@@ -1,0 +1,4 @@
+Options -Indexes
+<FilesMatch "(?i)^(?:\..*|init_db\.php|database\.php|.*\.(?:db|sqlite|sqlite3)(?:[-.].*)?)$">
+    Require all denied
+</FilesMatch>

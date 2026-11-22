@@ -18,8 +18,7 @@ $year = $_GET['year'];
 $month = $_GET['month'];
 
 try {
-    $db = new PDO('sqlite:roomie.db');
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db = getDatabaseConnection();
     $stmt = $db->prepare("SELECT date FROM bookings WHERE strftime('%Y', date) = :year AND strftime('%m', date) = :month AND room_id = :room_id");
     $stmt->execute(['year' => $year, 'month' => sprintf('%02d', $month), 'room_id' => $roomId]);
     $bookedDates = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);

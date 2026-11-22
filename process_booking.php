@@ -12,8 +12,7 @@ header('Content-Type: application/json');
 date_default_timezone_set('Europe/Berlin');
 
 try {
-    $db = new PDO('sqlite:roomie.db');
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db = getDatabaseConnection();
 } catch (PDOException $e) {
     echo json_encode(['success' => false, 'error' => "Connection failed: " . $e->getMessage()]);
     exit;
