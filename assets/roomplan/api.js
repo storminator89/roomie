@@ -42,6 +42,7 @@ export function normalizeRoomplan(response, availableFavorites = []) {
             type: String(raw.type ?? ''),
             capacity: Math.max(0, Math.min(500, Number.parseInt(raw.capacity, 10) || 0)),
             canBook: raw.can_book !== false,
+            requiresApproval: raw.requires_approval === true,
             amenities: decodeList(raw.equipment).filter(v => typeof v === 'string').slice(0, 32),
             position
         });
@@ -154,7 +155,7 @@ export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
             const payload = await request('update_favorite.php', {body: new URLSearchParams({favorite_room_id: roomId})});
             return payload.is_favorite === true;
         },
-        async book({roomId, date, period, startTime, endTime}) {
+        async book({roomId, date, period, startTime, endTime, approvalRequest = false}) {
             const custom = period === 'individuell';
             if (!positiveId(roomId) || !DAYS.test(date) || (!custom && !PERIODS.includes(period))) {
                 throw new Error('Bitte Raum, Datum und Zeitspanne prüfen.');
@@ -169,8 +170,9 @@ export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
                 body.set('start_time', startTime);
                 body.set('end_time', endTime);
             }
+            if (approvalRequest) body.set('approval_request', '1');
             const payload = await request('process_booking.php', {body});
-            return {message: payload.message};
+            return {message: payload.message, ...(payload.pending === true ? {pending: true} : {})};
         },
         async saveLayout(layout) {
             // Never downgrade a new editor session to an unlocked legacy write.

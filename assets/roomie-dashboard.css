@@ -26,6 +26,7 @@
   display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%,9.5rem),1fr)); gap:.6rem;
 }
 .rm-dash-form-fields :is(input,select) { width:100%; min-width:0; font:inherit; color:inherit; background:var(--roomplan-surface); }
+.rm-dash-form-fields input[readonly] { color:var(--roomplan-muted); background:#f2f4f5; }
 .rm-dash-form-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; margin-top:.75rem; }
 .rm-dash-feedback { margin:0; color:var(--roomplan-muted); }
 .rm-dash-feedback:empty { display:none; }

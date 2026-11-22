@@ -407,6 +407,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   const dialogTitle = el('h2', '', 'Raum buchen');
   dialogTitle.id = 'rp-book-title';
   const dialogDate = el('p', 'rp-dialog-date');
+  const approvalNote = el('p', 'roomplan-muted', 'Der Raum ist erst nach Freigabe gebucht.');
   const roomForm = el('form', 'rp-book-form');
   const periodLegend = el('legend', '', 'Zeitraum');
   const choices = el('fieldset', 'rp-periods');
@@ -420,7 +421,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   submit.type = 'submit';
   actions.append(close, submit);
   roomForm.append(choices, feedback, actions);
-  dialog.append(dialogTitle, dialogDate, roomForm);
+  dialog.append(dialogTitle, dialogDate, approvalNote, roomForm);
   view.append(dialog);
   let selectedBooking = null;
   let bookPending = false;
@@ -436,7 +437,9 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     const { booked, presets, custom } = availability;
     trigger = opener;
     selectedBooking = { room, date: dateInput.value, booked };
-    dialogTitle.textContent = room.name + ' buchen';
+    dialogTitle.textContent = room.name + (room.requiresApproval ? ' anfragen' : ' buchen');
+    submit.textContent = room.requiresApproval ? 'Anfrage senden' : 'Buchen';
+    approvalNote.hidden = !room.requiresApproval;
     dialogDate.textContent = dateLabel(selectedBooking.date);
     feedback.textContent = '';
     choices.replaceChildren(periodLegend);
@@ -497,15 +500,23 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     submit.disabled = true;
     close.disabled = true;
     choices.disabled = true;
-    feedback.textContent = 'Buchung wird gespeichert …';
+    feedback.textContent = attempted.room.requiresApproval ? 'Anfrage wird gesendet …' : 'Buchung wird gespeichert …';
     try {
       const result = await api.book({
         roomId: attempted.room.id, date: attempted.date, period,
+        ...(attempted.room.requiresApproval ? { approvalRequest: true } : {}),
         ...(custom ? { startTime, endTime } : {}),
       });
       dialog.close();
-      status(result.message || 'Buchung gespeichert.');
-      await loadBookings({ announce: false, focusRoom: attempted.room.id });
+      if (result.pending) {
+        status(result.message || 'Anfrage gesendet. Der Raum ist noch nicht gebucht.');
+        const requests = el('a', 'rp-request-link', 'Meine Anfragen');
+        requests.href = 'bookings.php#rb-booking-requests';
+        notice.append(document.createTextNode(' '), requests);
+      } else {
+        status(result.message || 'Buchung gespeichert.');
+        await loadBookings({ announce: false, focusRoom: attempted.room.id });
+      }
     } catch (error) {
       feedback.textContent = error.message || 'Buchung war nicht möglich.';
     } finally {
@@ -525,7 +536,8 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     const ready = bookingStatus === 'ready';
     return {
       booked,
-      presets: ready ? availablePeriods(room.capacity, booked) : [],
+      presets: ready ? availablePeriods(room.capacity, booked).filter(([, , from]) =>
+        !room.requiresApproval || bookingWindowInFuture(dateInput.value, from, now)) : [],
       custom: ready && dateIsBookable() ? firstFreeBookingWindow(room.capacity, booked, dateInput.value, now) : null,
     };
   }
@@ -549,6 +561,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     box.append(header);
     const badges = el('div', 'rp-room-badges');
     badges.append(el('span', 'rp-badge', room.capacity === 1 ? '1 Platz' : `${room.capacity} Plätze`));
+    if (room.requiresApproval) badges.append(el('span', 'rp-badge rp-badge-approval', 'Freigabe nötig'));
     const badgesToShow = new Set([...selectedEquipment, ...normalizeAmenities(room.amenities)]);
     for (const key of [...badgesToShow].slice(0, Math.max(3, selectedEquipment.length))) {
       badges.append(el('span', 'rp-badge', amenities.get(key)));
@@ -590,9 +603,9 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     const details = el('a', secondaryButton, 'Details');
     details.href = detailsUrl(room, dateInput.value, preferredRange(), onlyFree);
     details.setAttribute('aria-label', `Details zu ${room.name}`);
-    const book = button('Buchen', 'roomplan-action rp-button rp-button-primary');
+    const book = button(room.requiresApproval ? 'Anfragen' : 'Buchen', 'roomplan-action rp-button rp-button-primary');
     book.dataset.bookRoomId = String(room.id);
-    book.setAttribute('aria-label', `${room.name} buchen`);
+    book.setAttribute('aria-label', `${room.name}${room.requiresApproval ? ' anfragen' : ' buchen'}`);
     book.disabled = !available || room.canBook === false || !dateIsBookable();
     book.addEventListener('click', () => openBooking(room, availability, book));
     footer.append(details, book);

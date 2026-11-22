@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/room_admin_input.php';
+require_once __DIR__ . '/booking_approvals.php';
 
 $data = roomieAdminJson();
 $id = roomieRoomId($data['roomId'] ?? null);
@@ -11,6 +12,9 @@ roomieAdminWrite(static function (PDO $db) use ($id): array {
         throw new DomainException('Ein Raum mit Buchungshistorie kann nicht gelöscht werden.', 409);
     }
     $reserved->closeCursor();
+    if (roomieRoomHasOpenBookingRequests($db, $id)) {
+        throw new DomainException('Ein Raum mit offenen Buchungsanfragen kann nicht gelöscht werden.', 409);
+    }
     foreach (['user_favorites', 'permissions', 'seats'] as $table) {
         $db->prepare("DELETE FROM $table WHERE room_id = ?")->execute([$id]);
     }

@@ -52,7 +52,7 @@ import { bookingWindowInFuture, periodCanBeBooked, validBookingWindow } from '..
     pending = true;
     submit.disabled = true;
     periods.disabled = true;
-    tell('Buchung wird gespeichert …');
+    tell(form.dataset.requiresApproval === '1' ? 'Anfrage wird gesendet …' : 'Buchung wird gespeichert …');
     try {
       const response = await fetch(form.action, {
         method: 'POST', body, credentials: 'same-origin', redirect: 'error', cache: 'no-store',
@@ -64,7 +64,10 @@ import { bookingWindowInFuture, periodCanBeBooked, validBookingWindow } from '..
         throw new Error(typeof message === 'string' ? message : 'Buchung fehlgeschlagen.');
       }
       booked = true;
-      tell(typeof result.message === 'string' ? result.message : 'Buchung gespeichert.');
+      const requested = result.pending === true;
+      tell(typeof result.message === 'string' ? result.message : requested ? 'Anfrage gesendet. Der Raum ist noch nicht gebucht.' : 'Buchung gespeichert.');
+      for (const link of bookings.querySelectorAll('[data-confirmed-only]')) link.hidden = requested;
+      for (const link of bookings.querySelectorAll('[data-pending-only]')) link.hidden = !requested;
       bookings.hidden = false;
       form.hidden = true;
       feedback.focus();

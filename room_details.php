@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_helpers.php';
 require_once __DIR__ . '/room_blocks.php';
+require_once __DIR__ . '/booking_approvals.php';
 
 if (!isLoggedIn()) {
     header("Location: login.php");
@@ -32,6 +33,7 @@ try {
         http_response_code(404);
         exit('Raum nicht gefunden.');
     }
+    $requiresApproval = roomieRoomRequiresApproval($db, $room_id);
     // An administrator may inspect a restricted room, but booking still needs its grant.
     $canBookRoom = true;
     if ($admin && in_array($room['type'], ROOMIE_RESTRICTED_ROOM_TYPES, true)) {
@@ -111,6 +113,7 @@ $firstPeriod = null;
 foreach ($periods as $key => &$period) {
     $blocked = roomieRoomBlockOverlaps($roomBlocks, $period[1], $period[2]);
     $period[] = $canBookRoom && $canBookDate && !$blocked
+        && (!$requiresApproval || $parsedDate->modify($period[1]) > $now)
         && roomieBookingConflict($bookings, $capacity, $userId, $period[1], $period[2]) === null;
     $period[] = $blocked;
     if ($period[3] && $firstPeriod === null) $firstPeriod = $key;
@@ -201,6 +204,7 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
             <?php if ((string) ($room['number'] ?? '') !== '') : ?><span>Nr. <?= detailEscape((string) $room['number']) ?></span><?php endif; ?>
             <span><?= detailEscape(getRoomTypeName($room['type'])) ?></span>
             <span><?= $capacity === 1 ? '1 Platz' : $capacity . ' Plätze' ?></span>
+            <?php if ($requiresApproval) : ?><span class="rb-request-status rb-request-pending">Freigabe nötig</span><?php endif; ?>
         </div>
     </header>
     <?php if ($equipment) : ?>
@@ -219,6 +223,20 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
         <?php if ($next) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $next->format('Y-m-d'), $detailContext)) ?>" aria-label="Nächster Tag">→</a><?php endif; ?>
         <?php if ($admin) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape($blocksAdminUrl) ?>">Sperrzeiten</a><?php endif; ?>
     </form>
+    <?php if ($admin) : ?>
+    <form id="rb-room-approval" class="rb-filter" method="post" action="booking_request_action.php">
+        <input type="hidden" name="csrf_token" value="<?= detailEscape(csrfToken()) ?>">
+        <input type="hidden" name="action" value="policy">
+        <input type="hidden" name="room_id" value="<?= $room_id ?>">
+        <input type="hidden" name="date" value="<?= detailEscape($selected_date) ?>">
+        <input type="hidden" name="required" value="<?= $requiresApproval ? '0' : '1' ?>">
+        <button type="submit" class="roomplan-action roomplan-action-secondary rb-approval-toggle"
+                aria-pressed="<?= $requiresApproval ? 'true' : 'false' ?>">Freigabe erforderlich</button>
+        <?php if (($_GET['approval'] ?? null) === ($requiresApproval ? '1' : '0')) : ?>
+            <p class="rb-empty" role="status">Freigabe <?= $requiresApproval ? 'aktiviert' : 'deaktiviert' ?>.</p>
+        <?php endif; ?>
+    </form>
+    <?php endif; ?>
     <div class="rb-room-columns">
         <section class="roomplan-panel rb-room-panel">
             <h2>Belegung · <time datetime="<?= detailEscape($selected_date) ?>"><?= detailEscape($parsedDate->format('d.m.Y')) ?></time></h2>
@@ -234,16 +252,17 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
             <?php endif; ?>
         </section>
         <section class="roomplan-panel rb-room-panel">
-            <h2>Raum buchen</h2>
+            <h2><?= $requiresApproval ? 'Raum anfragen' : 'Raum buchen' ?></h2>
             <?php if (!$canBookRoom) : ?><p class="rb-empty">Für diesen Raum fehlt dir die Buchungsberechtigung.</p>
             <?php elseif (!$canBookDate) : ?><p class="rb-empty">Für dieses Datum nicht buchbar.</p>
             <?php elseif ($firstPeriod === null) : ?><p class="rb-empty">Kein buchbarer Zeitraum.</p>
             <?php else : ?>
-            <form id="rb-room-book" method="post" action="process_booking.php" hidden>
+            <form id="rb-room-book" method="post" action="process_booking.php" data-requires-approval="<?= $requiresApproval ? '1' : '0' ?>" hidden>
                 <input type="hidden" name="csrf_token" value="<?= detailEscape(csrfToken()) ?>">
                 <input type="hidden" name="selectedWorkspace" value="<?= $room_id ?>">
                 <input type="hidden" name="start_date" value="<?= detailEscape($selected_date) ?>">
                 <input type="hidden" name="end_date" value="<?= detailEscape($selected_date) ?>">
+                <?php if ($requiresApproval) : ?><input type="hidden" name="approval_request" value="1"><?php endif; ?>
                 <fieldset class="rb-periods">
                     <legend>Zeit wählen</legend>
                     <?php foreach ($periods as $id => [$title, $start, $end, $available, $blocked]) : ?>
@@ -275,16 +294,18 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
                     </div>
                     <?php endif; ?>
                 </fieldset>
-                <button type="submit" class="roomplan-action">Buchen</button>
+                <?php if ($requiresApproval) : ?><p class="rb-empty">Der Raum ist erst nach Freigabe gebucht.</p><?php endif; ?>
+                <button type="submit" class="roomplan-action"><?= $requiresApproval ? 'Anfrage senden' : 'Buchen' ?></button>
             </form>
             <p id="rb-room-feedback" class="rb-notice" role="status" tabindex="-1" hidden></p>
             <div id="rb-room-bookings" class="rb-segments" hidden>
-                <a href="bookings.php?date=<?= rawurlencode($selected_date) ?>">Zu meinen Buchungen</a>
-                <a href="<?= detailEscape(detailUrl($room_id, $selected_date, $detailContext)) ?>">Belegung aktualisieren</a>
+                <a href="bookings.php?date=<?= rawurlencode($selected_date) ?>" data-confirmed-only>Zu meinen Buchungen</a>
+                <a href="<?= detailEscape(detailUrl($room_id, $selected_date, $detailContext)) ?>" data-confirmed-only>Belegung aktualisieren</a>
+                <a href="bookings.php#rb-booking-requests" data-pending-only hidden>Zu meinen Anfragen</a>
             </div>
             <noscript><a class="rb-inline-link" href="<?= detailEscape($planUrl) ?>">Im Raumplan buchen</a></noscript>
             <?php endif; ?>
-            <?php if ($canBookRoom && $canBookDate) : ?>
+            <?php if ($canBookRoom && $canBookDate && !$requiresApproval) : ?>
                 <a class="roomplan-action roomplan-action-secondary rb-series-link" href="<?= detailEscape($seriesUrl) ?>">Wöchentlich buchen</a>
             <?php endif; ?>
         </section>

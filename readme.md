@@ -149,6 +149,25 @@ Do not roll back to older application code while room closures are active:
 older booking paths do not enforce them. Fresh installs create the table
 through `init_db.php`.
 
+### Optional room booking approval
+
+Room bookings are instant by default. For an individual room, an admin can
+enable **Freigabe nötig** in the room details. People then request a single
+appointment and track its status under **Meine Buchungen**. A pending request
+does not hold a place or create a calendar entry. Existing bookings are kept.
+
+An administrator can approve or decline from the request list. Roomie checks
+the user's current room access, the time, any closure, and the remaining
+capacity when approving. Only approval creates the actual booking. Until then
+the requester can withdraw it. Recurring or multi-day bookings and moves for
+approval-only rooms are not supported. The app sends no email for these
+request or approval actions.
+
+For existing installations, back up SQLite before running the additive CLI
+`php schema_hardening.php` with the usual private database configuration.
+Fresh installations create the tables through `init_db.php`. Do not roll
+back to code without approval enforcement while any room requires it.
+
 ## PHP 8.6 runtime
 
 The deployment target is PHP **8.6.x** (`.php-version`). Select it separately

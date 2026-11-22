@@ -2,6 +2,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_calendar.php';
 require_once __DIR__ . '/room_blocks.php';
+require_once __DIR__ . '/booking_approvals.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: private, no-store');
@@ -24,6 +25,7 @@ $roomId = roomiePositiveId($_POST['selectedWorkspace'] ?? null);
 $today = roomieBookingToday();
 $horizon = $today->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days');
 $timePeriod = $_POST['time_period'] ?? null;
+$approvalIntent = $_POST['approval_request'] ?? null;
 $periods = [
     'ganzerTag' => [ROOMIE_BOOKING_OPEN_TIME, ROOMIE_BOOKING_CLOSE_TIME],
     'vormittags' => [ROOMIE_BOOKING_OPEN_TIME, '12:00'],
@@ -41,6 +43,10 @@ if ($startDate < $today || $endDate > $horizon) {
 }
 if ($roomId === null) {
     bookingError('Ungültiger Raum.');
+    exit;
+}
+if ($approvalIntent !== null && $approvalIntent !== '1' && $approvalIntent !== '0') {
+    roomieBookingJson(['success' => false, 'error' => 'Ungültige Buchungsaktion.'], 400);
     exit;
 }
 if ($custom) {
@@ -64,7 +70,9 @@ $userId = (int) $_SESSION['user_id'];
 $db = getDatabaseConnection();
 $transactionOpen = false;
 $bookings = [];
+$requestId = null;
 $rejection = null;
+$rejectionStatus = 200;
 
 try {
     $db->exec('PRAGMA busy_timeout = 5000');
@@ -105,6 +113,24 @@ try {
     }
 
     if ($rejection === null) {
+        $approvalRequired = roomieRoomRequiresApproval($db, $roomId);
+        if ($approvalIntent === '1' && !$approvalRequired) {
+            $rejection = 'Die Freigabeeinstellung für diesen Raum wurde geändert. Bitte lade die Raumansicht neu.';
+            $rejectionStatus = 409;
+        } elseif ($approvalRequired) {
+            if ($startDate != $endDate) {
+                $rejection = 'Für diesen Raum sind nur Anfragen für einzelne Termine möglich.';
+            } else {
+                try {
+                    $requestId = roomieSubmitBookingRequest($db, $userId, $roomId, $startDate->format('Y-m-d'), $startTime, $endTime);
+                } catch (DomainException $error) {
+                    $rejection = $error->getMessage();
+                }
+            }
+        }
+    }
+
+    if ($rejection === null && $requestId === null) {
         $recipient = $db->prepare('SELECT name, email FROM users WHERE id = ?');
         $recipient->execute([$userId]);
         $user = $recipient->fetch(PDO::FETCH_ASSOC);
@@ -114,7 +140,7 @@ try {
         }
     }
 
-    if ($rejection === null) {
+    if ($rejection === null && $requestId === null) {
         $quota = $db->prepare('SELECT COUNT(*) FROM bookings WHERE user_id = :uid AND date >= :today');
         $quota->execute(['uid' => $userId, 'today' => $today->format('Y-m-d')]);
         $requestedDays = 1 + $startDate->diff($endDate)->days;
@@ -124,7 +150,7 @@ try {
         $quota->closeCursor();
     }
 
-    if ($rejection === null) {
+    if ($rejection === null && $requestId === null) {
         // The indexed prefilter can include an extra touching row with seconds;
         // the shared conflict check compares the full timestamps.
         $checkBookings = $db->prepare(
@@ -184,7 +210,13 @@ try {
     exit;
 }
 if ($rejection !== null) {
+    http_response_code($rejectionStatus);
     bookingError($rejection);
+    exit;
+}
+if ($requestId !== null) {
+    roomieBookingJson(['success' => true, 'pending' => true, 'status' => 'pending', 'request_id' => $requestId,
+        'message' => 'Anfrage gesendet. Der Raum ist noch nicht gebucht.']);
     exit;
 }
 

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/room_access.php';
 require_once __DIR__ . '/room_blocks.php';
+require_once __DIR__ . '/booking_approvals.php';
 
 const ROOMIE_SERIES_MIN = 2;
 const ROOMIE_SERIES_MAX = 12;
@@ -58,6 +59,9 @@ function roomieSeriesInspect(PDO $db, int $userId, array $plan, DateTimeImmutabl
     $room = roomieVisibleRoom($db, $plan['roomId'], $userId, false);
     if ($room === null) {
         throw new RoomieSeriesRejected('Dieser Raum steht dir nicht zur Buchung zur Verfügung.', 403);
+    }
+    if (roomieRoomRequiresApproval($db, $plan['roomId'])) {
+        throw new RoomieSeriesRejected('Dieser Raum braucht eine Freigabe. Es sind nur Anfragen für einzelne Termine möglich.', 409);
     }
     $check = $db->prepare('SELECT user_id, start_time, end_time FROM bookings
         WHERE room_id = ? AND date = ? AND start_time < ? AND end_time > ?');

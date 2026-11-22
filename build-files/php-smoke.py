@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import shlex
 import signal
 import sqlite3
 import struct
@@ -861,12 +862,14 @@ def smoke_series(command, root, env, date, guest, admin, admin_status, user, use
 
 
 def smoke_room_block_upgrade(command, root, env, scratch):
-    existing = scratch / "pre-block-upgrade.sqlite"
+    existing = scratch / "pre-booking-upgrade.sqlite"
+    new_tables = ("room_blocks", "booking_requests", "room_booking_approval_policies")
     with closing(sqlite3.connect(env["ROOMIE_DB_PATH"])) as source, closing(sqlite3.connect(existing)) as copy:
-        expect(source.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='room_blocks'").fetchone(),
-               "Fresh setup must install the maintenance table")
+        expect(all(source.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+                   for table in new_tables), "Fresh setup must install the maintenance and approvals tables")
         source.backup(copy)
-        copy.execute("DROP TABLE room_blocks")
+        for table in new_tables:
+            copy.execute(f"DROP TABLE {table}")
         copy.execute("""INSERT INTO bookings (user_id, room_id, date, start_time, end_time)
             VALUES ((SELECT MIN(id) FROM users), (SELECT MIN(id) FROM rooms), '2030-06-17', '10:00:00', '11:00:00')""")
         copy.commit()
@@ -876,11 +879,12 @@ def smoke_room_block_upgrade(command, root, env, scratch):
     for _ in range(2):
         run(command + [str(root / "schema_hardening.php")], root, dict(env, ROOMIE_DB_PATH=str(existing)))
     with closing(sqlite3.connect(existing)) as db:
-        expect(db.execute("SELECT COUNT(*) FROM room_blocks").fetchone()[0] == 0, "Upgrade creates an empty block table")
+        expect(all(db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0 for table in new_tables),
+               "Upgrade creates empty maintenance and approval tables without enabling any room policy")
         expect(db.execute("PRAGMA foreign_key_check").fetchall() == [], "Upgrade must preserve referential integrity")
         expect(before == {table: db.execute(f"SELECT * FROM {table} ORDER BY id").fetchall() for table in before},
                "Reapplying the additive upgrade must preserve users, rooms and their bookings exactly")
-    print("Room blocks schema: fresh installation, additive existing upgrade and safe repeat passed", flush=True)
+    print("Booking schema: fresh installation, additive upgrade with approval default off and safe repeat passed", flush=True)
 
 
 def smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, concurrent):
@@ -1021,6 +1025,252 @@ def smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, 
           + ("; concurrent block vs booking passed" if concurrent else ""), flush=True)
 
 
+def smoke_booking_approvals(env, scratch, date, guest, admin, admin_status, concurrent):
+    db_path = env["ROOMIE_DB_PATH"]
+    admin_token = admin_status["csrf_token"]
+    action_path = "booking_request_action.php"
+    queue_path = "admin_booking_requests.php"
+    now = dt.datetime.now(ZoneInfo("Europe/Berlin")).date()
+    next_date = (dt.date.fromisoformat(date) + dt.timedelta(days=1)).isoformat()
+    mail_capture = scratch / "mail-capture.txt"
+
+    def outbox_size():
+        return mail_capture.stat().st_size if mail_capture.exists() else 0
+
+    with closing(sqlite3.connect(db_path)) as db, db:
+        ids = {}
+        for label, name in (("owner", "Roomie Approval Owner"), ("peer", "Roomie Approval Peer")):
+            ids[label] = db.execute("""
+                INSERT INTO users (name, email, password, is_admin)
+                SELECT ?, ?, password, 0 FROM users WHERE email = 'smoke-user@example.test'
+            """, (name, f"smoke-approval-{label}@example.test")).lastrowid
+        rooms = {}
+        for label, capacity, kind, required in (
+            ("Default", 1, "office", False), ("Queue", 1, "meeting", True),
+            ("Restricted", 1, "fk-office", True), ("Block after request", 1, "office", True),
+            ("Expired", 1, "office", True), ("Horizon", 1, "office", True),
+            ("Race", 1, "office", True), ("Stale series", 1, "office", False),
+            ("Move", 1, "office", True), ("Toggle", 1, "office", False),
+        ):
+            room = db.execute("INSERT INTO rooms (name, type, capacity) VALUES (?, ?, ?)",
+                              (f"QA Approval {label}", kind, capacity)).lastrowid
+            rooms[label] = room
+            if required:
+                db.execute("INSERT INTO room_booking_approval_policies (room_id) VALUES (?)", (room,))
+        db.execute("INSERT INTO permissions (user_id, room_id) VALUES (?, ?)", (ids["owner"], rooms["Restricted"]))
+        move_id = db.execute("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, '15:00', '16:00')",
+                             (ids["owner"], rooms["Move"], date)).lastrowid
+
+    owner, peer = Client(admin.base_url), Client(admin.base_url)
+    owner_status = owner.login("smoke-approval-owner@example.test", env["ROOMIE_SMOKE_PASSWORD"])
+    peer_status = peer.login("smoke-approval-peer@example.test", env["ROOMIE_SMOKE_PASSWORD"])
+    owner_token, peer_token = owner_status["csrf_token"], peer_status["csrf_token"]
+
+    def request_booking(room, *, actor=owner, token=owner_token, day=date, end_day=None,
+                        start="10:15", end="10:45", period="individuell", intent=None, expected=200):
+        fields = {"csrf_token": token, "selectedWorkspace": room, "start_date": day, "end_date": end_day or day,
+                  "time_period": period, "start_time": start, "end_time": end}
+        if intent is not None:
+            fields["approval_request"] = intent
+        code, _, data = actor.request("process_booking.php", fields)
+        expect(code == expected, f"Booking path should answer HTTP {expected}, got {code}")
+        return json.loads(data)
+
+    def pending(room, *, actor=owner, token=owner_token, window=("10:15", "10:45")):
+        result = request_booking(room, actor=actor, token=token, start=window[0], end=window[1])
+        expect(result.get("success") is True and result.get("pending") is True and result.get("status") == "pending"
+               and int(result.get("request_id") or 0) > 0, f"Protected room creates a request, not a booking: {result}")
+        return int(result["request_id"])
+
+    def snapshot(request_id):
+        with closing(sqlite3.connect(db_path)) as db:
+            return db.execute("SELECT date, start_time, end_time, status, booking_id FROM booking_requests WHERE id = ?",
+                              (request_id,)).fetchone()
+
+    def schedule(room):
+        with closing(sqlite3.connect(db_path)) as db:
+            return db.execute("SELECT id, user_id, date, start_time, end_time FROM bookings WHERE room_id = ? ORDER BY id", (room,)).fetchall()
+
+    def decide(request_id, operation="approve", *, actor=admin, token=admin_token):
+        code, headers, _ = actor.request(action_path, {"csrf_token": token, "request_id": request_id, "action": operation})
+        if code == 303 and actor is not guest:
+            expected = "bookings.php?request=cancelled" if operation == "cancel" else f"{queue_path}?request={operation}d"
+            expect(headers.get("Location") == expected, f"{operation} should redirect to {expected}, got {headers.get('Location')}")
+        return code
+
+    def policy(room, required, *, actor=admin, token=admin_token):
+        code, headers, _ = actor.request(action_path, {"csrf_token": token, "action": "policy", "room_id": room,
+            "date": date, "required": required})
+        if code == 303:
+            to = urlsplit(headers.get("Location", ""))
+            expect(to.path == "room_details.php" and parse_qs(to.query).get("approval") == [str(required)],
+                   "Policy changes must return to the room and confirm the new flag")
+        return code
+
+    expect(guest.request(queue_path)[0] in (302, 303, 401, 403), "Unauthenticated visitors cannot access the queue")
+    expect(owner.request(queue_path)[0] == 403, "Member cannot access the administrator queue")
+    default = request_booking(rooms["Default"], actor=peer, token=peer_token)
+    expect(default.get("success") is True and default.get("pending") is not True and len(schedule(rooms["Default"])) == 1,
+           "Approval is disabled by default; the existing direct booking flow must still work")
+    if concurrent:
+        expect(outbox_size() > 0 and b"To: smoke-approval-peer@example.test" in mail_capture.read_bytes(),
+               "Transport stub must observe the regular confirmation so checking pending sends is meaningful")
+    mail_before = outbox_size()
+
+    queue = rooms["Queue"]
+    code, _, raw = owner.request("load_grid.php")
+    map_rooms = {entry["id"]: entry for entry in json.loads(raw)["data"]["rooms"]}
+    expect(code == 200 and map_rooms[queue].get("requires_approval") is True
+           and map_rooms[rooms["Default"]].get("requires_approval") is False,
+           "Map must distinguish request-only rooms from default direct-booking rooms")
+    code, _, html = owner.request(f"room_details.php?id={queue}&date={date}")
+    expect(code == 200 and "Anfrage senden" in html, "Protected room booking must explain it is only an approval request")
+    req = pending(queue)
+    duplicate = request_booking(queue)
+    expect((duplicate.get("success") is False or int(duplicate.get("request_id") or 0) == req),
+           "Repeating the same pending request cannot create a distinct booking request")
+    with closing(sqlite3.connect(db_path)) as db:
+        expect(db.execute("SELECT COUNT(*) FROM booking_requests WHERE room_id = ? AND user_id = ?", (queue, ids["owner"])).fetchone()[0] == 1,
+               "Duplicate submission must persist just one pending request")
+    other = pending(queue, actor=peer, token=peer_token)
+    expect(schedule(queue) == [] and snapshot(req)[3:] == ("pending", None) and snapshot(other)[3:] == ("pending", None),
+           "Two pending requests for a one-place room must not reserve that place")
+    code, _, raw = owner.request("get_bookings.php?" + urlencode({"room_id": queue, "start_date": date, "include_blocks": 1}))
+    expect(code == 200 and json.loads(raw) == [], "Pending requests are not exposed as occupancy")
+    expect(owner.request(f"bookings.php?download=calendar&booking_id={req}")[0] == 404,
+           "A pending request cannot be exported as a calendar booking")
+    code, _, html = owner.request("bookings.php")
+    request_section = html.split('id="rb-booking-requests"', 1)[-1].split("</section>", 1)[0]
+    expect(code == 200 and 'id="rb-booking-requests"' in html and "QA Approval Queue" in request_section
+           and "Ausstehend" in request_section and "Anfrage zurückziehen" in request_section and "Roomie Approval Peer" not in html
+           and "download=calendar" not in request_section and "Bestätigung erneut senden" not in request_section,
+           "Owner sees only own pending requests, with withdraw but no calendar or email action")
+    code, _, html = admin.request(queue_path)
+    expect(code == 200 and all(value in html for value in ("Roomie Approval Owner", "Roomie Approval Peer", "Genehmigen", "Ablehnen")),
+           "Admin review queue displays pending requests and explicit decisions")
+    expect(outbox_size() == mail_before, "Pending creation, deduplication and queue/availability reads must not send email")
+    expect(decide(req, actor=owner, token=owner_token) == 403, "Requestor cannot approve their own request")
+    expect(decide(req, actor=guest, token="") in (302, 303, 401, 403), "Guest cannot approve a request")
+    expect(decide(req, token="") == 403, "Approval must require CSRF")
+    expect(decide(req, operation="cancel", actor=peer, token=peer_token) == 404, "Peers cannot withdraw others' requests")
+    expect(decide(req, operation="cancel", actor=owner, token="") == 403, "Withdrawal must require CSRF")
+    expect(decide(req, operation="cancel", actor=owner, token=owner_token) == 303 and snapshot(req)[3:] == ("cancelled", None),
+           "Owner can withdraw a pending request without creating a booking")
+    expect(decide(req) == 409 and schedule(queue) == [], "Withdrawn request cannot become a booking")
+    expect(outbox_size() == mail_before, "Withdrawing an unconfirmed request must not send a booking or cancellation email")
+
+    new_req = pending(queue)
+    expect(decide(new_req) == 303 and snapshot(new_req)[3] == "approved", "Admin can approve a still-available request")
+    booked = schedule(queue)
+    expect(len(booked) == 1 and booked[0][0] == snapshot(new_req)[4] and booked[0][1:] == (ids["owner"], date, "10:15", "10:45"),
+           "Approval creates and links exactly one confirmed booking for the original requester")
+    expect(owner.request(f"bookings.php?download=calendar&booking_id={booked[0][0]}")[0] == 200,
+           "The resulting booking, unlike its request, owns the calendar file")
+    expect(decide(new_req) == 409 and decide(other) == 409 and snapshot(other)[3:] == ("pending", None) and schedule(queue) == booked,
+           "Review replay and capacity now taken by another approved request must not duplicate bookings")
+    expect(decide(other, operation="decline") == 303 and snapshot(other)[3:] == ("declined", None) and schedule(queue) == booked,
+           "Decline affects only the request, not the confirmed booking")
+
+    restricted = rooms["Restricted"]
+    req = pending(restricted)
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("DELETE FROM permissions WHERE user_id = ? AND room_id = ?", (ids["owner"], restricted))
+    expect(decide(req) == 403 and snapshot(req)[3:] == ("pending", None) and schedule(restricted) == [],
+           "A stale request cannot be approved after the requester's room grant is revoked")
+    expect(decide(req, operation="cancel", actor=owner, token=owner_token) == 303,
+           "Owner can still withdraw after losing the room grant")
+
+    blocked = rooms["Block after request"]
+    req = pending(blocked)
+    status, _, _ = admin.request("admin_room_blocks.php", {"csrf_token": admin_token, "action": "create", "room_id": blocked,
+        "date": date, "start_time": "10:00", "end_time": "11:00", "kind": "maintenance"})
+    expect(status == 303, "Adding a block after an otherwise valid pending request should succeed")
+    expect(decide(req) == 409 and snapshot(req)[3:] == ("pending", None) and schedule(blocked) == [],
+           "Approval must recheck maintenance added after request submission")
+
+    for room, invalid in ((rooms["Expired"], now - dt.timedelta(days=1)), (rooms["Horizon"], now + dt.timedelta(days=91))):
+        req = pending(room)
+        # Synthetic persisted request ages/out-of-policy dates; never alter the system clock.
+        with closing(sqlite3.connect(db_path)) as db, db:
+            db.execute("UPDATE booking_requests SET date=? WHERE id=?", (invalid.isoformat(), req))
+        expect(decide(req) == 409 and snapshot(req)[3:] == ("pending", None) and schedule(room) == [],
+               "Approval must revalidate a request's live timing and horizon")
+
+    out = request_booking(rooms["Move"], end_day=next_date, period="vormittags")
+    expect(out.get("success") is False, "Protected rooms must reject multi-day booking rather than reserve several days")
+    code, _, _ = owner.request("reschedule_booking.php", {"csrf_token": owner_token, "booking_id": move_id,
+        "original_date": date, "original_start_time": "15:00", "original_end_time": "16:00", "date": date,
+        "start_time": "14:00", "end_time": "15:00"})
+    expect(code == 409 and schedule(rooms["Move"]) == [(move_id, ids["owner"], date, "15:00", "16:00")],
+           "An already-confirmed booking cannot bypass protection by rescheduling")
+
+    def series_preview(room):
+        status, _, html = owner.request("series_booking.php", {"stage": "preview", "room_id": room, "count": 2,
+            "date": date, "start_time": "11:00", "end_time": "12:00", "csrf_token": owner_token})
+        return status, SeriesHTML(html).forms.get("rb-series-book")
+
+    expect(series_preview(queue) == (409, None), "Protected room cannot offer a series commit proof")
+    stale_room = rooms["Stale series"]
+    status, stale = series_preview(stale_room)
+    expect(status == 200 and stale, "Fixture: unprotected room offers a valid series proof")
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("INSERT INTO room_booking_approval_policies (room_id) VALUES (?)", (stale_room,))
+        expect(db.execute("SELECT COUNT(*) FROM booking_requests WHERE room_id = ?", (rooms["Move"],)).fetchone()[0] == 0,
+               "Rejected multi-day and move paths must not create a pending request either")
+    expect(owner.request("series_booking.php", stale)[0] == 409 and not schedule(stale_room),
+           "A preview issued before enabling approval cannot reserve any series date after activation")
+
+    toggle = rooms["Toggle"]
+    expect(policy(toggle, 1, actor=owner, token=owner_token) == 403 and policy(toggle, 1, token="") == 403,
+           "Only administrators with CSRF can turn approval on or off")
+    expect(policy(toggle, 1) == 303, "Admin can enable approval for a room")
+    stale_direct = request_booking(toggle, intent="0")
+    expect(stale_direct.get("pending") is True and schedule(toggle) == [],
+           "An older direct-booking form cannot skip a newly activated room policy")
+    req = int(stale_direct["request_id"])
+    deletion, _, _ = admin.request("delete_room.php", data=json.dumps({"roomId": toggle}).encode(),
+                                  content_type="application/json", csrf=admin_token)
+    expect(deletion == 409 and snapshot(req)[3:] == ("pending", None), "Room deletion cannot discard an open request")
+    expect(policy(toggle, 0) == 409 and snapshot(req)[3:] == ("pending", None) and schedule(toggle) == [],
+           "Turning approval off cannot silently discard or approve unresolved requests")
+    expect(decide(req, operation="cancel", actor=owner, token=owner_token) == 303 and policy(toggle, 0) == 303,
+           "After the last request is resolved, admin can restore direct booking")
+    stale_outbox = outbox_size()
+    stale_request = request_booking(toggle, intent="1", expected=409)
+    expect(stale_request.get("success") is False and schedule(toggle) == [] and stale_outbox == outbox_size(),
+           "An older request-only form must not accidentally create a booking after the policy is turned off")
+    direct = request_booking(toggle)
+    expect(direct.get("success") is True and direct.get("pending") is not True,
+           "Room policy disabled explicitly restores direct booking")
+
+    if concurrent:
+        race = rooms["Race"]
+        first = pending(race)
+        second = pending(race, actor=peer, token=peer_token)
+        other_admin = Client(admin.base_url)
+        other_status = other_admin.login("smoke-admin@example.test", env["ROOMIE_SMOKE_PASSWORD"])
+        barrier = Barrier(2, timeout=5)
+
+        def approve_together(request_id, actor, token):
+            barrier.wait()
+            return decide(request_id, actor=actor, token=token)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            left = pool.submit(approve_together, first, admin, admin_token)
+            right = pool.submit(approve_together, second, other_admin, other_status["csrf_token"])
+            results = left.result(), right.result()
+        active = schedule(race)
+        expect(sorted(results) == [303, 409] and len(active) == 1,
+               "Two independent admin sessions must not approve competing last-place requests")
+        winner, loser = (first, second) if results[0] == 303 else (second, first)
+        expect(snapshot(winner)[3:] == ("approved", active[0][0]) and snapshot(loser)[3:] == ("pending", None),
+               "Approval and booking insert must commit together and leave the losing request unchanged")
+
+    print("Booking approvals: default off, role and CSRF, pending privacy/no ICS or email, dedup, owner withdrawal, "
+          "approve/decline, stale ACL/block/capacity/time/horizon, move/series/multi-day protection passed"
+          + ("; concurrent decisions passed" if concurrent else ""), flush=True)
+
+
 def smoke(php, root, scratch, expected_minor):
     env = {key: value for key, value in os.environ.items()
            if not key.startswith("ROOMIE_") and key != "PHP_CLI_SERVER_WORKERS"}
@@ -1032,7 +1282,16 @@ def smoke(php, root, scratch, expected_minor):
         "ROOMIE_SMOKE_PASSWORD": "FreshTempSmokeOnly!91",
     })
     concurrent = os.name == "posix"
-    server_env = dict(env, PHP_CLI_SERVER_WORKERS="3") if concurrent else env
+    server_env = dict(env)
+    server_args = []
+    if concurrent:
+        # Capture transactional email locally. Never invoke a system MTA or transmit a message.
+        capture = scratch / "capture-mail.sh"
+        capture.write_text('#!/bin/sh\ncat >> "$ROOMIE_SMOKE_MAIL_CAPTURE"\n', encoding="utf-8")
+        capture.chmod(0o700)
+        server_env.update(PHP_CLI_SERVER_WORKERS="3", ROOMIE_MAIL_FROM="smoke-sender@example.test",
+                          ROOMIE_SMOKE_MAIL_CAPTURE=str(scratch / "mail-capture.txt"))
+        server_args += ["-d", f"sendmail_path={shlex.quote(str(capture))}"]
     command = [php] + PHP_TEST_ARGS
     php_code = """
       echo PHP_VERSION, PHP_EOL;
@@ -1081,7 +1340,7 @@ def smoke(php, root, scratch, expected_minor):
         port = reserve.getsockname()[1]
     base_url = f"http://127.0.0.1:{port}/"
     with logfile.open("w", encoding="utf-8") as output:
-        with subprocess.Popen(command + ["-d", f"session.save_path={sessions}", "-S",
+        with subprocess.Popen(command + server_args + ["-d", f"session.save_path={sessions}", "-S",
                               f"127.0.0.1:{port}", "-t", str(root)], cwd=root, env=server_env,
                               stdout=output, stderr=subprocess.STDOUT, start_new_session=concurrent) as server:
             try:
@@ -1190,6 +1449,7 @@ def smoke(php, root, scratch, expected_minor):
                 smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, concurrent)
                 smoke_series(command, root, env, date, guest, admin, admin_status, user, user_status, concurrent)
                 smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, concurrent)
+                smoke_booking_approvals(env, scratch, date, guest, admin, admin_status, concurrent)
             finally:
                 if concurrent:
                     try:

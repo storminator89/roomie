@@ -42,6 +42,10 @@
 .rb-series-free { color:#14532d; background:#dcfce7; }
 .rb-series-busy { color:#831843; background:#fce7f3; }
 .rb-period-blocked { color:#374151; background:#e5e7eb; font-weight:650; }
+.rb-request-status { align-self:center; border-radius:999px; background:#e5e7eb; color:#374151; padding:.2rem .6rem; font-size:.875rem; font-weight:650; }
+.rb-request-pending,.rb-tags .rb-request-pending { color:#694409; background:#fff2c6; }
+.rb-approval-toggle[aria-pressed="true"] { border-color:#946700; background:#fff3d1; }
+#rb-room-approval { align-items:center; }
 .rb-periods { display:grid; gap:.35rem; border:0; padding:0; margin:0; }
 .rb-periods legend { font-weight:650; margin-bottom:.2rem; }
 .rb-periods > label { display:flex; gap:.5rem; align-items:center; min-height:44px; }

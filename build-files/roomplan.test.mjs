@@ -102,3 +102,21 @@ test('planner requests maintenance rows explicitly without changing the legacy b
     }});
     assert.deepEqual(await api.loadBookings(closure.date), [closure]);
 });
+
+
+test('planner preserves request-only policy, explicit intent, and pending receipt', async () => {
+    const {rooms} = normalizeRoomplan({rooms: [
+        {id: 2, name: 'Request only', requires_approval: true}, {id: 3, name: 'Direct'},
+    ]});
+    assert.deepEqual(rooms.map(room => room.requiresApproval), [true, false]);
+    const api = createRoomplanApi({fetcher: async (_path, {body}) => {
+        assert.equal(body.get('approval_request'), '1');
+        assert.equal(body.get('start_date'), body.get('end_date'));
+        return {ok: true, status: 200, json: async () => ({
+            success: true, pending: true, status: 'pending', message: 'Anfrage gesendet.', request_id: 7,
+        })};
+    }});
+    assert.deepEqual(await api.book({roomId: 2, date: '2026-11-23', period: 'vormittags', approvalRequest: true}), {
+        message: 'Anfrage gesendet.', pending: true,
+    });
+});

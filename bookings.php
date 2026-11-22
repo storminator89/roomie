@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_calendar.php';
+require_once __DIR__ . '/booking_approvals.php';
 
 header('Cache-Control: private, no-store');
 if (!isLoggedIn()) {
@@ -21,6 +22,8 @@ if (($_GET['cancelled'] ?? '') === '1') {
     $successMessage = 'Buchung verschoben.';
 } elseif (($_GET['series'] ?? '') === '1') {
     $successMessage = 'Buchungsserie gespeichert.';
+} elseif (($_GET['request'] ?? '') === 'cancelled') {
+    $successMessage = 'Anfrage zurückgezogen.';
 }
 
 function findOwnBooking(PDO $db, int $userId, int $bookingId): ?array
@@ -96,12 +99,21 @@ $today = $now->setTime(0, 0);
 $todayKey = $today->format('Y-m-d');
 $lastDate = $today->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days')->format('Y-m-d');
 $bookings = [];
+$ownRequests = [];
+$approvalRooms = [];
 $hasNext = false;
 
 try {
     $db = getDatabaseConnection();
+    $approvalRooms = array_fill_keys(roomieApprovalRoomIds($db), true);
+    if ($scope === 'mine') {
+        $ownRequests = roomieListOwnBookingRequests($db, $user_id);
+        if ($filterDate !== '') {
+            $ownRequests = array_filter($ownRequests, static fn (array $entry): bool => $entry['date'] === $filterDate);
+        }
+    }
     [$rule, $params] = roomieBookingAccessSql('r', $user_id, $isAdmin);
-    $query = "SELECT b.id, r.name AS room_name, b.date, b.start_time, b.end_time, b.user_id,
+    $query = "SELECT b.id, r.id AS room_id, r.name AS room_name, b.date, b.start_time, b.end_time, b.user_id,
                 CASE WHEN b.user_id = :viewer_id OR :show_details = 1 THEN u.name ELSE 'Belegt' END AS user_name
               FROM bookings b JOIN rooms r ON b.room_id = r.id JOIN users u ON b.user_id = u.id
               WHERE b.date >= :current_date AND ((b.date <= :last_date AND $rule) OR b.user_id = :owner_id)";
@@ -171,6 +183,9 @@ for ($slot = $today->modify(ROOMIE_BOOKING_OPEN_TIME); $slot <= $close; $slot = 
 }
 $moveStarts = array_slice($moveTimes, 0, -1);
 $moveEnds = array_slice($moveTimes, 1);
+$requestLabels = [
+    'pending' => 'Ausstehend', 'approved' => 'Genehmigt', 'declined' => 'Abgelehnt', 'cancelled' => 'Zurückgezogen',
+];
 ?>
 <!doctype html>
 <html lang="de">
@@ -186,7 +201,10 @@ $moveEnds = array_slice($moveTimes, 1);
 <main id="roomplan" class="roomplan-main rb-page" tabindex="-1">
     <header class="rb-header">
         <h1>Buchungen</h1>
-        <a class="roomplan-action" href="<?= bookingEscape($planUrl) ?>">Raum buchen</a>
+        <div class="rp-floor-actions">
+            <?php if ($isAdmin) : ?><a class="roomplan-action roomplan-action-secondary" href="admin_booking_requests.php">Anfragen verwalten</a><?php endif; ?>
+            <a class="roomplan-action" href="<?= bookingEscape($planUrl) ?>">Raum buchen</a>
+        </div>
     </header>
     <nav class="rb-segments" aria-label="Buchungsansicht">
         <a href="<?= bookingEscape(bookingPageUrl('mine', $filterDate)) ?>"<?= $scope === 'mine' ? ' aria-current="page"' : '' ?>>Meine Buchungen</a>
@@ -207,10 +225,40 @@ $moveEnds = array_slice($moveTimes, 1);
     <?php if ($successMessage) : ?><p class="rb-notice" role="status"><?= bookingEscape($successMessage) ?></p><?php endif; ?>
     <?php if ($error) : ?><p class="rb-notice rb-notice-error" role="alert"><?= bookingEscape($error) ?></p><?php endif; ?>
 
+    <?php if ($scope === 'mine') : ?>
+    <section id="rb-booking-requests" class="rb-day" aria-labelledby="rb-booking-requests-title" tabindex="-1"<?= !$ownRequests ? ' hidden' : '' ?>>
+        <h2 id="rb-booking-requests-title">Meine Anfragen</h2>
+        <ul class="rb-list">
+        <?php foreach ($ownRequests as $request) :
+            $state = (string) $request['status'];
+            $pendingRequest = $state === 'pending';
+        ?>
+            <li class="rb-entry">
+                <div class="rb-entry-main">
+                    <h3><?= bookingEscape((string) $request['room_name']) ?></h3>
+                    <p><time datetime="<?= bookingEscape((string) $request['date']) ?>"><?= bookingEscape(roomieDateLabel($request['date'])) ?></time> ·
+                        <?= bookingEscape(substr((string) $request['start_time'], 0, 5) . '–' . substr((string) $request['end_time'], 0, 5)) ?> Uhr</p>
+                </div>
+                <div class="rb-entry-actions">
+                    <span class="rb-request-status<?= $pendingRequest ? ' rb-request-pending' : '' ?>"><?= bookingEscape($requestLabels[$state] ?? 'Erledigt') ?></span>
+                    <?php if ($pendingRequest) : ?>
+                    <form method="post" action="booking_request_action.php">
+                        <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">
+                        <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
+                        <button type="submit" name="action" value="cancel" class="roomplan-action roomplan-action-secondary">Anfrage zurückziehen</button>
+                    </form>
+                    <?php endif; ?>
+                </div>
+            </li>
+        <?php endforeach; ?>
+        </ul>
+    </section>
+    <?php endif; ?>
+
     <?php if (!$groups) : ?>
         <p class="roomplan-panel rb-empty"><?= $error ? 'Liste nicht verfügbar.'
             : ($filterDate !== '' || $searchName !== '' ? 'Keine Buchungen für diesen Filter.'
-            : ($scope === 'mine' ? 'Du hast keine anstehenden Buchungen.' : 'Keine anstehenden Buchungen.')) ?></p>
+            : ($ownRequests ? 'Keine bestätigten Buchungen.' : ($scope === 'mine' ? 'Du hast keine anstehenden Buchungen.' : 'Keine anstehenden Buchungen.'))) ?></p>
     <?php endif; ?>
 
     <?php foreach ($groups as $date => $entries) : ?>
@@ -221,7 +269,8 @@ $moveEnds = array_slice($moveTimes, 1);
                 $bookingId = (int) $booking['id'];
                 $owner = (int) $booking['user_id'] === $user_id;
                 $startClock = roomieBookingClock($booking['start_time']);
-                $canMove = $owner && $startClock !== null && ($date > $todayKey || ($date === $todayKey && $startClock > $now->format('H:i:s')));
+                $canMove = $owner && !isset($approvalRooms[(int) $booking['room_id']]) && $startClock !== null
+                    && ($date > $todayKey || ($date === $todayKey && $startClock > $now->format('H:i:s')));
                 $reopenMove = $canMove && $bookingId === $editBookingId;
             ?>
                 <li class="rb-entry"<?= $owner ? ' id="booking-' . $bookingId . '" tabindex="-1"' : '' ?>>

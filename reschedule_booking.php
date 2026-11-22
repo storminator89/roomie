@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_helpers.php';
 require_once __DIR__ . '/room_blocks.php';
+require_once __DIR__ . '/booking_approvals.php';
 
 header('Cache-Control: private, no-store');
 header('Content-Type: text/html; charset=utf-8');
@@ -77,6 +78,9 @@ try {
     $roomId = roomiePositiveId($booking['room_id']);
     if ($roomId === null || !($room = roomieVisibleRoom($db, $roomId, $userId, false))) {
         throw new RoomieRescheduleRejected('Für diesen Raum fehlt dir die Buchungsberechtigung.', 403);
+    }
+    if (roomieRoomRequiresApproval($db, $roomId)) {
+        throw new RoomieRescheduleRejected('Dieser Raum braucht eine Freigabe. Stelle für einen anderen Termin eine neue Anfrage.', 409);
     }
     $retryBooking = $bookingId;
     $expectedDate = $originalDate->format('Y-m-d');

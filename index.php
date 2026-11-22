@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/room_access.php';
+require_once __DIR__ . '/booking_approvals.php';
 
 header('Cache-Control: private, no-store');
 if (!isLoggedIn()) {
@@ -15,12 +16,14 @@ $lastDate = $now->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days')->format('Y
 $dashboardEscape = static fn ($value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
 $rooms = [];
+$approvalRooms = [];
 $nextBooking = null;
 $loadFailed = false;
 try {
     $db = getDatabaseConnection();
     // The list reflects the write endpoint's room grants, including for administrators.
     $rooms = roomieListRooms($db, $userId, false);
+    $approvalRooms = array_fill_keys(roomieApprovalRoomIds($db), true);
     $query = $db->prepare(
         'SELECT r.name AS room_name, b.date, b.start_time, b.end_time
            FROM bookings b JOIN rooms r ON b.room_id = r.id
@@ -77,7 +80,7 @@ unset($_SESSION['error'], $_SESSION['success']);
                     <rect x="58" y="22" width="15" height="15" rx="5" fill="currentColor" stroke="none" opacity=".42"/>
                 </svg>
                 <h2>Raum finden</h2>
-                <p>Freie Räume im Plan sehen und direkt buchen.</p>
+                <p>Freie Räume im Plan finden.</p>
                 <a href="raumplan.php" class="roomplan-action">Raumplan öffnen <span aria-hidden="true">→</span></a>
             </section>
 
@@ -110,8 +113,8 @@ unset($_SESSION['error'], $_SESSION['success']);
                             <span>Raum</span>
                             <select name="selectedWorkspace" required>
                                 <option value="">Raum auswählen</option>
-                                <?php foreach ($rooms as $room) : ?>
-                                    <option value="<?= $dashboardEscape($room['id']) ?>"><?= $dashboardEscape($room['name']) ?></option>
+                                <?php foreach ($rooms as $room) : $needsApproval = isset($approvalRooms[(int) $room['id']]); ?>
+                                    <option value="<?= $dashboardEscape($room['id']) ?>"<?= $needsApproval ? ' data-requires-approval="1"' : '' ?>><?= $dashboardEscape($room['name']) ?><?= $needsApproval ? ' · Freigabe nötig' : '' ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </label>
@@ -134,6 +137,7 @@ unset($_SESSION['error'], $_SESSION['success']);
                     </div>
                     <div class="rm-dash-form-actions">
                         <button type="submit" class="roomplan-action">Zeitraum buchen</button>
+                        <p id="rm-range-approval" class="rm-dash-feedback" hidden>Nur einzelne Tage. Der Raum ist erst nach Freigabe gebucht.</p>
                         <p id="rm-range-feedback" class="rm-dash-feedback" role="status" aria-atomic="true"></p>
                         <a class="roomplan-action roomplan-action-secondary" href="bookings.php" id="rm-range-bookings" hidden>Buchungen ansehen</a>
                     </div>

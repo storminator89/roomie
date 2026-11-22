@@ -155,6 +155,8 @@
 .rp-card-header :is(h2, h3, h4) { font-size: 1.05rem; line-height: 1.25; }
 .rp-card-actions { margin-block-start: auto; }
 .rp-badge { display: inline-block; max-width: 100%; padding: .18rem .48rem; background: #edf5ef; color: #245436; border-radius: .4rem; font-size: .78rem; line-height: 1.4; }
+.rp-badge-approval { margin-inline-start:.25rem; color:#694409; background:#fff2c6; }
+.rp-request-link { color:inherit; font-weight:650; text-underline-offset:.17em; }
 .rp-bookings { display: grid; gap: .25rem; margin: 0; padding-inline-start: 1rem; color: var(--roomplan-muted); font-size: .85rem; }
 .rp-icon-button {
     display: inline-grid; place-items: center; min-height: 2.75rem; min-width: 2.75rem; padding: .4rem;
