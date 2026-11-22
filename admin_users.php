@@ -9,6 +9,10 @@ if (!isLoggedIn() || !isAdmin()) {
 $user_name = $_SESSION['user_name'] ?? 'Admin';
 $current_page = basename($_SERVER['PHP_SELF']);
 
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    requireCsrfToken($_POST['csrf_token'] ?? null);
+}
+
 try {
     $db = getDatabaseConnection();
 
@@ -194,6 +198,7 @@ try {
             <div class="bg-white shadow-md rounded-lg mb-6 p-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Neuen Benutzer erstellen</h3>
                 <form action="admin_users.php" method="POST" class="space-y-4">
+                    <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
                     <input type="hidden" name="action" value="create">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -257,6 +262,7 @@ try {
                                         <i class="fas fa-edit"></i> Bearbeiten
                                     </button>
                                     <form action="admin_users.php" method="POST" class="inline" onsubmit="return confirm('Sind Sie sicher, dass Sie diesen Benutzer löschen möchten?');">
+                                        <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
                                         <input type="hidden" name="action" value="delete">
                                         <input type="hidden" name="id" value="<?php echo $user['id']; ?>">
                                         <button type="submit" class="text-red-600 hover:text-red-900">
@@ -279,6 +285,7 @@ try {
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
             <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
                 <form id="editForm" action="admin_users.php" method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
                     <input type="hidden" name="action" value="edit">
                     <input type="hidden" name="id" id="editUserId">
                     <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">

@@ -6,6 +6,10 @@ if (!isAdmin()) {
     exit;
 }
 
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    requireCsrfToken($_POST['csrf_token'] ?? null);
+}
+
 try {
     $db = getDatabaseConnection();
 
@@ -32,7 +36,10 @@ try {
 }
 
 $users = $db->query('SELECT id, name FROM users')->fetchAll(PDO::FETCH_ASSOC);
-$rooms = $db->query("SELECT id, name FROM rooms WHERE type IN ('spez-abt-buero', 'fk-office')")->fetchAll(PDO::FETCH_ASSOC);
+$placeholders = implode(', ', array_fill(0, count(ROOMIE_RESTRICTED_ROOM_TYPES), '?'));
+$restrictedRooms = $db->prepare("SELECT id, name FROM rooms WHERE type IN ($placeholders)");
+$restrictedRooms->execute(ROOMIE_RESTRICTED_ROOM_TYPES);
+$rooms = $restrictedRooms->fetchAll(PDO::FETCH_ASSOC);
 $permissions = $db->query("
     SELECT permissions.id, users.name AS user_name, rooms.name AS room_name 
     FROM permissions 
@@ -162,6 +169,7 @@ $permissions = $db->query("
                 </div>
                 <div class="p-4">
                     <form method="POST" class="space-y-4">
+                        <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
                         <div>
                             <label for="user_id" class="block text-sm font-medium text-gray-700"><i class="fas fa-user"></i>&nbsp;Benutzer</label>
                             <select id="user_id" name="user_id" class="w-full bg-white border border-gray-300 rounded-md p-2">
@@ -207,6 +215,7 @@ $permissions = $db->query("
                                     <td class="border px-4 py-2"><?php echo htmlspecialchars($permission['room_name']); ?></td>
                                     <td class="border px-4 py-2">
                                         <form method="POST" style="display: inline;">
+                                            <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
                                             <input type="hidden" name="permission_id" value="<?php echo $permission['id']; ?>">
                                             <button type="submit" name="remove_permission" class="bg-red-500 hover:bg-red-600 text-white rounded-md px-2 py-1">
                                                 <i class="fas fa-trash"></i>&nbsp;Entfernen

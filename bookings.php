@@ -319,6 +319,7 @@ if (isset($_GET['send_email']) && isset($_GET['booking_id'])) {
                                         <?php if ($booking['user_id'] == $user_id) : ?>
                                             <div class="mt-2 flex items-center text-sm text-gray-500 sm:mt-0 space-x-2">
                                                 <form action="cancel_booking.php" method="POST" onsubmit="return confirm('Sind Sie sicher, dass Sie diese Buchung stornieren möchten?');">
+                                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8') ?>">
                                                     <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
                                                     <button type="submit" class="icon-btn">
                                                         <i class="fas fa-times icon"></i>

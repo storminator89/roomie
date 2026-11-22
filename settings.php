@@ -10,6 +10,10 @@ $user_id = $_SESSION['user_id'] ?? null;
 $successMessage = '';
 $errorMessage = '';
 
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    requireCsrfToken($_POST['csrf_token'] ?? null);
+}
+
 try {
     $db = getDatabaseConnection();
 
@@ -161,6 +165,7 @@ try {
             <div class="bg-white shadow overflow-hidden sm:rounded-lg">
                 <div class="px-4 py-5 sm:p-6">
                     <form action="" method="POST">
+                        <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
                         <div class="space-y-6">
                             <div class="flex items-start">
                                 <div class="flex items-center h-5">

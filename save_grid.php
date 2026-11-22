@@ -8,6 +8,8 @@ if (!isAdmin()) {
     exit;
 }
 
+requireCsrfToken($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null, true);
+
 $data = json_decode(file_get_contents('php://input'), true);
 
 if (!isset($data['layout']) || !isset($data['rows']) || !isset($data['cols'])) {

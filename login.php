@@ -9,15 +9,11 @@ if (isLoggedIn()) {
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrfToken($_POST['csrf_token'] ?? null);
     $email = $_POST['email'] ?? '';
     $password = $_POST['password'] ?? '';
-    $rememberMe = isset($_POST['remember-me']);
 
     if (loginUser($email, $password)) {
-        if ($rememberMe) {       
-            setcookie('email', $email, time() + (86400 * 30), "/"); // Cookie für 30 Tage setzen
-            setcookie('password', $password, time() + (86400 * 30), "/"); // Cookie für 30 Tage setzen
-        }
         header("Location: index.php");
         exit;
     } else {
@@ -68,26 +64,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endif; ?>
 
                 <form class="mt-8 space-y-6" action="" method="POST">
-                    <input type="hidden" name="remember" value="true">
+                    <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
                     <div class="rounded-md shadow-sm -space-y-px">
                         <div>
                             <label for="email-address" class="sr-only">E-Mail Adresse</label>
-                            <input id="email-address" name="email" type="email" autocomplete="email" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm" placeholder="E-Mail Adresse" value="<?php echo htmlspecialchars($_POST['email'] ?? 'admin@example.com'); ?>">
+                            <input id="email-address" name="email" type="email" autocomplete="email" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm" placeholder="E-Mail Adresse" value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
                         </div>
                         <div>
                             <label for="password" class="sr-only">Passwort</label>
-                            <input id="password" name="password" type="password" autocomplete="current-password" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm" placeholder="Passwort" value="password">
+                            <input id="password" name="password" type="password" autocomplete="current-password" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm" placeholder="Passwort">
                         </div>
                     </div>
 
                     <div class="flex items-center justify-between">
-                        <div class="flex items-center">
-                            <input id="remember-me" name="remember-me" type="checkbox" class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded" checked>
-                            <label for="remember-me" class="ml-2 block text-sm text-gray-900">
-                                Angemeldet bleiben
-                            </label>
-                        </div>
-
                         <div class="text-sm">
                             <a href="#" class="font-medium text-yellow-600 hover:text-yellow-500">
                                 Passwort vergessen?

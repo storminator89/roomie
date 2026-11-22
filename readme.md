@@ -58,9 +58,6 @@ Roomie is a web application for managing and booking rooms in an office building
   The setup refuses to overwrite an existing file. Review old accounts for
   demo credentials, revoke sessions and replace any affected credentials before
   reopening; moving the DB alone does not revoke any account.
-- **Repository containment is separate:** ensure the old accidentally tracked
-  database is removed from the current branch's tracking and deployment outputs
-  with an authorized Git change. New ignore rules do not untrack an existing
-  file or erase previous commits/forks/caches. Treat any formerly published
-  data as potentially disclosed and investigate exposure before republishing.
-  Do not deploy an old database from the source repository.
+- Do not deploy or commit SQLite files. The bundled demo database was removed
+  from the current branch; older commits and copies are unaffected. Never use
+  a database from the Git history for deployment.

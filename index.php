@@ -264,6 +264,7 @@ function getMonthlyBookings($db, $year, $month, $roomId)
 
                 <div class="flex space-x-3 mb-8">
                     <form id="bookingForm" class="flex-1">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="start_date" x-bind:value="startDate ? formatDateToUTC(startDate) : ''">
                         <input type="hidden" name="end_date" x-bind:value="endDate ? formatDateToUTC(endDate) : ''">
                         <input type="hidden" name="selectedWorkspace" x-bind:value="selectedWorkspace">

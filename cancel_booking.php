@@ -6,49 +6,54 @@ if (!isLoggedIn()) {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $bookingId = $_POST['booking_id'] ?? '';
+requireCsrfToken($_POST['csrf_token'] ?? null);
 
-    if (empty($bookingId)) {
-        die("Fehler: Keine Buchungs-ID angegeben.");
+$bookingId = filter_var($_POST['booking_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+if ($bookingId === false) {
+    die("Fehler: Keine Buchungs-ID angegeben.");
+}
+
+try {
+    $db = getDatabaseConnection();
+
+    // Überprüfen, ob die Buchung dem angemeldeten Benutzer gehört
+    $stmt = $db->prepare("SELECT * FROM bookings WHERE id = :id");
+    $stmt->execute(['id' => $bookingId]);
+    $booking = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$booking || $booking['user_id'] != $_SESSION['user_id']) {
+        die("Fehler: Sie sind nicht berechtigt, diese Buchung zu stornieren.");
     }
 
-    try {
-        $db = getDatabaseConnection();
-        
-        // Überprüfen, ob die Buchung dem angemeldeten Benutzer gehört
-        $stmt = $db->prepare("SELECT * FROM bookings WHERE id = :id");
-        $stmt->execute(['id' => $bookingId]);
-        $booking = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$booking || $booking['user_id'] != $_SESSION['user_id']) {
-            die("Fehler: Sie sind nicht berechtigt, diese Buchung zu stornieren.");
-        }
+    // Buchungsdetails für die E-Mail
+    $stmt = $db->prepare("SELECT r.name as room_name, u.name as user_name, u.email as user_email, b.date, b.start_time, b.end_time
+                          FROM bookings b
+                          JOIN rooms r ON b.room_id = r.id
+                          JOIN users u ON b.user_id = u.id
+                          WHERE b.id = :id");
+    $stmt->execute(['id' => $bookingId]);
+    $bookingDetails = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        // Buchungsdetails für die E-Mail
-        $stmt = $db->prepare("SELECT r.name as room_name, u.name as user_name, u.email as user_email, b.date, b.start_time, b.end_time 
-                              FROM bookings b 
-                              JOIN rooms r ON b.room_id = r.id 
-                              JOIN users u ON b.user_id = u.id 
-                              WHERE b.id = :id");
-        $stmt->execute(['id' => $bookingId]);
-        $bookingDetails = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Buchung löschen
+    $stmt = $db->prepare("DELETE FROM bookings WHERE id = :id AND user_id = :user_id");
+    $stmt->execute(['id' => $bookingId, 'user_id' => $_SESSION['user_id']]);
+    if ($stmt->rowCount() !== 1) {
+        http_response_code(409);
+        exit('Die Buchung ist nicht mehr verfügbar.');
+    }
 
-        // Buchung löschen
-        $stmt = $db->prepare("DELETE FROM bookings WHERE id = :id");
-        $stmt->execute(['id' => $bookingId]);
-
-        // E-Mail-Benachrichtigung senden
+    // E-Mail-Benachrichtigung senden
+    if ($bookingDetails && filter_var($bookingDetails['user_email'], FILTER_VALIDATE_EMAIL) !== false) {
         sendCancellationEmail($bookingDetails, $bookingDetails['user_email']);
-
-        header("Location: bookings.php?cancelled=1");
-        exit;
-    } catch (PDOException $e) {
-        die("Fehler bei der Stornierung: " . $e->getMessage());
     }
-} else {
-    header("Location: bookings.php");
+
+    header("Location: bookings.php?cancelled=1");
     exit;
+} catch (PDOException $e) {
+    error_log('Roomie booking cancellation failed');
+    http_response_code(500);
+    exit('Stornierung fehlgeschlagen.');
 }
 
 function sendCancellationEmail($booking, $recipientEmail) {

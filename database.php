@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+// Canonical restricted types and the spelling used by older room records.
+const ROOMIE_RESTRICTED_ROOM_TYPES = ['spez-abt-buero', 'spez-abt-buro', 'fk-office'];
+
 function roomieDatabasePath(bool $create = false): string
 {
     $path = getenv('ROOMIE_DB_PATH');

@@ -22,7 +22,7 @@ function roomieApp() {
                         showNotification('Buchung erfolgreich', data.message);
                         // Optional: Formular zurücksetzen oder Seite aktualisieren
                     } else {
-                        showNotification('Fehler', data.error);
+                        showNotification('Fehler', data.error || data.message);
                     }
                 })
                 .catch(error => {

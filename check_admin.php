@@ -8,4 +8,8 @@ $response = [
     'isAdmin' => isAdmin()
 ];
 
+if ($response['isLoggedIn']) {
+    $response['csrf_token'] = csrfToken();
+}
+header('Cache-Control: no-store');
 echo json_encode($response);

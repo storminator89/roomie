@@ -8,6 +8,7 @@ if (!isLoggedIn()) {
 }
 
 header('Content-Type: application/json');
+requireCsrfToken($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null, true);
 
 try {
     $db = getDatabaseConnection();
@@ -38,5 +39,7 @@ try {
         echo json_encode(['success' => false, 'error' => 'Ungültige Anfrage']);
     }
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => "Datenbankfehler: " . $e->getMessage()]);
+    error_log('Roomie favorite update failed');
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Favorit konnte nicht aktualisiert werden.']);
 }
