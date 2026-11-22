@@ -155,6 +155,11 @@ $equipment = json_decode((string) $room['equipment'], true);
 $equipment = is_array($equipment) ? array_slice(array_unique(array_filter($equipment, 'is_string')), 0, 20) : [];
 $roomName = (string) $room['name'];
 $planUrl = 'raumplan.php?' . http_build_query(['date' => $selected_date] + $detailContext);
+$seriesParams = ['room_id' => $room_id, 'date' => $selected_date];
+if ($chosenCustom) {
+    $seriesParams += ['start_time' => $chosenCustom[0], 'end_time' => $chosenCustom[1]];
+}
+$seriesUrl = 'series_booking.php?' . http_build_query($seriesParams);
 $prev = parseBookingDate($parsedDate->modify('-1 day')->format('Y-m-d'));
 $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
 ?>
@@ -257,6 +262,9 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
                 <a href="<?= detailEscape(detailUrl($room_id, $selected_date, $detailContext)) ?>">Belegung aktualisieren</a>
             </div>
             <noscript><a class="rb-inline-link" href="<?= detailEscape($planUrl) ?>">Im Raumplan buchen</a></noscript>
+            <?php endif; ?>
+            <?php if ($canBookRoom && $canBookDate) : ?>
+                <a class="roomplan-action roomplan-action-secondary rb-series-link" href="<?= detailEscape($seriesUrl) ?>">Wöchentlich buchen</a>
             <?php endif; ?>
         </section>
     </div>

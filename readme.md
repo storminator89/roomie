@@ -109,7 +109,9 @@ and book the selected time. Room details also accept an individual slot.
 Custom slots are for one day, between 09:00 and 17:00 (Europe/Berlin), in
 15-minute increments. The existing presets and multi-day booking still work.
 Room permissions and available places are checked again on save; the filter
-does not reserve a room. No database change is needed for custom times.
+does not reserve a room. No database change is needed for custom times. Under optional **Ausstattung**,
+select all equipment the room must have. It combines with the availability
+and favorites filters.
 
 Under **Buchungen → Optionen → Verschieben**, change the date and time of an
 upcoming booking in the same room. If the new time is taken or the booking has
@@ -118,6 +120,17 @@ Multi-day bookings are listed as separate reservations; this action moves only
 the selected day. The calendar download reflects the new time, but an earlier
 import into Outlook or another calendar is not synchronized. No migration is
 required.
+
+On a room's details page, choose **Wöchentlich buchen**, set the start date,
+time and number of appointments (2–12), then **Termine prüfen**. Every date
+is displayed before saving. Weekly occurrences keep the same Berlin local
+time, including across a clock change. On confirmation Roomie checks every
+date again; it saves all appointments together or none. The 90-day booking
+horizon still applies. Each saved occurrence can be moved, cancelled or
+exported separately; Roomie does not yet edit the series as a group.
+
+[Exchange availability pilot design](docs/exchange-pilot.md) documents a
+read-only integration proposal. It is not enabled or implemented.
 
 Run `node --test build-files/*.test.mjs` to check the frontend data
 contract without a running PHP server.

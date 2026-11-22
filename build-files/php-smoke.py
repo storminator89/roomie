@@ -597,6 +597,269 @@ def smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, c
           + ("; both concurrent races passed" if concurrent else ""), flush=True)
 
 
+class SeriesHTML(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.forms = {}
+        self.actions = {}
+        self.links = []
+        self.dates = []
+        self.form = None
+        self.select = None
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "form":
+            self.form = attrs.get("id")
+            if self.form:
+                self.forms[self.form] = {}
+                self.actions[self.form] = attrs.get("action")
+        elif tag == "input" and self.form and attrs.get("name"):
+            self.forms[self.form][attrs["name"]] = attrs.get("value")
+        elif tag == "select":
+            self.select = attrs.get("name")
+        elif tag == "option" and self.form and self.select and "selected" in attrs:
+            self.forms[self.form][self.select] = attrs.get("value")
+        elif tag == "a" and attrs.get("href"):
+            self.links.append(attrs["href"])
+        elif tag == "time" and attrs.get("datetime"):
+            self.dates.append(attrs["datetime"])
+
+    def handle_endtag(self, tag):
+        if tag == "form":
+            self.form = None
+        elif tag == "select":
+            self.select = None
+
+
+def smoke_series(command, root, env, date, guest, admin, admin_status, user, user_status, concurrent):
+    run(command + ["-r", """
+        require 'series_booking.php';
+        require_once 'booking_calendar.php';
+        foreach ([
+            ['2026-03-20', '2026-03-22', '2026-03-29', '081500', '071500'],
+            ['2026-10-15', '2026-10-18', '2026-10-25', '071500', '081500'],
+        ] as [$clock, $first, $second, $firstUtc, $secondUtc]) {
+            $now = new DateTimeImmutable($clock . 'T14:30:00Z');
+            $plan = roomieSeriesPlan(['room_id' => '1', 'date' => $first, 'count' => '2',
+                'start_time' => '09:15', 'end_time' => '10:45'], $now);
+            if ($plan['dates'] !== [$first, $second] || $plan['start'] !== '09:15' || $plan['end'] !== '10:45') {
+                fwrite(STDERR, 'Weekly local times or days shifted across daylight-saving transition'); exit(1);
+            }
+            $items = [];
+            foreach ($plan['dates'] as $i => $on) {
+                $items[] = ['id' => $i + 1, 'date' => $on, 'start_time' => $plan['start'], 'end_time' => $plan['end'],
+                            'room_name' => 'DST Room', 'user_name' => 'Fixture User'];
+            }
+            $ical = roomieCalendar($items);
+            foreach ([[$first, $firstUtc], [$second, $secondUtc]] as [$on, $utc]) {
+                if (!str_contains($ical, 'DTSTART:' . str_replace('-', '', $on) . 'T' . $utc . 'Z')) {
+                    fwrite(STDERR, 'Calendar did not apply the occurrence date’s DST offset'); exit(1);
+                }
+            }
+        }
+    """], root, env)
+    db_path = env["ROOMIE_DB_PATH"]
+    endpoint = "series_booking.php"
+    start_day = dt.date.fromisoformat(date)
+    berlin = ZoneInfo("Europe/Berlin")
+    today = dt.datetime.now(berlin).date()
+    start, end = "10:15", "11:30"
+
+    def occurrences(first, n):
+        return [(first + dt.timedelta(weeks=offset)).isoformat() for offset in range(n)]
+
+    days = occurrences(start_day, 3)
+    with closing(sqlite3.connect(db_path)) as db, db:
+        ids = dict(db.execute("SELECT email, id FROM users"))
+        user_id = ids["smoke-user@example.test"]
+        admin_id = ids["smoke-admin@example.test"]
+        quota_id = db.execute("""
+            INSERT INTO users (name, email, password, is_admin)
+            SELECT 'Smoke Series Quota', 'smoke-quota@example.test', password, 0 FROM users WHERE id = ?
+        """, (user_id,)).lastrowid
+        rooms = {}
+        for name, capacity, kind in (("Clean", 1, "office"), ("Other members", 2, "shared-desk"),
+                                     ("Own", 3, "shared-desk"), ("Restricted", 1, "fk-office"),
+                                     ("Recheck", 1, "office"), ("Race", 1, "office"),
+                                     ("Quota", 1, "office"), ("Quota existing", 1, "office"),
+                                     ("DST", 1, "office")):
+            rooms[name] = db.execute("INSERT INTO rooms (name, type, capacity) VALUES (?, ?, ?)",
+                                     (f"QA Series {name}", kind, capacity)).lastrowid
+        db.executemany("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, ?, ?)", (
+            (admin_id, rooms["Other members"], days[1], "09:00", "12:00"),
+            (ids["smoke-other@example.test"], rooms["Other members"], days[1], "10:00", "11:00"),
+            (user_id, rooms["Own"], days[1], "10:00", "11:00"),
+        ))
+        db.executemany("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, '09:00', '10:00')",
+                       ((quota_id, rooms["Quota existing"], (start_day + dt.timedelta(days=n)).isoformat()) for n in range(58)))
+
+    def rows(room, owner=None):
+        with closing(sqlite3.connect(db_path)) as db:
+            return db.execute("SELECT date, start_time, end_time FROM bookings WHERE room_id = ? "
+                              "AND (? IS NULL OR user_id = ?) ORDER BY date, start_time, id", (room, owner, owner)).fetchall()
+
+    token = user_status["csrf_token"]
+    admin_token = admin_status["csrf_token"]
+
+    def preview(room, *, actor=user, code=200, csrf=token, first=date, window=(start, end), count=3, bookable=True, path=endpoint):
+        status, headers, html = actor.request(path, {"stage": "preview", "csrf_token": csrf,
+            "room_id": room, "date": first, "start_time": window[0], "end_time": window[1], "count": count})
+        expect(status == code, f"Series preview {room}: expected HTTP {code}, got {status}")
+        if status == 200:
+            expect("no-store" in headers.get("Cache-Control", ""), "Series previews with proof must not be cached")
+        document = SeriesHTML(html)
+        form = document.forms.get("rb-series-book")
+        if not bookable:
+            expect(form is None, "A blocked or invalid preview must not offer a commit form")
+            return html
+        expect(form is not None and form.get("stage") == "book" and form.get("csrf_token") == csrf
+               and re.fullmatch(r"[0-9a-f]{64}", form.get("preview_token") or ""), "Valid preview must carry a session-bound proof")
+        want_dates = occurrences(dt.date.fromisoformat(first), int(count))
+        expect(document.dates == want_dates, "Preview must show every weekly occurrence in chronological order")
+        return form
+
+    def commit(form, expected, description, *, actor=user, path=endpoint):
+        status, headers, _ = actor.request(path, form)
+        expect(status == expected, f"{description}: expected HTTP {expected}, got {status}")
+        if status == 303:
+            expect(headers.get("Location") == ("login.php" if actor is guest else "bookings.php?series=1"),
+                   f"{description}: incorrect redirect")
+
+    room = rooms["Clean"]
+    link_query = {"room_id": room, "date": date, "start_time": start, "end_time": end}
+    code, _, html = user.request("room_details.php?" + urlencode({"id": room, "date": date, "start_time": start, "end_time": end}))
+    expect(code == 200 and "Wöchentlich buchen" in html and any(urlsplit(link).path == endpoint
+           and parse_qs(urlsplit(link).query) == {key: [str(value)] for key, value in link_query.items()}
+           for link in SeriesHTML(html).links), "Room details must offer a prefilled weekly-series link")
+    entry = endpoint + "?" + urlencode(link_query)
+    code, _, html = user.request(entry)
+    document = SeriesHTML(html)
+    form = document.forms.get("rb-series-preview")
+    form_action = document.actions.get("rb-series-preview")
+    expect(code == 200 and form and form.get("stage") == "preview" and form.get("csrf_token") == token
+           and all(form.get(key) == str(value) for key, value in link_query.items())
+           and form_action == endpoint + "?" + urlencode({"room_id": room}),
+           "Series entry must present a CSRF-protected preview form fixed to the prefilled room and times")
+    status, headers, _ = guest.request(entry)
+    expect(status in (302, 303) and headers.get("Location") == "login.php", "Series flow must require login")
+    commit({"stage": "book", "preview_token": "0" * 64, "csrf_token": token, **link_query, "count": 3}, 409,
+           "Direct commit with fabricated proof cannot create a series")
+    expect(rows(room) == [], "Direct stage=book must not write without a matching preview")
+
+    for invalid in (1, 13, "2.5"):
+        preview(room, code=400, count=invalid, bookable=False)
+    preview(room, code=400, window=("10:07", "11:30"), bookable=False)
+    preview(room, code=400, window=("10:15", "10:00"), bookable=False)
+    preview(room, code=400, first=(today + dt.timedelta(days=84)).isoformat(), count=2, bookable=False)
+    preview(room, code=403, csrf="", bookable=False)
+    preview(room, count=12)
+    expect(rows(room) == [], "Even a maximum-length preview must not write a booking")
+
+    for kind in ("Other members", "Own"):
+        existing = rows(rooms[kind])
+        html = preview(rooms[kind], bookable=False)
+        expect('id="rb-series-results"' in html and "Belegt" in html and "Frei" in html,
+               "Occupied series preview should identify both free and blocked dates instead of offering a partial commit")
+        expect(rows(rooms[kind]) == existing, "A conflicting preview must not change any existing occurrence")
+
+    restricted = rooms["Restricted"]
+    preview(restricted, code=403, bookable=False)
+    preview(restricted, actor=admin, csrf=admin_token, code=403, bookable=False)
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("INSERT INTO permissions (user_id, room_id) VALUES (?, ?)", (user_id, restricted))
+    granted = preview(restricted)
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("DELETE FROM permissions WHERE user_id = ? AND room_id = ?", (user_id, restricted))
+    commit(granted, 403, "Grant revoked after preview must block commit")
+    expect(rows(restricted) == [], "No dates may be written after access is revoked")
+
+    def single(room, on):
+        return admin.request("process_booking.php", {"selectedWorkspace": room, "start_date": on, "end_date": on,
+            "time_period": "individuell", "start_time": start, "end_time": end, "csrf_token": admin_token})
+
+    recheck = rooms["Recheck"]
+    recheck_form = preview(recheck)
+    status, _, raw = single(recheck, days[-1])
+    expect(status == 200 and json.loads(raw).get("success") is True, "A different viewer should be able to claim a date after preview")
+    commit(recheck_form, 409, "New last-day conflict must roll back entire series")
+    expect(rows(recheck, user_id) == [] and rows(recheck, admin_id) == [(days[-1], start, end)],
+           "A conflict on the last date must leave no earlier occurrences and preserve the other booking")
+
+    quota = Client(user.base_url)
+    quota_status = quota.login("smoke-quota@example.test", env["ROOMIE_SMOKE_PASSWORD"])
+    quota_token = quota_status["csrf_token"]
+    quota_room = rooms["Quota"]
+    quota_form = preview(quota_room, actor=quota, csrf=quota_token, count=2)
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, '09:00', '10:00')",
+                   (quota_id, rooms["Quota existing"], (start_day + dt.timedelta(days=58)).isoformat()))
+    commit(quota_form, 409, "Quota exceeded after preview must reject whole series", actor=quota)
+    preview(quota_room, actor=quota, csrf=quota_token, count=2, bookable=False)
+    expect(rows(quota_room) == [], "A series cannot exceed the active bookings quota")
+
+    clean = preview(room, path=form_action)
+    proof_to_reject = preview(room, count=2)
+    commit(dict(proof_to_reject, room_id=rooms["Recheck"], date=days[1], start_time="13:00", end_time="14:00", count=2),
+           400, "A mismatched plan must not be accepted with another preview's proof")
+    expect(rows(room) == [] and rows(recheck, user_id) == [], "Neither preview nor mismatched plan should write bookings")
+    commit(dict(clean, csrf_token=admin_token), 409, "A preview proof must not authorize another account's session", actor=admin)
+    commit(dict(clean, csrf_token=""), 403, "Confirmation must require a valid CSRF token")
+    if concurrent:
+        barrier = Barrier(2, timeout=5)
+        race = rooms["Race"]
+        race_form = preview(race)
+
+        def start_together(action):
+            barrier.wait()
+            return action()
+
+        # A separate user can claim the last occurrence while the first confirms the series.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(start_together, lambda: user.request(endpoint, race_form)[0])
+            second = pool.submit(start_together, lambda: single(race, days[-1]))
+            outcome, single_reply = first.result(), second.result()
+        expect(outcome in (303, 409) and single_reply[0] == 200 and json.loads(single_reply[2]).get("success") is (outcome == 409),
+               "Exactly one competing last-place operation should succeed")
+        expect(rows(race, user_id) == ([(on, start, end) for on in days] if outcome == 303 else []),
+               "Concurrent series confirmation must create all dates or none")
+
+    commit(clean, 303, "Confirm exactly the previously previewed series", path=form_action)
+    expect(rows(room) == [(on, start, end) for on in days], "Saved series must match the displayed dates and hours")
+    commit(clean, 409, "Replaying a consumed preview proof cannot duplicate bookings")
+    expect(len(rows(room)) == 3, "A successful series creates exactly one reservation per occurrence")
+    code, _, html = user.request("bookings.php?series=1")
+    expect(code == 200 and "Buchungsserie gespeichert" in html and "QA Series Clean" in html,
+           "Successful series redirect must show confirmation and the new bookings")
+
+    # Run the full HTTP+ICS DST case whenever a Berlin offset change is inside the real 90-day horizon.
+    dst_tested = False
+    for offset in range(1, 84):
+        first = today + dt.timedelta(days=offset)
+        second = first + dt.timedelta(weeks=1)
+        before = dt.datetime.combine(first, dt.time.fromisoformat(start), berlin)
+        after = dt.datetime.combine(second, dt.time.fromisoformat(start), berlin)
+        if before.utcoffset() == after.utcoffset():
+            continue
+        dst = rooms["DST"]
+        form = preview(dst, first=first.isoformat(), count=2)
+        commit(form, 303, "Book two weekly instances across a Berlin clock change")
+        expect(rows(dst) == [(on, start, end) for on in occurrences(first, 2)],
+               "Stored local time must not shift across daylight-saving transition")
+        with closing(sqlite3.connect(db_path)) as db:
+            ids = [row[0] for row in db.execute("SELECT id FROM bookings WHERE room_id = ? ORDER BY date", (dst,))]
+        for booking_id, at in zip(ids, (before, after)):
+            status, _, ics = user.request(f"bookings.php?download=calendar&booking_id={booking_id}")
+            utc = at.astimezone(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            expect(status == 200 and f"DTSTART:{utc}" in ics.split("\r\n"), "Each ICS instance must use its own DST offset")
+        dst_tested = True
+        break
+    print("Weekly series: preview/commit, CSRF, template proof, quota, capacity, permissions, replay, rollback, booking list and DST planner passed"
+          + ("; concurrent last-seat race passed" if concurrent else "")
+          + ("; Berlin DST HTTP+ICS passed" if dst_tested else "; HTTP DST transition outside 90-day window"), flush=True)
+
+
 def smoke(php, root, scratch, expected_minor):
     env = {key: value for key, value in os.environ.items()
            if not key.startswith("ROOMIE_") and key != "PHP_CLI_SERVER_WORKERS"}
@@ -763,6 +1026,7 @@ def smoke(php, root, scratch, expected_minor):
                 smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status,
                                         user, user_status, concurrent)
                 smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, concurrent)
+                smoke_series(command, root, env, date, guest, admin, admin_status, user, user_status, concurrent)
             finally:
                 if concurrent:
                     try:

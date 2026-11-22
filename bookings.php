@@ -19,6 +19,8 @@ if (($_GET['cancelled'] ?? '') === '1') {
     $successMessage = 'Ihre Buchung wurde storniert.';
 } elseif (($_GET['moved'] ?? '') === '1') {
     $successMessage = 'Buchung verschoben.';
+} elseif (($_GET['series'] ?? '') === '1') {
+    $successMessage = 'Buchungsserie gespeichert.';
 }
 
 function findOwnBooking(PDO $db, int $userId, int $bookingId): ?array

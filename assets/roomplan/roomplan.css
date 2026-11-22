@@ -196,3 +196,24 @@
 }
 .rp-floor-focus { margin-top: .75rem; }
 .rp-floor-focus .rp-card { max-width: 36rem; }
+
+.rp-equipment-filter { max-width: 100%; }
+.rp-equipment-filter[open] { flex: 1 0 100%; }
+.rp-equipment-summary { list-style: none; }
+.rp-equipment-summary::-webkit-details-marker { display: none; }
+.rp-equipment-filter[open] .rp-equipment-chevron { transform: rotate(180deg); }
+.rp-equipment-active .rp-equipment-summary { background: #fff3d1; border-color: #946700; }
+.rp-equipment-group {
+    min-width: 0; margin: .5rem 0 0; padding: .5rem .75rem .75rem; border: 1px solid var(--roomplan-border);
+    border-radius: .65rem; background: var(--roomplan-surface);
+}
+.rp-equipment-group legend { padding-inline: .25rem; font-size: .9rem; font-weight: 650; }
+.rp-equipment-hint { margin: 0 0 .25rem; color: var(--roomplan-muted); font-size: .875rem; }
+.rp-equipment-options {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); margin-block-end: .5rem;
+}
+.rp-equipment-option { display: flex; align-items: center; gap: .45rem; min-height: 2.75rem; cursor: pointer; }
+.rp-equipment-option input { accent-color: #8d650e; }
+.rp-equipment-option span { overflow-wrap: anywhere; }
+.rp-equipment-result { margin: 0; color: var(--roomplan-muted); font-size: .875rem; }
+.rp-equipment-result:not(:empty) { margin-block-end: .7rem; }

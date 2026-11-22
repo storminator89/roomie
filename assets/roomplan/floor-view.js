@@ -94,7 +94,7 @@ export function matchesRoomSearch(label, query) {
 export function renderFloorPosition({
   floor, rooms, availability, onRoomSelect, imageUrl, roomDetails,
   filters = { query: '', onlyBookable: false }, canBook = () => true, availabilityStatus = 'ready',
-  onFilterChange = () => {},
+  onFilterChange = () => {}, matchesEquipment = () => true, onResultCount = () => {},
 }) {
   const frame = el('section', 'rp-floor-position');
   const title = (typeof floor?.title === 'string' && floor.title.trim()) || 'Grundriss';
@@ -227,17 +227,19 @@ export function renderFloorPosition({
     for (const { item, li, marker } of entries.values()) {
       const matches = matchesRoomSearch(item.label, filters.query);
       const bookable = !filters.onlyBookable || (availabilityStatus === 'ready' && canBook(item.room, item.key));
-      li.hidden = marker.hidden = !(matches && bookable);
+      li.hidden = marker.hidden = !(matches && matchesEquipment(item.room) && bookable);
       if (!li.hidden) count++;
     }
-    const active = required.length > 0 || filters.onlyBookable;
+    const active = required.length > 0 || filters.onlyBookable || filters.equipmentActive;
     shortcuts.hidden = count === 0;
-    shortcutTitle.textContent = required.length ? 'Suchergebnisse' : filters.onlyBookable ? 'Freie Räume' : 'Räume im Grundriss';
+    shortcutTitle.textContent = required.length ? 'Suchergebnisse' : filters.onlyBookable ? 'Freie Räume'
+      : filters.equipmentActive ? 'Passende Räume' : 'Räume im Grundriss';
     if (active) shortcuts.open = true;
     else if (resetOpen && !viewport.hidden) shortcuts.open = false;
-    resultCount.textContent = !active ? '' : filters.onlyBookable && availabilityStatus !== 'ready'
+    resultCount.textContent = !active || filters.equipmentActive ? '' : filters.onlyBookable && availabilityStatus !== 'ready'
       ? (availabilityStatus === 'error' ? 'Belegung unbekannt' : 'Belegung wird geladen …')
       : count === 0 ? 'Keine Treffer' : count === 1 ? '1 Raum' : `${count} Räume`;
+    onResultCount(count);
   }
   const notifyFilters = () => {
     applyFilters(true);
@@ -254,7 +256,7 @@ export function renderFloorPosition({
     setZoom(position.zoomIndex);
     viewport.scrollLeft = position.x;
     viewport.scrollTop = position.y;
-    if (!viewport.hidden && !filters.onlyBookable && !normalizeRoomSearch(filters.query).length) {
+    if (!viewport.hidden && !filters.onlyBookable && !filters.equipmentActive && !normalizeRoomSearch(filters.query).length) {
       shortcuts.open = position.open;
     }
   };
