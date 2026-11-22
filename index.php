@@ -80,7 +80,6 @@ unset($_SESSION['error'], $_SESSION['success']);
                     <rect x="58" y="22" width="15" height="15" rx="5" fill="currentColor" stroke="none" opacity=".42"/>
                 </svg>
                 <h2>Raum finden</h2>
-                <p>Freie Räume im Plan finden.</p>
                 <a href="raumplan.php" class="roomplan-action">Raumplan öffnen <span aria-hidden="true">→</span></a>
             </section>
 

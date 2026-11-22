@@ -42,7 +42,6 @@ $roomieAccountName = $_SESSION['user_name'] ?? 'Konto';
                 <div class="roomie-shell-menu-body">
                     <strong class="roomie-shell-account-name"><?= htmlspecialchars($roomieAccountName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>
                     <a href="profile.php" <?= $roomieActivePage === 'profile.php' ? 'aria-current="page"' : '' ?>>Profil</a>
-                    <a href="settings.php" <?= $roomieActivePage === 'settings.php' ? 'aria-current="page"' : '' ?>>Einstellungen</a>
                     <?php if (isAdmin()) : ?>
                         <div class="roomie-shell-menu-separator"></div>
                         <a href="admin_users.php" <?= $roomieActivePage === 'admin_users.php' ? 'aria-current="page"' : '' ?>>Benutzerverwaltung</a>

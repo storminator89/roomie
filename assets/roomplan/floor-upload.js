@@ -41,6 +41,7 @@ export function createFloorUpload({open = false, onSubmit}) {
     let generation = 0;
     let reader = null;
     let dragDepth = 0;
+    let hasSuggestedTitle = false;
 
     const element = el('details', 'rp-fu');
     element.open = open;
@@ -126,7 +127,10 @@ export function createFloorUpload({open = false, onSubmit}) {
             return;
         }
         file = next;
-        if (!title.value.trim()) title.value = suggestedFloorTitle(file.name);
+        if (!title.value.trim() || hasSuggestedTitle) {
+            title.value = suggestedFloorTitle(file.name);
+            hasSuggestedTitle = Boolean(title.value);
+        }
         filename.textContent = file.name;
         chosen.hidden = false;
         pickerText.textContent = 'Anderes Bild auswählen';
@@ -159,7 +163,10 @@ export function createFloorUpload({open = false, onSubmit}) {
     });
     preview.addEventListener('load', () => { preview.hidden = !preview.hasAttribute('src'); });
     preview.addEventListener('error', () => { preview.hidden = true; });
-    title.addEventListener('input', render);
+    title.addEventListener('input', () => {
+        hasSuggestedTitle = false;
+        render();
+    });
     pickerLabel.addEventListener('dragenter', event => {
         if (!isFileDrag(event)) return;
         event.preventDefault();
@@ -203,6 +210,7 @@ export function createFloorUpload({open = false, onSubmit}) {
         reset() {
             clearSelection();
             form.reset();
+            hasSuggestedTitle = false;
             setError('');
             element.open = false;
             render();

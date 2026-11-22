@@ -38,7 +38,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roomie Login</title>
     <link rel="stylesheet" href="assets/roomie-tailwind.css">
-    <script defer src="assets/alpine-3.14.9.min.js"></script>
     <style>
         body {
             font-family: 'Source Sans 3', sans-serif;
@@ -52,17 +51,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="px-6 py-8">
                 <div class="text-center">
                     <img class="h-16 w-auto mx-auto" src="test_white.svg" alt="Roomie Logo">
-                    <p class="text-sm text-gray-600">
-                        Willkommen zurück! Bitte melden Sie sich an.
-                    </p>
+                    <h1 class="text-lg font-semibold text-gray-900">Anmelden</h1>
                 </div>
-
-                <?php if (isset($_GET['registered'])) : ?>
-                    <div class="mt-4 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded" role="alert">
-                        <p class="font-bold">Registrierung erfolgreich!</p>
-                        <p>Sie können sich jetzt anmelden.</p>
-                    </div>
-                <?php endif; ?>
 
                 <?php if ($error) : ?>
                     <div class="mt-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded" role="alert">
@@ -84,14 +74,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                     </div>
 
-                    <div class="flex items-center justify-between">
-                        <div class="text-sm">
-                            <a href="#" class="font-medium text-yellow-600 hover:text-yellow-500">
-                                Passwort vergessen?
-                            </a>
-                        </div>
-                    </div>
-
                     <div>
                         <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition duration-150 ease-in-out">
                             <span class="absolute left-0 inset-y-0 flex items-center pl-3">
@@ -106,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 text-center">
                 <p class="text-sm text-gray-600">
-                    Noch kein Konto? Wenden Sie sich an die Roomie-Administration.
+                    Bei Anmeldeproblemen hilft die Roomie-Administration.
                 </p>
             </div>
         </div>

@@ -12,7 +12,6 @@
 .rm-dash-overview > section p { margin:0; overflow-wrap:anywhere; }
 .rm-dash-overview > section a { margin-top:.45rem; }
 .rm-dash-overview > .rm-dash-hero { background:#fff7df; border-color:#e8d8a7; padding-inline-end:min(28%,7rem); }
-.rm-dash-hero > p { color:#52431f; }
 .rm-dash-illustration {
   width:clamp(2.4rem,9vw,5rem); height:auto; position:absolute; right:clamp(.7rem,3vw,1.5rem);
   top:50%; transform:translateY(-50%); color:#a16d12; pointer-events:none;

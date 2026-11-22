@@ -108,7 +108,7 @@ $equipmentLabels = [
         <h1>Räume</h1>
         <div class="rp-floor-actions">
             <?php if (isAdmin()) : ?>
-                <a class="roomplan-action" href="<?= roomsEscape($planUrl . (str_contains($planUrl, '?') ? '&' : '?') . 'manage=1') ?>">Räume verwalten</a>
+                <a class="roomplan-action roomplan-action-secondary" href="<?= roomsEscape($planUrl . (str_contains($planUrl, '?') ? '&' : '?') . 'manage=1') ?>">Räume verwalten</a>
             <?php endif; ?>
             <a class="roomplan-action roomplan-action-secondary" href="<?= roomsEscape($planUrl) ?>">Raumplan</a>
         </div>

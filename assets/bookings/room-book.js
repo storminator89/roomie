@@ -1,4 +1,4 @@
-import { bookingWindowInFuture, periodCanBeBooked, validBookingWindow } from '../roomplan/booking-window.js';
+import { bookingWindowInFuture, validBookingWindow } from '../roomplan/booking-window.js';
 
 (() => {
   const form = document.getElementById('rb-room-book');
@@ -8,7 +8,7 @@ import { bookingWindowInFuture, periodCanBeBooked, validBookingWindow } from '..
   const submit = form.querySelector('button[type=submit]');
   const periods = form.querySelector('fieldset');
   const customControls = form.querySelector('[data-custom-time]');
-  const blocks = JSON.parse(customControls?.dataset.roomBlocks ?? '[]').map(block => ({ ...block, blocked: true }));
+  const availableUntil = JSON.parse(customControls?.dataset.availableUntil ?? '{}');
   const startTime = form.querySelector('[name=start_time]');
   const endTime = form.querySelector('[name=end_time]');
   const date = form.querySelector('[name=start_date]').value;
@@ -19,13 +19,18 @@ import { bookingWindowInFuture, periodCanBeBooked, validBookingWindow } from '..
     feedback.classList.toggle('rb-notice-error', error);
     feedback.hidden = false;
   }
+  function endCanBeBooked(start, end) {
+    return validBookingWindow(start, end)
+      && Object.hasOwn(availableUntil, start) && end <= availableUntil[start];
+  }
   function syncTimeControls() {
     if (!customControls) return;
     const custom = form.querySelector('[name=time_period]:checked')?.value === 'individuell';
     customControls.hidden = !custom;
     startTime.disabled = endTime.disabled = !custom;
+    if (!custom) return;
     for (const option of endTime.options) {
-      option.disabled = !periodCanBeBooked(1, blocks, startTime.value, option.value);
+      option.disabled = !endCanBeBooked(startTime.value, option.value);
     }
     if (endTime.selectedOptions[0]?.disabled || !endTime.value) {
       endTime.value = [...endTime.options].find(option => !option.disabled)?.value ?? '';
@@ -44,8 +49,8 @@ import { bookingWindowInFuture, periodCanBeBooked, validBookingWindow } from '..
       startTime.focus();
       return;
     }
-    if (body.get('time_period') === 'individuell' && !periodCanBeBooked(1, blocks, startTime.value, endTime.value)) {
-      tell('Der Raum ist in diesem Zeitraum gesperrt.', true);
+    if (body.get('time_period') === 'individuell' && !endCanBeBooked(startTime.value, endTime.value)) {
+      tell('Der Raum ist in diesem Zeitraum nicht verfügbar.', true);
       startTime.focus();
       return;
     }

@@ -125,20 +125,32 @@ $opens = $parsedDate->modify(ROOMIE_BOOKING_OPEN_TIME);
 $closes = $parsedDate->modify(ROOMIE_BOOKING_CLOSE_TIME);
 $step = new DateInterval('PT' . ROOMIE_BOOKING_STEP_MINUTES . 'M');
 $firstCustom = null;
-$blockedStarts = [];
+$freeCustomStarts = [];
 for ($slot = $opens; $slot <= $closes; $slot = $slot->add($step)) {
     $from = $slot->format('H:i');
     $customTimes[] = $from;
     $end = $slot->add($step);
     if ($end <= $closes) {
         $to = $end->format('H:i');
-        $blocked = roomieRoomBlockOverlaps($roomBlocks, $from, $to);
-        if ($blocked) $blockedStarts[$from] = true;
-        if (!$blocked && $firstCustom === null && $canBookRoom && $canBookDate && $slot > $now
+        if ($canBookRoom && $canBookDate && $slot > $now && !roomieRoomBlockOverlaps($roomBlocks, $from, $to)
             && roomieBookingConflict($bookings, $capacity, $userId, $from, $to) === null) {
-            $firstCustom = [$from, $to];
+            $freeCustomStarts[$from] = true;
+            $firstCustom ??= [$from, $to];
         }
     }
+}
+// A continuous range is available only while every quarter within it is free.
+// Send only the resulting time limits to the controls, not booking records.
+$availableUntil = [];
+$lastFreeEnd = null;
+for ($i = count($customTimes) - 2; $i >= 0; --$i) {
+    $from = $customTimes[$i];
+    if (!isset($freeCustomStarts[$from])) {
+        $lastFreeEnd = null;
+        continue;
+    }
+    $lastFreeEnd ??= $customTimes[$i + 1];
+    $availableUntil[$from] = $lastFreeEnd;
 }
 $detailContext = [];
 $givenStart = $_GET['start_time'] ?? null;
@@ -149,7 +161,7 @@ if (in_array($givenStart, $customTimes, true) && in_array($givenEnd, $customTime
     $detailContext += ['start_time' => $givenStart, 'end_time' => $givenEnd];
     try {
         $requestedCustom = roomieParseCustomBookingTimes($parsedDate, $givenStart, $givenEnd, $now);
-        if ($firstCustom && !roomieRoomBlockOverlaps($roomBlocks, $givenStart, $givenEnd)) {
+        if (isset($availableUntil[$givenStart]) && $givenEnd <= $availableUntil[$givenStart]) {
             $chosenCustom = $requestedCustom;
         }
     } catch (DomainException) {
@@ -157,7 +169,7 @@ if (in_array($givenStart, $customTimes, true) && in_array($givenEnd, $customTime
     }
 }
 if (($_GET['free'] ?? null) === '1') $detailContext['free'] = '1';
-if ($firstCustom && ($chosenCustom || $firstPeriod === null)) $firstPeriod = 'individuell';
+if ($firstCustom && ($requestedCustom || $firstPeriod === null)) $firstPeriod = 'individuell';
 [$customStart, $customEnd] = $chosenCustom ?? $firstCustom ?? [ROOMIE_BOOKING_OPEN_TIME, ROOMIE_BOOKING_CLOSE_TIME];
 
 $equipmentLabels = [
@@ -238,25 +250,15 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
     </form>
     <?php endif; ?>
     <div class="rb-room-columns">
-        <section class="roomplan-panel rb-room-panel">
-            <h2>Belegung · <time datetime="<?= detailEscape($selected_date) ?>"><?= detailEscape($parsedDate->format('d.m.Y')) ?></time></h2>
-            <?php if (!$occupancy) : ?><p class="rb-empty">Keine Buchungen.</p><?php else : ?>
-            <ul class="rb-room-list">
-                <?php foreach ($occupancy as $entry) : ?>
-                <li><strong><?= detailEscape(substr($entry['start_time'], 0, 5) . '–' . substr($entry['end_time'], 0, 5)) ?></strong>
-                    <?php if (!empty($entry['blocked'])) : ?><span class="rb-period-blocked">Gesperrt</span>
-                    <?php else : ?><span><?= $entry['own'] ? 'Eigene Buchung' : detailEscape($entry['user_name'] ?? 'Belegt') ?></span><?php endif; ?>
-                </li>
-                <?php endforeach; ?>
-            </ul>
-            <?php endif; ?>
-        </section>
-        <section class="roomplan-panel rb-room-panel">
-            <h2><?= $requiresApproval ? 'Raum anfragen' : 'Raum buchen' ?></h2>
+        <section class="roomplan-panel rb-room-panel" aria-labelledby="rb-room-booking-title">
+            <h2 id="rb-room-booking-title"><?= $requiresApproval ? 'Raum anfragen' : 'Raum buchen' ?></h2>
             <?php if (!$canBookRoom) : ?><p class="rb-empty">Für diesen Raum fehlt dir die Buchungsberechtigung.</p>
             <?php elseif (!$canBookDate) : ?><p class="rb-empty">Für dieses Datum nicht buchbar.</p>
             <?php elseif ($firstPeriod === null) : ?><p class="rb-empty">Kein buchbarer Zeitraum.</p>
             <?php else : ?>
+            <?php if ($requestedCustom && !$chosenCustom) : ?>
+                <p class="rb-notice rb-notice-error">Der im Raumplan gewählte Zeitraum ist nicht verfügbar. Bitte prüfe die angezeigte Alternative vor dem Buchen.</p>
+            <?php endif; ?>
             <form id="rb-room-book" method="post" action="process_booking.php" data-requires-approval="<?= $requiresApproval ? '1' : '0' ?>" hidden>
                 <input type="hidden" name="csrf_token" value="<?= detailEscape(csrfToken()) ?>">
                 <input type="hidden" name="selectedWorkspace" value="<?= $room_id ?>">
@@ -276,18 +278,18 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
                         <span><strong>Individuell</strong><?php if (!$firstCustom) : ?> <small>nicht verfügbar</small><?php endif; ?></span>
                     </label>
                     <?php if ($firstCustom) : ?>
-                    <div class="rp-time-range" data-custom-time data-room-blocks="<?= detailEscape(json_encode($roomBlocks, JSON_THROW_ON_ERROR)) ?>"<?= $firstPeriod !== 'individuell' ? ' hidden' : '' ?>>
+                    <div class="rp-time-range" data-custom-time data-available-until="<?= detailEscape(json_encode($availableUntil, JSON_THROW_ON_ERROR)) ?>"<?= $firstPeriod !== 'individuell' ? ' hidden' : '' ?>>
                         <label class="rp-time-label" for="rb-book-start-time">Von
                             <select class="rp-date rp-time" id="rb-book-start-time" name="start_time" required<?= $firstPeriod !== 'individuell' ? ' disabled' : '' ?>>
                                 <?php foreach (array_slice($customTimes, 0, -1) as $option) : ?>
-                                    <option value="<?= $option ?>"<?= $customStart === $option ? ' selected' : '' ?><?= isset($blockedStarts[$option]) ? ' disabled' : '' ?>><?= $option ?></option>
+                                    <option value="<?= $option ?>"<?= $customStart === $option ? ' selected' : '' ?><?= !isset($availableUntil[$option]) ? ' disabled' : '' ?>><?= $option ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </label>
                         <label class="rp-time-label" for="rb-book-end-time">Bis
                             <select class="rp-date rp-time" id="rb-book-end-time" name="end_time" required<?= $firstPeriod !== 'individuell' ? ' disabled' : '' ?>>
                                 <?php foreach (array_slice($customTimes, 1) as $option) : ?>
-                                    <option value="<?= $option ?>"<?= $customEnd === $option ? ' selected' : '' ?><?= $option <= $customStart || roomieRoomBlockOverlaps($roomBlocks, $customStart, $option) ? ' disabled' : '' ?>><?= $option ?></option>
+                                    <option value="<?= $option ?>"<?= $customEnd === $option ? ' selected' : '' ?><?= $option <= $customStart || $option > $availableUntil[$customStart] ? ' disabled' : '' ?>><?= $option ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </label>
@@ -307,6 +309,19 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
             <?php endif; ?>
             <?php if ($canBookRoom && $canBookDate && !$requiresApproval) : ?>
                 <a class="roomplan-action roomplan-action-secondary rb-series-link" href="<?= detailEscape($seriesUrl) ?>">Wöchentlich buchen</a>
+            <?php endif; ?>
+        </section>
+        <section class="roomplan-panel rb-room-panel" aria-labelledby="rb-room-occupancy-title">
+            <h2 id="rb-room-occupancy-title">Belegung · <time datetime="<?= detailEscape($selected_date) ?>"><?= detailEscape($parsedDate->format('d.m.Y')) ?></time></h2>
+            <?php if (!$occupancy) : ?><p class="rb-empty">Keine Buchungen.</p><?php else : ?>
+            <ul class="rb-room-list">
+                <?php foreach ($occupancy as $entry) : ?>
+                <li><strong><?= detailEscape(substr($entry['start_time'], 0, 5) . '–' . substr($entry['end_time'], 0, 5)) ?></strong>
+                    <?php if (!empty($entry['blocked'])) : ?><span class="rb-period-blocked">Gesperrt</span>
+                    <?php else : ?><span><?= $entry['own'] ? 'Eigene Buchung' : detailEscape($entry['user_name'] ?? 'Belegt') ?></span><?php endif; ?>
+                </li>
+                <?php endforeach; ?>
+            </ul>
             <?php endif; ?>
         </section>
     </div>

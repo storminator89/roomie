@@ -327,6 +327,14 @@ export function mountEditor({root, api, initial, onChange, onClose}) {
         const nextCols = cols.valueAsNumber;
         if (draft.rows === nextRows && draft.cols === nextCols) return;
         const layout = resizeLayout(draft.layout, draft.cols, nextRows, nextCols);
+        const removed = draft.layout.filter(id => id !== null).length - layout.filter(id => id !== null).length;
+        if (removed > 0 && !window.confirm(removed === 1
+            ? 'Beim Verkleinern wird 1 Raum aus dem Raster genommen. Der Raum bleibt gespeichert. Fortfahren?'
+            : `Beim Verkleinern werden ${removed} Räume aus dem Raster genommen. Die Räume bleiben gespeichert. Fortfahren?`)) {
+            rows.value = draft.rows;
+            cols.value = draft.cols;
+            return;
+        }
         draft = {rows: nextRows, cols: nextCols, layout};
         redraw();
     });

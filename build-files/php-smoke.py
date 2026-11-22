@@ -190,6 +190,8 @@ class BookingDetailsHTML(HTMLParser):
         super().__init__()
         self.inputs = []
         self.range = {}
+        self.time_options = {}
+        self.available_until = {}
         self.map_back = None
         self.select = None
         self.feed(html)
@@ -200,8 +202,12 @@ class BookingDetailsHTML(HTMLParser):
             self.inputs.append(attrs)
         elif tag == "select":
             self.select = attrs.get("name")
-        elif tag == "option" and self.select and "selected" in attrs:
-            self.range[self.select] = attrs.get("value")
+        elif tag == "option" and self.select:
+            self.time_options.setdefault(self.select, {})[attrs.get("value")] = "disabled" not in attrs
+            if "selected" in attrs:
+                self.range[self.select] = attrs.get("value")
+        elif tag == "div" and "data-available-until" in attrs:
+            self.available_until = json.loads(attrs["data-available-until"])
         elif tag == "a" and "rb-back" in attrs.get("class", "").split():
             self.map_back = attrs.get("href")
 
@@ -320,6 +326,8 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
     code, _, html = user.request(gap_url)
     expect(code == 200 and 'id="rb-room-book"' in html and "Smoke Other Member" not in html,
            "Room details must permit the free gap without exposing other bookers")
+    expect(html.index('id="rb-room-booking-title"') < html.index('id="rb-room-occupancy-title"'),
+           "The primary booking panel must precede the potentially long occupancy list")
     details = BookingDetailsHTML(html)
     periods = {entry.get("value"): entry for entry in details.inputs if entry.get("name") == "time_period"}
     expect(all(value in periods and "disabled" in periods[value] for value in ("ganzerTag", "vormittags", "nachmittags")),
@@ -327,6 +335,11 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
     expect("individuell" in periods and "disabled" not in periods["individuell"] and "checked" in periods["individuell"]
            and details.range == {"start_time": "10:00", "end_time": "10:15"},
            "The booking form must select the earliest usable custom gap when presets are full")
+    expect({time for time, enabled in details.time_options["start_time"].items() if enabled}
+           == {"10:00", "10:15", "10:30", "10:45"}
+           and details.available_until == {time: "11:00" for time in ("10:00", "10:15", "10:30", "10:45")}
+           and not details.time_options["end_time"]["11:15"],
+           "The custom picker must allow only a continuous free window even with legacy seconds")
     preferred = {"start_time": "10:15", "end_time": "10:45"}
     code, _, html = user.request(gap_url + "&" + urlencode({**preferred, "free": "1"}))
     linked = BookingDetailsHTML(html)
@@ -334,6 +347,21 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
     expect(code == 200 and linked.range == preferred and target.path == "raumplan.php"
            and parse_qs(target.query) == {key: [value] for key, value in {**preferred, "date": date, "free": "1"}.items()},
            "Opening room details and returning must preserve the map's date, times and free filter")
+    occupied = {"start_time": "10:45", "end_time": "11:15"}
+    code, _, html = user.request(gap_url + "&" + urlencode({**occupied, "free": "1"}))
+    linked = BookingDetailsHTML(html)
+    expect(code == 200 and linked.range == details.range
+           and "Der im Raumplan gewählte Zeitraum ist nicht verfügbar." in html
+           and parse_qs(urlsplit(linked.map_back or "").query)["end_time"] == ["11:15"],
+           "A deep-linked unavailable interval must not be selected or silently replaced")
+    code, _, html = user.request(f"room_details.php?id={rooms['Own overlap']}&date={date}")
+    own_picker = BookingDetailsHTML(html)
+    expect(code == 200 and own_picker.available_until.get("11:45") == "12:00"
+           and "12:00" not in own_picker.available_until and own_picker.available_until.get("12:30") == "17:00",
+           "The picker must exclude the viewer's own overlap even if the room has space")
+    code, _, html = user.request(f"room_details.php?id={rooms['Capacity']}&date={date}")
+    expect(code == 200 and BookingDetailsHTML(html).available_until.get("10:00") == "17:00",
+           "Available spare capacity across adjacent bookings must remain selectable")
     submit(fields("Gap"), expected=True, description="Custom interval fits a gap between legacy bookings")
     submit(fields("Gap", "09:45", "10:15"), actor=admin, token=admin_token, expected=False,
            description="Overlapping a booking by 15 minutes blocks a single-place room")
@@ -971,6 +999,10 @@ def smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, 
     code, _, html = user.request(f"room_details.php?id={open_room}&date={later}")
     expect(code == 200 and "Gesperrt" in html and "Roomie Smoke Admin" not in html and endpoint not in html,
            "Room detail must show a neutral closed interval, not the administrator or private management link")
+    picker = BookingDetailsHTML(html)
+    expect(picker.available_until.get("09:45") == "10:00" and "10:00" not in picker.available_until
+           and picker.available_until.get("11:00") == "17:00",
+           "A custom interval may touch but must not cross a room closure")
     code, _, admin_html = admin.request(f"room_details.php?id={open_room}&date={later}")
     expect(code == 200 and f'{endpoint}?room_id={open_room}&amp;date={later}' in admin_html,
            "Administrators can reach the room's maintenance management from details")

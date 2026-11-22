@@ -1,0 +1,12 @@
+.rm-profile { max-width: 42rem; }
+.rm-profile-form, .rm-profile-password { display: grid; gap: .9rem; min-width: 0; }
+.rm-profile-form { padding: clamp(1rem, 4vw, 1.5rem); }
+.rm-profile-avatar { display: flex; align-items: center; gap: .65rem; }
+.rm-profile-avatar img { flex: none; object-fit: cover; border-radius: 50%; }
+.rm-profile-avatar label { min-width: 0; }
+.rm-profile-form input { width: 100%; min-width: 0; font: inherit; }
+.rm-profile-email { display: grid; gap: .15rem; font-size: .9rem; overflow-wrap: anywhere; }
+.rm-profile-email span { color: var(--roomplan-muted); }
+.rm-profile-form details { border-block: 1px solid var(--roomplan-control-border); }
+.rm-profile-form summary { padding: .7rem 0; cursor: pointer; font-weight: 650; }
+.rm-profile-password { padding-bottom: .8rem; }
