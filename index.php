@@ -121,11 +121,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <label for="selectedWorkspace" class="block text-sm font-medium text-gray-700"><i class="fas fa-door-open"></i>&nbsp;Raum</label>
                     <select id="selectedWorkspace" name="selectedWorkspace" class="w-full bg-white border border-gray-300 rounded-md p-2" x-model="selectedWorkspace" required @change="fetchBookings">
                         <option value="" disabled selected>Raum auswählen</option>
-                        <?php while ($room = $rooms->fetch(PDO::FETCH_ASSOC)) : ?>
-                            <option value="<?= htmlspecialchars($room['id']) ?>">
+                        <?php foreach ($rooms as $room) : ?>
+                            <option value="<?= htmlspecialchars((string) $room['id'], ENT_QUOTES, 'UTF-8') ?>">
                                 <?= htmlspecialchars($room['name'] . ' (' . $room['type'] . ', Kapazität: ' . $room['capacity'] . ')') ?>
                             </option>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 

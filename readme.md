@@ -101,3 +101,30 @@ bookmark forwards to the integrated page. No new database schema is needed.
 
 Run `node --test build-files/roomplan.test.mjs` to check the frontend data
 contract without a running PHP server.
+
+## PHP 8.6 runtime
+
+The deployment target is PHP **8.6.x** (`.php-version`). Select it separately
+for both the web handler (for example, PHP-FPM) and CLI. Changing the CLI version
+alone does not switch the web app. Use the latest available 8.6 security release.
+
+- Enable `pdo_sqlite`, `session` and `filter`; Linux installations also
+  require `posix` for the private database checks. Enable `gd` with JPEG, GIF
+  and PNG support if avatar uploads are used.
+- Keep the private SQLite path, application user and writable session directory
+  configured as before. A PHP-only upgrade does **not** change the SQLite schema.
+- Back up the database and test under the new handler in staging. After selecting
+  the new handler, verify login, dashboard, room plan, booking, calendar download
+  and avatars if used. Check the web error log. If needed, restore the previous
+  handler; keep the database unchanged.
+
+Run the isolated application check with Python 3.9+ and the selected PHP CLI:
+
+```sh
+PHP_BIN=/path/to/php8.6 python3 build-files/php-smoke.py --expect-minor 8.6
+```
+
+It checks lint, session roles, dashboard room selection, booking, and ICS export.
+When GD PNG is enabled it also checks private avatar upload and delivery. The
+test uses temporary data and localhost only and sends no email. It does not
+check an Apache/PHP-FPM installation or change the host's PHP selection.
