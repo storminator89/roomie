@@ -394,6 +394,209 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
           "room grants, private map data and ICS passed" + ("; concurrent last place passed" if concurrent else ""), flush=True)
 
 
+class MoveFormsHTML(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.fields = None
+        self.forms = {}
+        self.opened = set()
+        self.details = []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "details":
+            self.details.append(attrs)
+        elif tag == "form" and attrs.get("action") == "reschedule_booking.php" and attrs.get("method", "").lower() == "post":
+            self.fields = {}
+        elif tag == "input" and self.fields is not None and attrs.get("type") == "hidden" and attrs.get("name"):
+            self.fields[attrs["name"]] = attrs.get("value")
+
+    def handle_endtag(self, tag):
+        if tag == "details" and self.details:
+            self.details.pop()
+        elif tag == "form" and self.fields is not None:
+            if "booking_id" in self.fields:
+                booking_id = int(self.fields["booking_id"])
+                self.forms[booking_id] = self.fields
+                open_classes = {name for detail in self.details if "open" in detail for name in detail.get("class", "").split()}
+                if {"rb-more", "rb-move"} <= open_classes:
+                    self.opened.add(booking_id)
+            self.fields = None
+
+
+def smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, concurrent):
+    db_path = env["ROOMIE_DB_PATH"]
+    berlin = ZoneInfo("Europe/Berlin")
+    now = dt.datetime.now(berlin)
+    today = now.date().isoformat()
+    next_date = (dt.date.fromisoformat(date) + dt.timedelta(days=1)).isoformat()
+    past_day = (now.date() - dt.timedelta(days=1)).isoformat()
+
+    with closing(sqlite3.connect(db_path)) as db, db:
+        accounts = dict(db.execute("SELECT email, id FROM users"))
+        who = accounts["smoke-user@example.test"]
+        other = accounts["smoke-admin@example.test"]
+
+        def room(name, capacity, kind="office"):
+            return db.execute("INSERT INTO rooms (name, type, capacity) VALUES (?, ?, ?)",
+                              (f"QA Move {name}", kind, capacity)).lastrowid
+
+        def seat(where):
+            return db.execute("INSERT INTO seats (room_id, top, left_pos) VALUES (?, '0', '0')", (where,)).lastrowid
+
+        def booking(owner, where, on, start, end, assigned=None):
+            return db.execute("INSERT INTO bookings (user_id, room_id, seat_id, date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?)",
+                              (owner, where, assigned, on, start, end)).lastrowid
+
+        main = room("Main", 1)
+        main_seat = seat(main)
+        own = booking(who, main, date, "09:00:00", "10:00:00", main_seat)
+        conflicting = booking(other, main, next_date, "10:15", "11:15")
+        ended = booking(who, main, past_day, "09:00", "10:00")
+        started = booking(who, main, today, "00:00", "23:59:59") if now.time() > dt.time() else None
+        restricted = room("Restricted", 2, "fk-office")
+        revoked = booking(who, restricted, date, "14:00", "15:00")
+        shared = room("Shared assigned seat", 2, "shared-desk")
+        shared_seat = seat(shared)
+        assigned_booking = booking(who, shared, date, "09:00", "10:00", shared_seat)
+        booking(other, shared, next_date, "10:00", "11:00", shared_seat)
+        race = room("Race", 1)
+        stale_race = booking(who, race, date, "09:00", "10:00")
+        last_place = booking(who, race, date, "12:00", "13:00")
+
+    def current(booking_id):
+        with closing(sqlite3.connect(db_path)) as db:
+            return db.execute("SELECT id, user_id, room_id, seat_id, date, start_time, end_time FROM bookings WHERE id = ?",
+                              (booking_id,)).fetchone()
+
+    def calendar(booking_id):
+        code, headers, raw = user.request(f"bookings.php?download=calendar&booking_id={booking_id}")
+        expect(code == 200 and "text/calendar" in headers.get("Content-Type", ""), "Moved booking keeps its calendar link")
+        return {key: value for key, _, value in (line.partition(":") for line in raw.split("\r\n"))}
+
+    def original(booking_id):
+        row = current(booking_id)
+        return {"booking_id": booking_id, "original_date": row[4], "original_start_time": row[5], "original_end_time": row[6],
+                "csrf_token": user_status["csrf_token"]}
+
+    def propose(snapshot, on=next_date, start="13:15", end="14:45"):
+        return {**snapshot, "date": on, "start_time": start, "end_time": end}
+
+    def move(payload, expected, description, actor=user):
+        code, headers, html = actor.request("reschedule_booking.php", payload)
+        expect(code == expected, f"{description}: expected HTTP {expected}, got {code}")
+        if code == 303:
+            expect(headers.get("Location") == ("login.php" if actor is guest else "bookings.php?moved=1"),
+                   f"{description}: incorrect redirect")
+        return html
+
+    code, _, html = user.request("bookings.php")
+    forms = MoveFormsHTML(html)
+    own_forms = forms.forms
+    expect(not forms.opened, "Move disclosures should stay closed until the owner opens them or retries")
+    expect(code == 200 and "Verschieben" in html and own_forms.get(own) == {key: str(value) for key, value in original(own).items()},
+           "Future owner booking must show move form with its exact original snapshot and CSRF")
+    expect(conflicting not in own_forms and ended not in own_forms and started not in own_forms,
+           "No move form for someone else's, past, or already started booking")
+    code, _, html = admin.request("bookings.php?scope=all")
+    admin_forms = MoveFormsHTML(html).forms
+    expect(code == 200 and conflicting in admin_forms and own not in admin_forms,
+           "Admin overview must not give permissions to move a different account's booking")
+    code, headers, _ = user.request("reschedule_booking.php?booking_id=" + str(own))
+    expect(code == 405 and headers.get("Allow") == "POST", "Rescheduling must be a POST-only mutation")
+
+    snapshot = own_forms[own]
+    before = current(own)
+    before_ics = calendar(own)
+    move(propose(snapshot), 303, "Guest cannot move a booking", guest)
+    move(dict(propose(snapshot), csrf_token=""), 403, "Missing CSRF must reject move")
+    move(dict(propose(snapshot), csrf_token=admin_status["csrf_token"]), 404, "Admin cannot move another member's booking", admin)
+    move(propose(original(revoked)), 403, "Revoked room grant must reject move")
+    move(propose(original(ended)), 409, "Ended booking cannot move")
+    if started is not None:
+        move(propose(original(started)), 409, "Already started booking cannot move")
+    move(propose(original(assigned_booking), next_date, "10:15", "10:45"), 409,
+         "Preserved seat cannot move onto a booking of the same seat even with room capacity")
+    move(propose(snapshot, date, "09:00", "10:00"), 400, "Normalized no-op should not move booking")
+    move(propose(snapshot, next_date, "08:45", "09:15"), 400, "Target outside allowed hours must reject")
+    conflict_html = move(propose(snapshot, next_date, "10:30", "10:45"), 409, "Occupied target must reject move")
+    retry_path = f"bookings.php?edit={own}"
+    expect(f'href="{retry_path}#booking-{own}"' in conflict_html, "Conflict response must offer to return to the booking")
+    expect(current(own) == before, "All rejected moves must leave the original booking and seat untouched")
+    expect(current(assigned_booking)[4:] == (date, "09:00", "10:00"), "Rejected seat move must leave original slot untouched")
+
+    overlap = propose(snapshot, date, "09:30", "10:15")
+    move(overlap, 303, "Own original overlap must not block a move")
+    move(overlap, 409, "Identical form replay must not write again")
+    move(propose(snapshot), 409, "Stale form must not overwrite a previously moved booking")
+    expect(current(own) == (*before[:4], date, "09:30", "10:15"), "In-place move must preserve user, room, ID, seat and shorter window")
+    code, _, html = user.request(retry_path)
+    retry = MoveFormsHTML(html)
+    expect(code == 200 and retry.opened == {own} and retry.forms[own]["original_start_time"] == "09:30",
+           "Retry link must open only this owned booking and load the current slot snapshot")
+    move(propose(retry.forms[own]), 303, "Owner can move the booking to a new date from a refreshed form")
+    expect(current(own) == (*before[:4], next_date, "13:15", "14:45"), "Move must update the same booking row in place")
+    code, _, html = user.request("bookings.php?moved=1")
+    expect(code == 200 and "Buchung verschoben" in html and "13:15–14:45" in html,
+           "Bookings list must confirm the move and show the new interval")
+    code, _, old_raw = user.request("get_bookings.php?" + urlencode({"room_id": main, "start_date": date}))
+    expect(code == 200 and not any(row.get("id") == own for row in json.loads(old_raw)), "Original slot must be freed")
+    code, _, new_raw = user.request("get_bookings.php?" + urlencode({"room_id": main, "start_date": next_date}))
+    moved_rows = [row for row in json.loads(new_raw) if row.get("id") == own]
+    expect(code == 200 and len(moved_rows) == 1 and moved_rows[0]["start_time"] == "13:15" and moved_rows[0]["end_time"] == "14:45",
+           "Moved slot must be visible once with updated hours")
+    after_ics = calendar(own)
+    expect(before_ics["UID"] == after_ics["UID"], "Moved calendar event must retain its stable UID")
+    for label, clock in (("DTSTART", dt.time(13, 15)), ("DTEND", dt.time(14, 45))):
+        local = dt.datetime.combine(dt.date.fromisoformat(next_date), clock, berlin)
+        expected_utc = local.astimezone(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        expect(after_ics[label] == expected_utc and before_ics[label] != expected_utc, f"Moved calendar must update {label}")
+
+    if concurrent:
+        parallel_session = Client(user.base_url)
+        parallel_status = parallel_session.login("smoke-user@example.test", env["ROOMIE_SMOKE_PASSWORD"])
+
+        def parallel(a, b):
+            barrier = Barrier(2, timeout=5)
+
+            def start(operation):
+                barrier.wait()
+                return operation()
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                first = pool.submit(start, a)
+                second = pool.submit(start, b)
+                return first.result(), second.result()
+
+        fresh = original(stale_race)
+        first = propose(fresh, next_date, "09:00", "09:30")
+        second = propose(dict(fresh, csrf_token=parallel_status["csrf_token"]), next_date, "09:30", "10:00")
+        a, b = parallel(lambda: user.request("reschedule_booking.php", first)[0],
+                        lambda: parallel_session.request("reschedule_booking.php", second)[0])
+        expect(sorted((a, b)) == [303, 409], "Concurrent moves of one original booking must have exactly one winner")
+        winner = first if a == 303 else second
+        expect(current(stale_race)[4:] == (winner["date"], winner["start_time"], winner["end_time"]),
+               "The losing move cannot overwrite the winner")
+
+        move_fields = propose(original(last_place), next_date, "15:00", "16:00")
+        new_fields = {"csrf_token": admin_status["csrf_token"], "selectedWorkspace": race, "time_period": "individuell",
+                      "start_date": next_date, "end_date": next_date, "start_time": "15:00", "end_time": "16:00"}
+        moved, booked = parallel(lambda: user.request("reschedule_booking.php", move_fields)[0],
+                                 lambda: admin.request("process_booking.php", new_fields))
+        expect(moved in (303, 409) and booked[0] == 200 and json.loads(booked[2]).get("success") is (moved == 409),
+               "A simultaneous move and new booking cannot both claim the last place")
+        with closing(sqlite3.connect(db_path)) as db:
+            count = db.execute("SELECT COUNT(*) FROM bookings WHERE room_id = ? AND date = ? AND start_time = '15:00'",
+                               (race, next_date)).fetchone()[0]
+        expect(count == 1, "Exactly one booking must occupy the contested target")
+        if moved == 409:
+            expect(current(last_place)[4:] == (date, "12:00", "13:00"), "A losing move still owns its old slot")
+
+    print("Reschedule: role, CSRF, started/expired, grant/seat/capacity, stale forms, unchanged row identity, and updated calendar passed"
+          + ("; both concurrent races passed" if concurrent else ""), flush=True)
+
+
 def smoke(php, root, scratch, expected_minor):
     env = {key: value for key, value in os.environ.items()
            if not key.startswith("ROOMIE_") and key != "PHP_CLI_SERVER_WORKERS"}
@@ -559,6 +762,7 @@ def smoke(php, root, scratch, expected_minor):
                 smoke_floorplan(command, root, env, guest, admin, admin_status, user, room_id)
                 smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status,
                                         user, user_status, concurrent)
+                smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, concurrent)
             finally:
                 if concurrent:
                     try:

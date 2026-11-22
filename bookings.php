@@ -17,6 +17,8 @@ $error = $_SESSION['roomie_booking_error'] ?? null;
 unset($_SESSION['roomie_booking_notice'], $_SESSION['roomie_booking_error']);
 if (($_GET['cancelled'] ?? '') === '1') {
     $successMessage = 'Ihre Buchung wurde storniert.';
+} elseif (($_GET['moved'] ?? '') === '1') {
+    $successMessage = 'Buchung verschoben.';
 }
 
 function findOwnBooking(PDO $db, int $userId, int $bookingId): ?array
@@ -83,10 +85,14 @@ if ($download || $resend) {
 $filterDate = parseBookingDate($_GET['date'] ?? null)?->format('Y-m-d') ?? '';
 $scope = ($_GET['scope'] ?? null) === 'all' ? 'all' : 'mine';
 $searchName = $scope === 'all' && $isAdmin && is_string($_GET['search'] ?? null) ? substr(trim($_GET['search']), 0, 100) : '';
+$editBookingId = roomiePositiveId($_GET['edit'] ?? null);
 $page = min(201, roomiePositiveId($_GET['page'] ?? null) ?? 1);
 $perPage = 50;
 $offset = ($page - 1) * $perPage;
-$today = roomieBookingToday();
+$now = new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin'));
+$today = $now->setTime(0, 0);
+$todayKey = $today->format('Y-m-d');
+$lastDate = $today->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days')->format('Y-m-d');
 $bookings = [];
 $hasNext = false;
 
@@ -101,8 +107,8 @@ try {
         'viewer_id' => $user_id,
         'show_details' => $isAdmin ? 1 : 0,
         'owner_id' => $user_id,
-        'current_date' => $today->format('Y-m-d'),
-        'last_date' => $today->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days')->format('Y-m-d'),
+        'current_date' => $todayKey,
+        'last_date' => $lastDate,
     ];
     if ($scope === 'mine') {
         $query .= ' AND b.user_id = :own_scope_id';
@@ -116,7 +122,13 @@ try {
         $query .= ' AND u.name LIKE :search_name';
         $params['search_name'] = '%' . $searchName . '%';
     }
-    $stmt = $db->prepare($query . ' ORDER BY b.date, b.start_time, b.id LIMIT ' . ($perPage + 1) . ' OFFSET ' . $offset);
+    $editOrder = '';
+    // A retry link must find an owned booking even when it sorts onto a later page.
+    if ($editBookingId !== null && $page === 1) {
+        $editOrder = 'CASE WHEN b.id = :edit_id AND b.user_id = :edit_owner THEN 0 ELSE 1 END, ';
+        $params += ['edit_id' => $editBookingId, 'edit_owner' => $user_id];
+    }
+    $stmt = $db->prepare($query . ' ORDER BY ' . $editOrder . 'b.date, b.start_time, b.id LIMIT ' . ($perPage + 1) . ' OFFSET ' . $offset);
     foreach ($params as $key => $value) {
         $stmt->bindValue(':' . $key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
     }
@@ -149,6 +161,14 @@ foreach ($bookings as $booking) {
 }
 $planUrl = 'raumplan.php' . ($filterDate !== '' ? '?date=' . rawurlencode($filterDate) : '');
 $hasMail = roomieMailFrom() !== null;
+$moveTimes = [];
+$moveStep = new DateInterval('PT' . ROOMIE_BOOKING_STEP_MINUTES . 'M');
+$close = $today->modify(ROOMIE_BOOKING_CLOSE_TIME);
+for ($slot = $today->modify(ROOMIE_BOOKING_OPEN_TIME); $slot <= $close; $slot = $slot->add($moveStep)) {
+    $moveTimes[] = $slot->format('H:i');
+}
+$moveStarts = array_slice($moveTimes, 0, -1);
+$moveEnds = array_slice($moveTimes, 1);
 ?>
 <!doctype html>
 <html lang="de">
@@ -193,10 +213,16 @@ $hasMail = roomieMailFrom() !== null;
 
     <?php foreach ($groups as $date => $entries) : ?>
         <section class="rb-day">
-            <h2><time datetime="<?= bookingEscape((string) $date) ?>"><?= $date === $today->format('Y-m-d') ? 'Heute · ' : '' ?><?= bookingEscape(roomieDateLabel($date)) ?></time></h2>
+            <h2><time datetime="<?= bookingEscape((string) $date) ?>"><?= $date === $todayKey ? 'Heute · ' : '' ?><?= bookingEscape(roomieDateLabel($date)) ?></time></h2>
             <ul class="rb-list">
-            <?php foreach ($entries as $booking) : $owner = (int) $booking['user_id'] === $user_id; ?>
-                <li class="rb-entry">
+            <?php foreach ($entries as $booking) :
+                $bookingId = (int) $booking['id'];
+                $owner = (int) $booking['user_id'] === $user_id;
+                $startClock = roomieBookingClock($booking['start_time']);
+                $canMove = $owner && $startClock !== null && ($date > $todayKey || ($date === $todayKey && $startClock > $now->format('H:i:s')));
+                $reopenMove = $canMove && $bookingId === $editBookingId;
+            ?>
+                <li class="rb-entry"<?= $owner ? ' id="booking-' . $bookingId . '" tabindex="-1"' : '' ?>>
                     <div class="rb-entry-main">
                         <h3><?= bookingEscape((string) $booking['room_name']) ?></h3>
                         <p><?= bookingEscape(substr((string) $booking['start_time'], 0, 5) . '–' . substr((string) $booking['end_time'], 0, 5)) ?> Uhr
@@ -205,8 +231,44 @@ $hasMail = roomieMailFrom() !== null;
                     <?php if ($owner) : ?>
                     <div class="rb-entry-actions">
                         <a class="roomplan-action roomplan-action-secondary" href="bookings.php?download=calendar&amp;booking_id=<?= (int) $booking['id'] ?>" aria-label="Kalenderdatei für <?= bookingEscape((string) $booking['room_name']) ?> herunterladen">Kalender</a>
-                        <details class="rb-more">
+                        <details class="rb-more"<?= $reopenMove ? ' open' : '' ?>>
                             <summary aria-label="Optionen für <?= bookingEscape((string) $booking['room_name']) ?>">Optionen</summary>
+                            <?php if ($canMove) :
+                                $moveDate = $date <= $lastDate ? $date : '';
+                                $moveStart = substr((string) $booking['start_time'], 0, 5);
+                                $moveEnd = substr((string) $booking['end_time'], 0, 5);
+                            ?>
+                            <details class="rb-move"<?= $reopenMove ? ' open' : '' ?>>
+                                <summary>Verschieben</summary>
+                                <form class="rb-move-form" method="post" action="reschedule_booking.php">
+                                    <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">
+                                    <input type="hidden" name="booking_id" value="<?= $bookingId ?>">
+                                    <input type="hidden" name="original_date" value="<?= bookingEscape((string) $booking['date']) ?>">
+                                    <input type="hidden" name="original_start_time" value="<?= bookingEscape((string) $booking['start_time']) ?>">
+                                    <input type="hidden" name="original_end_time" value="<?= bookingEscape((string) $booking['end_time']) ?>">
+                                    <div class="rb-filter">
+                                        <label>Datum<input type="date" name="date" min="<?= $todayKey ?>" max="<?= $lastDate ?>" value="<?= bookingEscape($moveDate) ?>" required></label>
+                                        <label>Von
+                                            <select name="start_time" required>
+                                                <option value="">Uhrzeit</option>
+                                                <?php foreach ($moveStarts as $time) : ?>
+                                                    <option value="<?= $time ?>"<?= $time === $moveStart ? ' selected' : '' ?>><?= $time ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </label>
+                                        <label>Bis
+                                            <select name="end_time" required>
+                                                <option value="">Uhrzeit</option>
+                                                <?php foreach ($moveEnds as $time) : ?>
+                                                    <option value="<?= $time ?>"<?= $time === $moveEnd ? ' selected' : '' ?>><?= $time ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <button type="submit" class="roomplan-action">Speichern</button>
+                                </form>
+                            </details>
+                            <?php endif; ?>
                             <?php if ($hasMail) : ?>
                             <form method="post" action="bookings.php">
                                 <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">

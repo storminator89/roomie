@@ -111,6 +111,14 @@ Custom slots are for one day, between 09:00 and 17:00 (Europe/Berlin), in
 Room permissions and available places are checked again on save; the filter
 does not reserve a room. No database change is needed for custom times.
 
+Under **Buchungen → Optionen → Verschieben**, change the date and time of an
+upcoming booking in the same room. If the new time is taken or the booking has
+changed since opening the form, the attempted move does not change the booking.
+Multi-day bookings are listed as separate reservations; this action moves only
+the selected day. The calendar download reflects the new time, but an earlier
+import into Outlook or another calendar is not synchronized. No migration is
+required.
+
 Run `node --test build-files/*.test.mjs` to check the frontend data
 contract without a running PHP server.
 
