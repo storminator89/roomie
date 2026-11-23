@@ -24,3 +24,8 @@
     .room-insights .insights-filter .admin-button { flex-basis: 100%; }
     .room-insights .insights-table { font-size: .875rem; }
 }
+
+@media (max-width: 23.5rem) {
+    /* Leave room for the native date indicator even with a long locale format. */
+    .room-insights .insights-filter .admin-field { flex-basis: 100%; }
+}

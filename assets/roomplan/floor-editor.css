@@ -44,3 +44,8 @@
     border:1px solid var(--roomplan-control-border);cursor:pointer;font-size:.875rem;font-weight:650;
 }
 .rp-fe-rename[open] > summary {width:fit-content;margin-bottom:.5rem;background:#fff8e6}
+
+@media (max-width: 42.5rem) {
+    .rp-fe-workspace details > summary { min-block-size: 44px; align-content: center; }
+    .rp-floor-editor :is(input, select) { font-size: 1rem; }
+}

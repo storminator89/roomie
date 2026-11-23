@@ -391,3 +391,16 @@ html:has(body.roomplan-page > #roomplan), body.roomplan-page:has(> #roomplan) { 
     background-repeat: no-repeat;
     background-size: 2.85rem auto;
 }
+
+@media (max-width: 42.5rem) {
+    .roomplan-page :is(.roomplan-field input, .roomplan-field select, .roomplan-field textarea,
+        .rp-date, .rp-floor-pick select, .rp-floor-editor input, .rp-floor-editor select,
+        .rp-fu-name input, .rp-ed-input, .rp-time) {
+        font-size: 1rem;
+        max-inline-size: 100%;
+    }
+}
+@media (max-width: 23.5rem) {
+    #roomplan .rp-floor-actions { flex-wrap: wrap; }
+    #roomplan .rp-floor-actions > button { min-inline-size: 0; overflow-wrap: anywhere; }
+}

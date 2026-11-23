@@ -192,3 +192,7 @@
     .rm-dash-find .roomplan-action { gap: .3rem; padding-inline: .55rem; font-size: .82rem; }
     .rm-dash-find .rm-dash-action-icon { inline-size: .95rem; block-size: .95rem; }
 }
+
+@media (max-width: 42.5rem) {
+    .rm-dash-form-fields :is(input, select) { font-size: 1rem; }
+}

@@ -45,3 +45,16 @@
 .admin-ok{border-color:#87ae8e;background:#edf5ef;color:#245436}
 .admin-paging{justify-content:space-between;margin:.5rem 0 .1rem}
 @media(max-width:520px){.admin-list li{grid-template-columns:minmax(0,1fr);gap:.3rem}.admin-entry :is(strong,span){line-height:1.35}}
+
+@media (max-width: 42.5rem) {
+    /* Avoid iOS focus zoom on editable controls; keep labels compact. */
+    .admin-page :is(.admin-field input, .admin-field select, .admin-search) {
+        font-size: 1rem;
+        max-inline-size: 100%;
+    }
+    .admin-card summary {
+        min-block-size: 2.75rem;
+        align-content: center;
+        overflow-wrap: anywhere;
+    }
+}

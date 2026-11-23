@@ -51,3 +51,7 @@
   .rm-area-head:not(.rm-login-brand) .rm-area-art { inline-size: 3.25rem; }
 }
 .rm-login-footer { border-end-start-radius: 1.3rem; border-end-end-radius: 1.3rem; }
+
+@media (max-width: 42.5rem) {
+  .rm-account-login input { font-size: 1rem; }
+}

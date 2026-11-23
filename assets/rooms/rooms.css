@@ -10,3 +10,7 @@
 .rr-capacity .rr-icon { margin-inline-end:.2rem; }
 .rr-empty { display:flex; align-items:center; gap:.65rem; }
 .rr-empty img { flex:none; inline-size:clamp(3rem, 16vw, 5rem); block-size:auto; }
+
+@media (max-width: 42.5rem) {
+    .rr-card-heading a { display: inline-flex; align-items: center; min-block-size: 44px; }
+}

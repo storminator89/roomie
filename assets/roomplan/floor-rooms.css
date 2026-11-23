@@ -21,3 +21,7 @@
 .rp-fr-help { color:var(--roomplan-muted); margin:0; }
 .rp-fr-actions { justify-content:flex-end; }
 @media (max-width: 430px) { .rp-fr-fields { grid-template-columns:minmax(0, 1fr); } }
+
+@media (max-width: 42.5rem) {
+    .rp-fr-fields :is(input, select) { font-size: 1rem; }
+}

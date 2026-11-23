@@ -16,3 +16,9 @@
 .mcp-revoke { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid #dfe3e7; }
 .mcp-revoke summary { color: #8c241d; }
 .mcp-admin [hidden] { display: none !important; }
+
+@media (max-width: 25rem) {
+    .mcp-input-row { grid-template-columns: minmax(0, 1fr); }
+    .mcp-input-row > button { justify-self: start; }
+    .mcp-details > div { grid-template-columns: minmax(0, 1fr); gap: .15rem; }
+}

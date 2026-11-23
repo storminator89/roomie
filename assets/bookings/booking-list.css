@@ -118,3 +118,10 @@
     .rb-booking-list .rb-entry { padding-inline: .65rem; }
     .rb-booking-list .rb-row-options > summary { inset-inline-end: .65rem; }
 }
+
+@media (max-width: 23.5rem) {
+    /* Let room names use the row rather than squeezing them behind Options. */
+    .rb-booking-list .rb-entry-with-options > .rb-entry-main { padding-inline-end: 0; }
+    .rb-booking-list .rb-row-options > summary { position: static; margin-block-start: .4rem; }
+    .rb-booking-list .rb-entry > .rb-entry-actions { margin-block-start: .45rem; }
+}

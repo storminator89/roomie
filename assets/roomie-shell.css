@@ -201,3 +201,15 @@
 @media (max-width: 42.5rem) {
     .roomie-shell-links a { flex-direction: column; gap: .15rem; min-height: 3rem; }
 }
+
+/* A short phone viewport must still reach the last account action. */
+@media (max-width: 42.5rem) {
+    .roomie-shell-menu-body {
+        max-block-size: min(29rem, calc(100vh - 7.5rem));
+        max-block-size: min(29rem, calc(100dvh - 7.5rem));
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        scroll-padding-block: .4rem;
+    }
+    .roomie-shell-menu-body :is(a, button):focus-visible { outline-offset: -3px; }
+}

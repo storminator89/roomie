@@ -10,3 +10,7 @@
 .rm-profile-form details { border-block: 1px solid var(--roomplan-control-border); }
 .rm-profile-form summary { padding: .7rem 0; cursor: pointer; font-weight: 650; }
 .rm-profile-password { padding-bottom: .8rem; }
+
+@media (max-width: 42.5rem) {
+    .rm-profile-form summary { min-block-size: 44px; align-content: center; }
+}

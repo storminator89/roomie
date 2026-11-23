@@ -14,3 +14,8 @@
 .roomie-qr-card [hidden] { display: none !important; }
 .roomie-qr-feedback:empty { display: none; }
 .roomie-qr-feedback { padding: .4rem 0; font-weight: 650; overflow-wrap: anywhere; }
+
+@media (max-width: 42.5rem) {
+    .roomie-qr-page { padding-inline: max(1rem, env(safe-area-inset-left)) max(1rem, env(safe-area-inset-right)); }
+    .roomie-qr-card a:focus-visible { outline-offset: 2px; }
+}
