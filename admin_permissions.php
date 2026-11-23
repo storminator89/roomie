@@ -106,6 +106,7 @@ $permissions = array_slice($permissions, 0, 25);
         <ul class="admin-tabs">
             <li><a href="admin_users.php">Benutzer</a></li>
             <li><a href="admin_permissions.php" aria-current="page">Berechtigungen</a></li>
+            <li><a href="admin_mcp.php">MCP-Zugang</a></li>
         </ul>
     </nav>
 

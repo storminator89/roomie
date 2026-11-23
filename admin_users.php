@@ -166,6 +166,7 @@ try {
         <ul class="admin-tabs">
             <li><a href="admin_users.php" aria-current="page">Benutzer</a></li>
             <li><a href="admin_permissions.php">Berechtigungen</a></li>
+            <li><a href="admin_mcp.php">MCP-Zugang</a></li>
         </ul>
     </nav>
     <?php if (isset($error)) : ?>

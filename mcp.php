@@ -36,6 +36,12 @@ function roomieMcpError(int $status, int $code, string $message, int|string|null
     roomieMcpResponse($status, ['jsonrpc' => '2.0', 'id' => $id, 'error' => $error]);
 }
 
+function roomieMcpUnauthorized(): never
+{
+    header('WWW-Authenticate: Bearer realm="Roomie MCP"');
+    roomieMcpResponse(401);
+}
+
 function roomieMcpResult(int|string $id, array $result, bool $modern): never
 {
     if ($modern) {
@@ -85,11 +91,6 @@ function roomieMcpToolDefinition(): array
     ];
 }
 
-$key = getenv('ROOMIE_MCP_API_KEY');
-if (!is_string($key) || !preg_match('/\A[0-9a-fA-F]{64}\z/', $key)) {
-    roomieMcpResponse(503);
-}
-
 $origin = $_SERVER['HTTP_ORIGIN'] ?? null;
 if ($origin !== null) {
     $allowed = getenv('ROOMIE_MCP_ORIGIN');
@@ -100,11 +101,24 @@ if ($origin !== null) {
 }
 
 $authorization = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-if (!preg_match('/\ABearer ([0-9a-fA-F]{64})\z/i', $authorization, $parts) || !hash_equals($key, $parts[1])) {
-    header('WWW-Authenticate: Bearer realm="Roomie MCP"');
-    roomieMcpResponse(401);
+if (!preg_match('/\ABearer ([0-9a-fA-F]{64})\z/i', $authorization, $parts)) {
+    roomieMcpUnauthorized();
 }
-unset($authorization, $parts, $key);
+$presentedKey = $parts[1];
+unset($authorization, $parts);
+try {
+    require_once __DIR__ . '/mcp_booking_data.php';
+    $db = roomieMcpReadOnlyConnection();
+    $db->beginTransaction();
+    $authenticated = roomieMcpResolveAccount($db, $presentedKey) !== null;
+    $db->commit();
+} catch (Throwable) {
+    error_log('Roomie MCP authentication unavailable');
+    roomieMcpResponse(503);
+}
+if (!$authenticated) {
+    roomieMcpUnauthorized();
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     header('Allow: POST');
@@ -228,10 +242,11 @@ if (($params->name ?? null) !== ROOMIE_MCP_TOOL
 }
 
 try {
-    require_once __DIR__ . '/mcp_booking_data.php';
-    $bookings = roomieMcpListBookings((array) ($params->arguments ?? new stdClass()));
+    $bookings = roomieMcpListBookings((array) ($params->arguments ?? new stdClass()), $db, $presentedKey);
     $text = json_encode($bookings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
     roomieMcpResult($id, ['content' => roomieMcpText($text), 'structuredContent' => $bookings, 'isError' => false], $modern);
+} catch (RoomieMcpKeyRejected) {
+    roomieMcpUnauthorized();
 } catch (InvalidArgumentException) {
     roomieMcpResult($id, [
         'content' => roomieMcpText('Invalid arguments. Provide valid from/to dates (up to 31 days inclusive), and optionally a positive room_id and limit from 1 to 200.'),

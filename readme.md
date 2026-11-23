@@ -232,23 +232,29 @@ no session setup on the server). The endpoint is disabled until configured.
 It does not use browser login cookies and cannot create, change, or cancel
 bookings.
 
-1. Create a dedicated **non-admin** Roomie account. Note its numeric user ID.
-   Give it only the room permissions needed. It can read bookings for rooms
-   visible to a normal Roomie user, including unrestricted rooms. Restricted
-   rooms require an explicit grant. The account must not be used for daily login.
-2. Generate a 256-bit API key with `openssl rand -hex 32`. Set
-   `ROOMIE_MCP_API_KEY` to the resulting 64 hex digits and
-   `ROOMIE_MCP_USER_ID` to the account ID in the PHP service environment.
-   Keep the key out of source control, web files, URLs and logs. Rotate by
-   replacing the environment secret and updating any clients.
+1. Create a dedicated **non-admin** Roomie account in **Konto → Benutzerverwaltung**.
+   Use **Berechtigungen** for any restricted room the integration should see.
+   It can read bookings for unrestricted rooms as well. Do not use the account
+   for day-to-day login.
+2. As an administrator, open **Konto → MCP-Zugang**, choose that account and
+   select **API-Key erstellen**. Copy the key immediately: Roomie shows it
+   once and saves only its hash in the private SQLite database. Use
+   **API-Key erneuern** to replace it or **Zugang sperren** to disable it.
+   After either action, the previous key no longer works for new requests.
 3. Serve the endpoint only over HTTPS (TLS enforced at the web server or reverse
    proxy). Preserve the `Authorization` header when forwarding to PHP, and apply
    a per-client rate limit on the endpoint, for example 30 requests per minute
-   with a small burst. Keep web-server denial of `mcp_booking_data.php` when
-   not using the included Apache rules. Do not set CORS headers for this route.
-   Leave `ROOMIE_MCP_ORIGIN` unset for normal server-side MCP clients; requests
-   with an `Origin` are rejected by default. If needed, set it to exactly the
-   published Roomie origin (scheme plus hostname and optional port, no slash).
+   with a small burst. Keep web-server denial of `mcp_booking_data.php` and
+   `mcp_key_store.php` when not using the included Apache rules. Do not log tokens
+   or set CORS headers for this route. Leave `ROOMIE_MCP_ORIGIN` unset for normal
+   server-side MCP clients; requests with an `Origin` are rejected by default.
+   If needed, set it to exactly the published Roomie origin (scheme plus hostname
+   and optional port, no slash).
+
+Existing setups using `ROOMIE_MCP_API_KEY` and `ROOMIE_MCP_USER_ID` keep working
+until an admin sets or revokes a key in the web interface. The database then
+takes precedence; revoking a managed key does not reactivate the old environment
+key. No new environment variables or manual schema step are needed for Web UI setup.
 
 In an MCP client that supports custom headers, set the transport to
 **Streamable HTTP**, URL to `https://<roomie-host>/mcp.php` and header to

@@ -2,13 +2,26 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/booking_helpers.php';
+require_once __DIR__ . '/mcp_key_store.php';
+
+final class RoomieMcpKeyRejected extends RuntimeException {}
+
+function roomieMcpReadOnlyConnection(): PDO
+{
+    $db = new PDO('sqlite:' . roomieDatabasePath(), null, null, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        Pdo\Sqlite::ATTR_OPEN_FLAGS => Pdo\Sqlite::OPEN_READONLY,
+    ]);
+    $db->exec('PRAGMA busy_timeout = 3000');
+    return $db;
+}
 
 /**
  * Return a bounded list of confirmed room-booking intervals in Berlin local
  * time, using the dedicated service user's normal room visibility only.
  * No browser session or booking owner identity is involved.
  */
-function roomieMcpListBookings(array $arguments): array
+function roomieMcpListBookings(array $arguments, PDO $db, string $presentedKey): array
 {
     if (array_diff_key($arguments, array_fill_keys(['from', 'to', 'room_id', 'limit'], true))) {
         throw new InvalidArgumentException('Unknown booking query argument.');
@@ -27,28 +40,13 @@ function roomieMcpListBookings(array $arguments): array
         throw new InvalidArgumentException('limit must be an integer from 1 to 200.');
     }
 
-    $configuredUser = getenv('ROOMIE_MCP_USER_ID');
-    $userId = is_string($configuredUser) && preg_match('/\A[1-9][0-9]*\z/', $configuredUser)
-        ? filter_var($configuredUser, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])
-        : false;
-    if ($userId === false) {
-        throw new RuntimeException('MCP service account unavailable.');
-    }
-
-    $db = new PDO('sqlite:' . roomieDatabasePath(), null, null, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        Pdo\Sqlite::ATTR_OPEN_FLAGS => Pdo\Sqlite::OPEN_READONLY,
-    ]);
-    $db->exec('PRAGMA busy_timeout = 3000');
     $db->beginTransaction();
     try {
-        // The account validation and room ACL are checked in the same read
-        // snapshot so the query cannot fall back to an anonymous/public view.
-        $service = $db->prepare('SELECT 1 FROM users WHERE id = :uid AND is_admin = 0');
-        $service->bindValue(':uid', $userId, PDO::PARAM_INT);
-        $service->execute();
-        if ($service->fetchColumn() === false) {
-            throw new RuntimeException('MCP service account unavailable.');
+        // Do not reuse the account from the initial transport check. Resolve
+        // the key and the booking ACL in one snapshot, including on rotation.
+        $userId = roomieMcpResolveAccount($db, $presentedKey);
+        if ($userId === null) {
+            throw new RoomieMcpKeyRejected('MCP access is not available.');
         }
 
         [$acl, $params] = roomieBookingAccessSql('r', $userId, false);

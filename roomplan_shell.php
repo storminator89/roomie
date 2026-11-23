@@ -46,6 +46,7 @@ $roomieAccountName = $_SESSION['user_name'] ?? 'Konto';
                         <div class="roomie-shell-menu-separator"></div>
                         <a href="admin_users.php" <?= $roomieActivePage === 'admin_users.php' ? 'aria-current="page"' : '' ?>>Benutzerverwaltung</a>
                         <a href="admin_permissions.php" <?= $roomieActivePage === 'admin_permissions.php' ? 'aria-current="page"' : '' ?>>Berechtigungen</a>
+                        <a href="admin_mcp.php" <?= $roomieActivePage === 'admin_mcp.php' ? 'aria-current="page"' : '' ?>>MCP-Zugang</a>
                     <?php endif; ?>
                     <div class="roomie-shell-menu-separator"></div>
                     <form method="post" action="logout.php">
