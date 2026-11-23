@@ -69,6 +69,10 @@ $roomieSkipTarget = match ($roomieActivePage) {
                             <svg class="roomie-shell-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 5 3 8 7 10 4-2 7-5 7-10V6l-7-3Z" /><path d="m9 12 2 2 4-4" /></svg>
                             <span>Berechtigungen</span>
                         </a>
+                        <a href="admin_room_insights.php" <?= $roomieActivePage === 'admin_room_insights.php' ? 'aria-current="page"' : '' ?>>
+                            <svg class="roomie-shell-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 4v16h16M8 16v-4m4 4V7m4 9v-6m4 6V5"/></svg>
+                            <span>Raumauswertung</span>
+                        </a>
                         <a href="admin_mcp.php" <?= $roomieActivePage === 'admin_mcp.php' ? 'aria-current="page"' : '' ?>>
                             <svg class="roomie-shell-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="10" r="4"/><path d="m11 13 8 8m-4-4 2-2m0 4 2-2"/></svg>
                             <span>MCP-Zugang</span>

@@ -181,6 +181,26 @@ does not trust arbitrary forwarded headers. Run
 `php build-files/room-checkin-test.php` for the offline policy and time-window
 checks.
 
+### Room insights and CSV
+
+Administrators can open **Konto → Raumauswertung** for the last seven days
+by default, or choose an inclusive range of up to 31 calendar days. The
+report shows **booked time**, not measured occupancy. Each room's valid,
+confirmed booking intervals are merged per date before duration is summed:
+two reserved seats at the same time do not double-count the room. Invalid
+legacy clock/date values are excluded; closures and pending approval
+requests are not reservations. The strongest clock hours are the bins with
+the most booked time across the range (Europe/Berlin); ties are kept and
+rooms without booked time have no peak. The overall numbers sum room time,
+so different rooms can add time simultaneously.
+
+The UTF-8 CSV contains the date range and each room's booked minutes and
+peak hours, without booking-level or user information. Self-confirmed
+check-ins remain separate in the existing room detail report; neither
+measure proves presence. No job, tracking or service configuration is
+required. Run `php build-files/room-insights-test.php` to test the aggregation
+and CSV with synthetic data.
+
 ### Room closures
 
 Admins can choose **Sperrzeiten** on a room's details page and block a future
