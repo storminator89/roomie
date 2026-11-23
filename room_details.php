@@ -158,19 +158,32 @@ $givenStart = $_GET['start_time'] ?? null;
 $givenEnd = $_GET['end_time'] ?? null;
 $requestedCustom = null;
 $chosenCustom = null;
+$requestedRange = false;
+$preferredPeriod = null;
 if (in_array($givenStart, $customTimes, true) && in_array($givenEnd, $customTimes, true) && $givenStart < $givenEnd) {
+    $requestedRange = true;
     $detailContext += ['start_time' => $givenStart, 'end_time' => $givenEnd];
+    $matchingPreset = null;
+    foreach ($periods as $id => [, $from, $to, $available]) {
+        if ($from === $givenStart && $to === $givenEnd) {
+            $matchingPreset = $id;
+            if ($available) $preferredPeriod = $id;
+            break;
+        }
+    }
     try {
         $requestedCustom = roomieParseCustomBookingTimes($parsedDate, $givenStart, $givenEnd, $now);
-        if (isset($availableUntil[$givenStart]) && $givenEnd <= $availableUntil[$givenStart]) {
+        if ($matchingPreset === null && isset($availableUntil[$givenStart]) && $givenEnd <= $availableUntil[$givenStart]) {
             $chosenCustom = $requestedCustom;
+            $preferredPeriod = 'individuell';
         }
     } catch (DomainException) {
         // Preserve the range on the back link even if it is no longer bookable.
     }
 }
 if (($_GET['free'] ?? null) === '1') $detailContext['free'] = '1';
-if ($firstCustom && ($requestedCustom || $firstPeriod === null)) $firstPeriod = 'individuell';
+if ($firstPeriod === null && $firstCustom) $firstPeriod = 'individuell';
+$selectedPeriod = $requestedRange ? $preferredPeriod : $firstPeriod;
 [$customStart, $customEnd] = $chosenCustom ?? $firstCustom ?? [ROOMIE_BOOKING_OPEN_TIME, ROOMIE_BOOKING_CLOSE_TIME];
 
 $equipmentLabels = [
@@ -257,8 +270,8 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
             <?php elseif (!$canBookDate) : ?><p class="rb-empty">Für dieses Datum nicht buchbar.</p>
             <?php elseif ($firstPeriod === null) : ?><p class="rb-empty">Kein buchbarer Zeitraum.</p>
             <?php else : ?>
-            <?php if ($requestedCustom && !$chosenCustom) : ?>
-                <p class="rb-notice rb-notice-error">Der im Raumplan gewählte Zeitraum ist nicht verfügbar. Bitte prüfe die angezeigte Alternative vor dem Buchen.</p>
+            <?php if ($requestedRange && $selectedPeriod === null) : ?>
+                <p class="rb-notice rb-notice-error">Der im Raumplan gewählte Zeitraum ist nicht verfügbar.</p>
             <?php endif; ?>
             <form id="rb-room-book" method="post" action="process_booking.php" data-requires-approval="<?= $requiresApproval ? '1' : '0' ?>" hidden>
                 <input type="hidden" name="csrf_token" value="<?= detailEscape(csrfToken()) ?>">
@@ -270,25 +283,25 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
                     <legend>Zeit wählen</legend>
                     <?php foreach ($periods as $id => [$title, $start, $end, $available, $blocked]) : ?>
                     <label>
-                        <input type="radio" name="time_period" value="<?= $id ?>"<?= $firstPeriod === $id ? ' checked' : '' ?><?= !$available ? ' disabled' : '' ?> required>
+                        <input type="radio" name="time_period" value="<?= $id ?>"<?= $selectedPeriod === $id ? ' checked' : '' ?><?= !$available ? ' disabled' : '' ?> required>
                         <span><strong><?= $title ?></strong> <small><?= $start ?>–<?= $end ?><?php if (!$available) : ?> · <?= $blocked ? 'gesperrt' : 'nicht verfügbar' ?><?php endif; ?></small></span>
                     </label>
                     <?php endforeach; ?>
                     <label>
-                        <input type="radio" name="time_period" value="individuell"<?= $firstPeriod === 'individuell' ? ' checked' : '' ?><?= !$firstCustom ? ' disabled' : '' ?> required>
+                        <input type="radio" name="time_period" value="individuell"<?= $selectedPeriod === 'individuell' ? ' checked' : '' ?><?= !$firstCustom ? ' disabled' : '' ?> required>
                         <span><strong>Individuell</strong><?php if (!$firstCustom) : ?> <small>nicht verfügbar</small><?php endif; ?></span>
                     </label>
                     <?php if ($firstCustom) : ?>
-                    <div class="rp-time-range" data-custom-time data-available-until="<?= detailEscape(json_encode($availableUntil, JSON_THROW_ON_ERROR)) ?>"<?= $firstPeriod !== 'individuell' ? ' hidden' : '' ?>>
+                    <div class="rp-time-range" data-custom-time data-available-until="<?= detailEscape(json_encode($availableUntil, JSON_THROW_ON_ERROR)) ?>"<?= $selectedPeriod !== 'individuell' ? ' hidden' : '' ?>>
                         <label class="rp-time-label" for="rb-book-start-time">Von
-                            <select class="rp-date rp-time" id="rb-book-start-time" name="start_time" required<?= $firstPeriod !== 'individuell' ? ' disabled' : '' ?>>
+                            <select class="rp-date rp-time" id="rb-book-start-time" name="start_time" required<?= $selectedPeriod !== 'individuell' ? ' disabled' : '' ?>>
                                 <?php foreach (array_slice($customTimes, 0, -1) as $option) : ?>
                                     <option value="<?= $option ?>"<?= $customStart === $option ? ' selected' : '' ?><?= !isset($availableUntil[$option]) ? ' disabled' : '' ?>><?= $option ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </label>
                         <label class="rp-time-label" for="rb-book-end-time">Bis
-                            <select class="rp-date rp-time" id="rb-book-end-time" name="end_time" required<?= $firstPeriod !== 'individuell' ? ' disabled' : '' ?>>
+                            <select class="rp-date rp-time" id="rb-book-end-time" name="end_time" required<?= $selectedPeriod !== 'individuell' ? ' disabled' : '' ?>>
                                 <?php foreach (array_slice($customTimes, 1) as $option) : ?>
                                     <option value="<?= $option ?>"<?= $customEnd === $option ? ' selected' : '' ?><?= $option <= $customStart || $option > $availableUntil[$customStart] ? ' disabled' : '' ?>><?= $option ?></option>
                                 <?php endforeach; ?>

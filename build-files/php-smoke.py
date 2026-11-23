@@ -376,6 +376,13 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
     expect(code == 200 and linked.range == preferred and target.path == "raumplan.php"
            and parse_qs(target.query) == {key: [value] for key, value in {**preferred, "date": date, "free": "1"}.items()},
            "Opening room details and returning must preserve the map's date, times and free filter")
+    exact_preset = {"start_time": "09:00", "end_time": "12:00"}
+    available_url = f"room_details.php?id={rooms['Gap']}&date={date}"
+    code, _, html = user.request(available_url + "&" + urlencode(exact_preset))
+    exact_blocked = BookingDetailsHTML(html)
+    expect(code == 200 and not any("checked" in entry for entry in exact_blocked.inputs
+           if entry.get("name") == "time_period") and "gewählte Zeitraum ist nicht verfügbar" in html,
+           "An unavailable linked preset must not preselect an alternative")
     occupied = {"start_time": "10:45", "end_time": "11:15"}
     code, _, html = user.request(gap_url + "&" + urlencode({**occupied, "free": "1"}))
     linked = BookingDetailsHTML(html)

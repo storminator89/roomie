@@ -11,7 +11,7 @@ await writeFile(join(moduleRoot, 'package.json'), '{"type":"module"}');
 for (const file of ['view.js', 'api.js', 'floor-view.js', 'booking-window.js']) {
   await copyFile(new URL(`../assets/roomplan/${file}`, import.meta.url), join(moduleRoot, file));
 }
-const { matchesRoomAmenities, normalizeAmenities, readViewLocation, writeViewLocation } =
+const { matchesRoomAmenities, normalizeAmenities, readViewLocation, writeViewLocation, preferredBookingPeriod, availablePeriods } =
   await import(pathToFileURL(join(moduleRoot, 'view.js')).href);
 
 test('equipment accepts only known keys and folds legacy and current aliases together', () => {
@@ -51,4 +51,24 @@ test('equipment deep links round trip with date, floor, favorites, availability,
   const cleared = writeViewLocation(saved, { ...parsed, equipment: [] }, today);
   assert.equal(cleared.searchParams.has('equipment'), false);
   assert.deepEqual(readViewLocation(cleared, today), { ...parsed, equipment: [] });
+});
+
+test('a requested room-plan interval stays exact, including a running ordinary preset', () => {
+  const date = '2026-11-23';
+  const now = new Date(date + 'T09:00:00Z'); // 10:00 Berlin
+  const room = { capacity: 1, requiresApproval: false };
+  const availability = { booked: [], presets: availablePeriods(room.capacity, []), custom: ['10:15', '10:30'] };
+  const pick = (range, overrides = {}, available = availability, clock = now) =>
+    preferredBookingPeriod(range, date, { ...room, ...overrides }, available, clock);
+
+  assert.equal(pick(['09:00', '12:00']), 'vormittags');
+  assert.equal(pick(['13:00', '17:00']), 'nachmittags');
+  assert.equal(pick(['10:15', '11:00']), 'individuell');
+  assert.equal(pick(['09:00', '12:00'], { requiresApproval: true }), null);
+  assert.equal(pick(['09:00', '12:00'], {}, availability, new Date(date + 'T11:00:00Z')), null);
+  assert.equal(pick(['09:15', '12:00']), null);
+  assert.equal(pick(['09:00', '12:00'], {}, { ...availability, presets: [] }), null);
+  assert.equal(pick(['10:15', '11:00'], {}, { ...availability, booked: [
+    { start_time: '10:45', end_time: '11:00' },
+  ] }), null);
 });

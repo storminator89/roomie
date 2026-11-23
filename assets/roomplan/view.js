@@ -110,6 +110,18 @@ export function availablePeriods(capacity, bookings) {
   return periods.filter(([, , start, end]) => periodCanBeBooked(capacity, bookings, start, end));
 }
 
+export function preferredBookingPeriod(range, date, room, availability, now = new Date()) {
+  if (!range) return null;
+  const [start, end] = range;
+  const preset = periods.find(([, , from, to]) => start === from && end === to);
+  if (preset) {
+    return availability.presets.some(([id]) => id === preset[0])
+      && presetBookingWindowOpen(date, start, end, room.requiresApproval, now) ? preset[0] : null;
+  }
+  return availability.custom && validBookingWindow(start, end) && bookingWindowInFuture(date, start, now)
+    && periodCanBeBooked(room.capacity, availability.booked, start, end) ? customPeriod : null;
+}
+
 function dateValue(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000-')) return false;
   const dt = new Date(`${value}T00:00:00Z`);
@@ -464,7 +476,9 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   }
   choices.addEventListener('change', syncCustomControls);
 
-  function openBooking(room, availability, opener) {
+  function openBooking(room, opener) {
+    const now = new Date();
+    const availability = roomAvailability(room, now);
     const { booked, presets, custom } = availability;
     trigger = opener;
     selectedBooking = { room, date: dateInput.value, booked };
@@ -486,17 +500,19 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       choices.append(option);
     }
     const preferred = preferredRange();
-    const usePreferred = preferred && bookingWindowInFuture(selectedBooking.date, preferred[0]);
-    if (custom) customControls.value = usePreferred ? preferred : custom;
+    const selection = preferredBookingPeriod(preferred, selectedBooking.date, room, availability, now);
+    if (custom) customControls.value = selection === customPeriod ? preferred : custom;
     choices.append(customControls.root);
-    const first = usePreferred && custom ? choices.querySelector(`[value="${customPeriod}"]`) : choices.querySelector('input:enabled');
-    if (!first) return;
-    first.checked = true;
+    const first = choices.querySelector('input:enabled');
+    const initial = selection ? choices.querySelector(`[value="${selection}"]`) : preferred ? null : first;
+    if (initial) initial.checked = true;
+    if (preferred && !selection) feedback.textContent = 'Gewählte Zeit nicht verfügbar.';
+    else if (!first) return;
     syncCustomControls();
-    submit.disabled = false;
+    submit.disabled = !first;
     close.disabled = false;
     dialog.showModal();
-    first.focus();
+    (initial ?? first ?? close).focus();
   }
   close.addEventListener('click', () => {
     if (!bookPending) dialog.close();
@@ -643,7 +659,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     book.dataset.bookRoomId = String(room.id);
     book.setAttribute('aria-label', `${room.name}${room.requiresApproval ? ' anfragen' : ' buchen'}`);
     book.disabled = !available || room.canBook === false || !dateIsBookable();
-    book.addEventListener('click', () => openBooking(room, availability, book));
+    book.addEventListener('click', () => openBooking(room, book));
     footer.append(details, book);
     box.append(footer);
     return box;
