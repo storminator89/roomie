@@ -136,8 +136,9 @@ date again; it saves all appointments together or none. The 90-day booking
 horizon still applies. Each saved occurrence can be moved, cancelled or
 exported separately; Roomie does not yet edit the series as a group.
 
-[Exchange availability pilot design](docs/exchange-pilot.md) documents a
-read-only integration proposal. It is not enabled or implemented.
+The [read-only Exchange pilot](docs/exchange-pilot.md) has an offline-tested
+availability parser. It is not connected to Roomie, and no Exchange account,
+UI, or booking behavior is enabled.
 
 Run `node --test build-files/*.test.mjs` to check the frontend data
 contract without a running PHP server. Run `php build-files/room-search.php`

@@ -1,6 +1,20 @@
 # Exchange Online room availability pilot
 
-**Design only.** No live tenant was connected or tested. The integration stays off by default. Start with one existing Exchange Online test room mailbox and a dedicated identity. The pilot displays availability only; booking and cancellations for the mapped room happen in Outlook or Teams through the Exchange room calendar. No Teams API, meeting creation, mail, calendar writes, or new paid service is needed for this design. [How Outlook and Teams book Exchange rooms](https://learn.microsoft.com/en-us/microsoft-365/places/room-desk-booking/rooms)
+**Offline pilot core only.** No live tenant was connected or tested. There is
+no runtime integration, route, tenant mapping, credentials, or network
+transport. There is no feature switch to enable. The parser and its synthetic
+tests live under the web-denied `build-files/` directory; the running app does
+not load them.
+
+Run `php build-files/exchange-availability.php` for offline acceptance.
+The parser verifies and merges complete sets of already-retrieved synthetic
+Graph response pages into UTC busy intervals. It does not establish freshness,
+prove the origin or permissions of those pages, follow pagination, or decide
+whether a user may see a room. Its known-empty result means only no recorded
+blocking event in the tested window. See the
+[verification plan](exchange-pilot-test-plan.md) for the remaining gates.
+
+**Future setup design (not instructions to enable this release).** Start with one existing Exchange Online test room mailbox and a dedicated identity. The pilot displays availability only; booking and cancellations for the mapped room happen in Outlook or Teams through the Exchange room calendar. No Teams API, meeting creation, mail, calendar writes, or new paid service is needed for this design. [How Outlook and Teams book Exchange rooms](https://learn.microsoft.com/en-us/microsoft-365/places/room-desk-booking/rooms)
 
 ## Permissions and setup proposal
 
@@ -28,7 +42,7 @@ GET https://graph.microsoft.com/v1.0/users/{roomObjectId}/calendarView?startDate
 Prefer: outlook.timezone="UTC"
 ```
 
-Use offset-qualified ISO timestamps, a bounded window, and all pages within a bounded time budget; follow a [Graph next link](https://learn.microsoft.com/en-us/graph/paging) only on the configured HTTPS Graph origin. Discard canceled events; explicit `free` does not block and `tentative`, `busy`, `oof`, or `workingElsewhere` block for the pilot. Treat overlapping `unknown` or unrecognized status as unverified. Roomie should expose only date/time intervals and status to users who may view the room, never meeting subjects, organizers, participants or raw payloads. `$select` minimizes normal responses; it is **not** an authorization restriction. The credential can read calendar event details in the scoped room. If that is unacceptable, leave the pilot off until an independently approved availability-only feed exists.
+Use offset-qualified ISO timestamps, a bounded window, and all pages within a bounded time budget; follow a [Graph next link](https://learn.microsoft.com/en-us/graph/paging) only after it passes the future transport's checks below. Discard canceled events; explicit `free` does not block and `tentative`, `busy`, `oof`, or `workingElsewhere` block for the pilot. Treat overlapping `unknown` or unrecognized status as unverified. Roomie should expose only date/time intervals and status to users who may view the room, never meeting subjects, organizers, participants or raw payloads. `$select` minimizes normal responses; it is **not** an authorization restriction. The credential can read calendar event details in the scoped room. If that is unacceptable, leave the pilot off until an independently approved availability-only feed exists.
 
 ## Authority and failure behavior
 
