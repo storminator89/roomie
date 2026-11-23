@@ -1,0 +1,38 @@
+.rb-booking-list { gap:.85rem; }
+.rb-booking-list .rb-list-controls,
+.rb-booking-list .rb-list-context { display:flex; flex-wrap:wrap; align-items:center; }
+.rb-booking-list .rb-list-controls { justify-content:space-between; gap:.15rem 1rem; }
+.rb-booking-list .rb-list-context { gap:0 .8rem; font-size:.9rem; }
+.rb-booking-list .rb-list-context p { color:var(--roomplan-muted); }
+.rb-booking-list .rb-list-context a,
+.rb-booking-list .rb-booking-admin a { display:inline-flex; align-items:center; min-height:44px; }
+.rb-booking-list .rb-day { gap:.45rem; }
+.rb-booking-list .rb-day h2 { font-size:1rem; }
+.rb-booking-list .rb-list { gap:.35rem; }
+.rb-booking-list .rb-entry {
+    position:relative; display:grid; grid-template-columns:minmax(0,1fr);
+    gap:0; min-height:calc(44px + 1rem); padding:.5rem .7rem;
+}
+.rb-booking-list .rb-entry-with-options > .rb-entry-main { padding-inline-end:5.9rem; }
+.rb-booking-list .rb-entry-main p { margin-top:.1rem; font-size:.9rem; }
+.rb-booking-list .rb-entry-main .rb-request-status { display:inline-block; margin-block-start:.3rem; }
+.rb-booking-list .rb-row-options > summary {
+    position:absolute; inset-block-start:.5rem; inset-inline-end:.7rem;
+    border:1px solid var(--roomplan-border); font-size:.9rem;
+}
+.rb-booking-list .rb-row-options > summary:hover,
+.rb-booking-list .rb-row-options[open] > summary { background:#fff3d1; }
+.rb-booking-list .rb-row-menu {
+    display:grid; gap:.25rem; justify-items:start;
+    margin-block-start:.45rem; padding-block-start:.45rem; border-block-start:1px solid var(--roomplan-border);
+}
+.rb-booking-list .rb-row-options:not([open]) > .rb-row-menu { display:none; }
+.rb-booking-list .rb-row-menu > .rb-move { max-width:100%; }
+.rb-booking-list .rb-row-menu form + form { margin:0; }
+.rb-booking-list .rb-booking-filters { border-block-start:1px solid var(--roomplan-border); }
+.rb-booking-list .rb-booking-filters summary {
+    min-height:44px; width:fit-content; padding:.6rem .4rem .6rem 0;
+    font-size:.9rem; font-weight:650; cursor:pointer;
+}
+.rb-booking-list .rb-booking-filters .rb-filter { padding-block:.25rem .55rem; }
+.rb-booking-list .rb-booking-admin { font-size:.9rem; border-block-start:1px solid var(--roomplan-border); }

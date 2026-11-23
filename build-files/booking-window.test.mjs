@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const source = await readFile(new URL('../assets/roomplan/booking-window.js', import.meta.url));
-const { validBookingWindow, bookingWindowInFuture, periodCanBeBooked, firstFreeBookingWindow } = await import(
+const { validBookingWindow, bookingWindowInFuture, presetBookingWindowOpen, periodCanBeBooked, firstFreeBookingWindow } = await import(
   'data:text/javascript;base64,' + source.toString('base64')
 );
 
@@ -85,4 +85,15 @@ test('first free booking skips all slots inside room maintenance', () => {
   const morningClosure = { ...slot('09:00', '11:00'), blocked: true };
   const now = new Date('2026-11-22T12:00:00Z');
   assert.deepEqual(firstFreeBookingWindow(30, [morningClosure], '2026-11-23', now), ['11:00', '11:15']);
+});
+
+
+test('standard windows stay bookable until their Berlin end; approval needs a future start', () => {
+  const date = '2026-06-01';
+  const morning = (approval, now) => presetBookingWindowOpen(date, '09:00', '12:00', approval, new Date(now));
+  assert.equal(morning(true, '2026-06-01T06:59:59Z'), true);
+  assert.equal(morning(true, '2026-06-01T07:00:00Z'), false);
+  assert.equal(morning(false, '2026-06-01T09:59:59Z'), true);
+  assert.equal(morning(false, '2026-06-01T10:00:00Z'), false);
+  assert.equal(presetBookingWindowOpen(date, '12:00', '09:00', false, new Date('2026-06-01T06:00:00Z')), false);
 });

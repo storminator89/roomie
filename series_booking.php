@@ -63,18 +63,14 @@ function roomieSeriesInspect(PDO $db, int $userId, array $plan, DateTimeImmutabl
     if (roomieRoomRequiresApproval($db, $plan['roomId'])) {
         throw new RoomieSeriesRejected('Dieser Raum braucht eine Freigabe. Es sind nur Anfragen für einzelne Termine möglich.', 409);
     }
-    $check = $db->prepare('SELECT user_id, start_time, end_time FROM bookings
-        WHERE room_id = ? AND date = ? AND start_time < ? AND end_time > ?');
-    $check->setFetchMode(PDO::FETCH_ASSOC);
     $rows = [];
     $anyConflict = false;
     foreach ($plan['dates'] as $date) {
         if (roomieRoomHasBlock($db, $plan['roomId'], $date, $plan['start'], $plan['end'])) {
             $status = 'blocked';
         } else {
-            $check->execute([$plan['roomId'], $date, $plan['end'], $plan['start']]);
-            $status = roomieBookingConflict($check, (int) $room['capacity'], $userId, $plan['start'], $plan['end']);
-            $check->closeCursor();
+            $bookings = roomieRoomBookingRows($db, $plan['roomId'], $date);
+            $status = roomieBookingConflict($bookings, (int) $room['capacity'], $userId, $plan['start'], $plan['end']);
         }
         $anyConflict = $anyConflict || $status !== null;
         $rows[] = [

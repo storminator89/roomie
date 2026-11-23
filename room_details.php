@@ -43,10 +43,11 @@ try {
         $grant->closeCursor();
     }
     [$acl, $aclParams] = roomieBookingAccessSql('r', $userId, $admin);
+    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
     $stmt = $db->prepare("SELECT b.start_time, b.end_time, b.user_id, b.user_id = :owner AS own,
                          CASE WHEN :canSeeNames = 1 OR b.user_id = :viewer THEN u.name END AS user_name
-                          FROM bookings b JOIN users u ON b.user_id = u.id JOIN rooms r ON r.id = b.room_id
-                          WHERE b.room_id = :room_id AND b.date = :selected_date AND $acl
+                          FROM bookings b JOIN users u ON b.user_id = u.id JOIN rooms r ON r.id = $effectiveRoom
+                          WHERE r.id = :room_id AND b.date = :selected_date AND $acl
                           ORDER BY b.start_time, b.end_time, b.id LIMIT 501");
     $params = $aclParams + ['canSeeNames' => (int) $admin, 'viewer' => $userId, 'owner' => $userId,
         'room_id' => $room_id, 'selected_date' => $selected_date];
@@ -113,7 +114,7 @@ $firstPeriod = null;
 foreach ($periods as $key => &$period) {
     $blocked = roomieRoomBlockOverlaps($roomBlocks, $period[1], $period[2]);
     $period[] = $canBookRoom && $canBookDate && !$blocked
-        && (!$requiresApproval || $parsedDate->modify($period[1]) > $now)
+        && roomieBookingPresetIsOpen($parsedDate, $period[1], $period[2], $now, $requiresApproval)
         && roomieBookingConflict($bookings, $capacity, $userId, $period[1], $period[2]) === null;
     $period[] = $blocked;
     if ($period[3] && $firstPeriod === null) $firstPeriod = $key;

@@ -28,9 +28,10 @@ try {
     }
 
     // Buchungsdetails für die E-Mail
+    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
     $stmt = $db->prepare("SELECT r.name as room_name, u.name as user_name, u.email as user_email, b.date, b.start_time, b.end_time
                           FROM bookings b
-                          JOIN rooms r ON b.room_id = r.id
+                          JOIN rooms r ON r.id = $effectiveRoom
                           JOIN users u ON b.user_id = u.id
                           WHERE b.id = :id");
     $stmt->execute(['id' => $bookingId]);

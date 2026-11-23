@@ -47,6 +47,11 @@
 }
 .rp-floor-hint { margin:0; color:var(--roomplan-muted,#525b65); }
 .rp-floor-hint:empty { display:none; }
+.rp-floor-unavailable {
+  display:flex; align-items:center; flex-wrap:wrap; gap:.5rem .8rem;
+  padding:.65rem .75rem; background:#fff3ef; color:#90271b; border:1px solid #edc4bc; border-radius:.65rem;
+}
+.rp-floor-unavailable p { margin:0; }
 .rp-floor-shortcuts summary { cursor:pointer; padding:.55rem 0; font-weight:650; }
 .rp-floor-shortcut-list { display:flex; flex-wrap:wrap; gap:.35rem; margin:.2rem 0 0; padding:0; list-style:none; }
 .rp-floor-shortcut { min-block-size:44px; text-align:left; gap:.35rem; }
@@ -63,14 +68,6 @@
   .rp-floor-marker-indicator { background:ButtonFace; color:ButtonText; border:1px solid ButtonText; }
 }
 
-.rp-floor-filters { display:flex; flex-wrap:wrap; align-items:center; gap:.45rem; }
-.rp-floor-search {
-  min-inline-size:9rem; max-inline-size:100%; flex:1 1 12rem; box-sizing:border-box;
-  min-block-size:44px; padding:.42rem .7rem; border:1px solid var(--roomplan-control-border,#90918c);
-  border-radius:.65rem; background:var(--roomplan-surface,#fff); color:inherit; font:inherit;
-}
-.rp-floor-result-count { color:var(--roomplan-muted,#525b65); font-size:.875rem; }
-.rp-floor-result-count:empty { display:none; }
 .rp-floor-shortcut[aria-expanded="true"] {
   background:#fff3d1; border-color:#946700;
 }
@@ -80,7 +77,6 @@
 .rp-floor-position .rp-floor-focus { margin:0; }
 .rp-floor-focus .rp-floor-close-detail { align-self:flex-start; }
 .rp-floor-marker[aria-expanded="true"] { border:3px solid #1c2e49; z-index:1; box-shadow:0 0 0 2px white; }
-@media (min-width:55rem) { .rp-floor-search { flex:0 1 19rem; } }
 .rp-floor-focus .rp-card-header { align-items:center; justify-content:flex-end; }
 .rp-floor-focus .rp-card-heading { flex:1 1 7rem; min-inline-size:0; }
 .rp-floor-close-detail { font-size:1.3rem; }

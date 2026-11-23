@@ -21,9 +21,10 @@ try {
         exit;
     }
     [$rule, $params] = roomieBookingAccessSql('r', $userId, $isAdmin);
+    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
     $sql = "SELECT b.id, b.user_id, u.name AS user_name, r.name AS room, r.id AS room_id,
             b.date, b.start_time, b.end_time, b.seat_id FROM bookings b
-            JOIN rooms r ON b.room_id = r.id JOIN users u ON b.user_id = u.id
+            JOIN rooms r ON r.id = $effectiveRoom JOIN users u ON b.user_id = u.id
             WHERE b.date BETWEEN :start_date AND :end_date AND $rule";
     $params += ['start_date' => $start->format('Y-m-d'), 'end_date' => $end->format('Y-m-d')];
     if ($roomId !== null) {

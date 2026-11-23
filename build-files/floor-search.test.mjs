@@ -17,6 +17,19 @@ test('office search accepts room numbers, accents and words in any order', () =>
   }
 });
 
+test('room search treats composed and decomposed accents, transliteration and number separators alike', () => {
+  const labels = ['A-23 · Großes Büro Süd · Café', 'A-23 · Grosses Buero Sued · Cafe\u0301'];
+  const queries = ['a 23 BURO SUED CAFE', 'GROẞES', 'su\u0308d Büro', 'sued A.23', 'büro a-23 café'];
+  for (const label of labels) {
+    for (const query of queries) {
+      assert.equal(matchesRoomSearch(label, query), true, `${label}: ${query}`);
+    }
+    assert.equal(matchesRoomSearch(label, '24 Süd'), false);
+    assert.equal(matchesRoomSearch(label, '23 Nord'), false);
+  }
+  assert.equal(matchesRoomSearch('Straße', 'STRAẞE'), true);
+});
+
 test('a search can only find the authorized valid and deduplicated floor markers', () => {
   const rooms = [{ id: 3, name: 'Nord' }, { id: 4, name: 'Unmarkiert' }];
   const marker = { roomId: 3, x: .1, y: .2, w: .3, h: .4 };

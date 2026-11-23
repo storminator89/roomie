@@ -1,5 +1,6 @@
 import { createFloorUpload } from './floor-upload.js';
 import { createFloorRoomManager } from './floor-rooms.js';
+import { FLOOR_IMAGE_UNAVAILABLE } from './floor-view.js';
 
 const MIN = 0.01;
 const limit = n => Math.min(1, Math.max(0, n));
@@ -109,12 +110,17 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
         onSaved: () => { if (alive) zoneRoom.focus(); },
     });
     const imageWrap = el('div', null, 'rp-fe-image');
-    const image = el('img');
-    image.alt = 'Grundriss';
-    image.draggable = false;
     const overlay = el('div', null, 'rp-fe-overlay');
     overlay.setAttribute('aria-hidden', 'true');
-    imageWrap.append(image, overlay);
+    let image = null;
+    let imageSource = null;
+    let imageState = 'idle';
+    const imageFallback = el('div', null, 'rp-floor-unavailable');
+    const imageMessage = el('p');
+    imageMessage.setAttribute('role', 'status');
+    const listLink = el('a', 'Raumliste öffnen', 'roomplan-action roomplan-action-secondary');
+    listLink.href = 'rooms.php';
+    imageFallback.append(imageMessage, listLink);
     const coordinateForm = el('form', null, 'rp-fe-tools rp-fe-coords');
     const coords = fields.map(([, display]) => {
         const control = el('input');
@@ -131,7 +137,7 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     coordinateForm.append(apply);
     const precise = el('details');
     precise.append(el('summary', 'Position & Größe'), coordinateForm);
-    workspace.append(zoneTools, imageWrap, precise);
+    workspace.append(imageFallback, zoneTools, imageWrap, precise);
     panel.append(toolbar, planTools, upload.element, roomManager.element, error, status, workspace);
     root.replaceChildren(panel);
 
@@ -168,30 +174,52 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
         }
     }
 
+    function syncImage() {
+        const source = floor ? api.floorplanImageUrl(floor.id) : null;
+        if (imageSource !== source) {
+            imageSource = source;
+            imageState = source ? 'loading' : 'idle';
+            image = source ? el('img') : null;
+            if (image) {
+                const loading = image;
+                loading.draggable = false;
+                loading.width = floor.width;
+                loading.height = floor.height;
+                const settled = state => {
+                    // A response from the previously selected floor cannot hide this one.
+                    if (!alive || image !== loading) return;
+                    imageState = state;
+                    render({refreshCoords:false});
+                };
+                listen(loading, 'load', () => settled('ready'));
+                listen(loading, 'error', () => settled('error'));
+                imageWrap.replaceChildren(loading, overlay);
+                loading.src = source;
+            } else imageWrap.replaceChildren(overlay);
+        }
+        if (image) image.alt = floor.title;
+        imageWrap.hidden = !image || imageState === 'error';
+        imageWrap.classList.toggle('rp-fe-draw', selectedRoom != null && !pending && imageState === 'ready');
+        imageFallback.hidden = !floor || imageState !== 'error';
+        const message = imageFallback.hidden ? '' : FLOOR_IMAGE_UNAVAILABLE;
+        if (imageMessage.textContent !== message) imageMessage.textContent = message;
+    }
+
     function render({refreshCoords = true} = {}) {
         picker.replaceChildren(...(floors.size ? [...floors.values()].map(f => option(f.id, f.title)) : [option('', 'Noch kein Grundriss')]));
         picker.value = floor ? String(floor.id) : '';
         zoneRoom.replaceChildren(option('', 'Raum auswählen …'), ...[...roomNames].sort((a,b)=>a[1].localeCompare(b[1],'de'))
             .map(([id, name]) => option(id, draft.some(m => m.roomId === id) ? `${name} ✓` : name)));
         zoneRoom.value = selectedRoom == null ? '' : String(selectedRoom);
-        imageWrap.hidden = !floor;
-        imageWrap.classList.toggle('rp-fe-draw', selectedRoom != null && !pending);
-        if (floor) {
-            const imageUrl = api.floorplanImageUrl(floor.id);
-            if (image.getAttribute('src') !== imageUrl) {
-                image.width = floor.width;
-                image.height = floor.height;
-                image.setAttribute('src', imageUrl);
-            }
-            image.alt = floor.title;
-        }
+        syncImage();
         const item = currentMarker();
         if (refreshCoords) fields.forEach(([key,,fallback], i) => {
             const value = item ? rounded(item[key]*100) : (key === 'w' || key === 'h' ? 20 : fallback);
             coords[i].value = String(value);
         });
         drawOverlay();
-        const instruction = !floor ? '' : start ? 'Zweite Ecke wählen.' : selectedRoom == null
+        const instruction = !floor ? '' : imageState === 'loading' ? 'Grundriss wird geladen …'
+            : imageState === 'error' ? '' : start ? 'Zweite Ecke wählen.' : selectedRoom == null
             ? 'Raum auswählen.' : item ? 'Zone ziehen oder neu markieren.' : 'Ziehen oder zwei Ecken wählen.';
         const statusKey = `${instruction}:${dirty()}`;
         if (statusKey !== renderedStatus) {
@@ -352,7 +380,7 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     }
 
     function imagePoint(event) {
-        if (pending || !floor || !image.complete || !image.naturalWidth) return null;
+        if (pending || !image?.complete || !image.naturalWidth) return null;
         const bounds = image.getBoundingClientRect();
         if (bounds.width <= 0 || bounds.height <= 0) return null;
         return {x:limit((event.clientX-bounds.left)/bounds.width), y:limit((event.clientY-bounds.top)/bounds.height)};

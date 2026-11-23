@@ -136,9 +136,9 @@ function roomieListPendingBookingRequests(PDO $db): array
 }
 
 /** A malformed legacy booking cannot safely prove that capacity is free. */
-function roomieValidApprovalScheduleRows(PDOStatement $rows): iterable
+function roomieValidApprovalScheduleRows(iterable $rows): iterable
 {
-    while ($row = $rows->fetch(PDO::FETCH_ASSOC)) {
+    foreach ($rows as $row) {
         $from = roomieBookingClock($row['start_time']);
         $to = roomieBookingClock($row['end_time']);
         if ($from === null || $to === null || $from >= $to) {
@@ -174,17 +174,8 @@ function roomieAssertBookingRequestSlot(
     if (roomieRoomHasBlock($db, $roomId, $date, $start, $end)) {
         throw new DomainException('Der Raum ist zur gewählten Zeit gesperrt.', 409);
     }
-    // Also count legacy bookings that only reference a seat in the room.
-    $check = $db->prepare('SELECT b.user_id, b.start_time, b.end_time FROM bookings b
-        WHERE b.date = :day AND (b.room_id = :room OR EXISTS (
-            SELECT 1 FROM seats s WHERE s.id = b.seat_id AND s.room_id = :seat_room
-        ))');
-    $check->execute(['day' => $date, 'room' => $roomId, 'seat_room' => $roomId]);
-    try {
-        $conflict = roomieBookingConflict(roomieValidApprovalScheduleRows($check), (int) $room['capacity'], $userId, $start, $end);
-    } finally {
-        $check->closeCursor();
-    }
+    $bookings = roomieRoomBookingRows($db, $roomId, $date);
+    $conflict = roomieBookingConflict(roomieValidApprovalScheduleRows($bookings), (int) $room['capacity'], $userId, $start, $end);
     if ($conflict !== null) {
         throw new DomainException($conflict === 'own' ? 'Für diese Zeit besteht bereits eine eigene Buchung.'
             : 'Der Raum ist zur gewählten Zeit nicht verfügbar.', 409);

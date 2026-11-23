@@ -22,7 +22,8 @@ requireCsrfToken($_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_POST['csrf_token'] ?? null, 
 $startDate = parseBookingDate($_POST['start_date'] ?? null);
 $endDate = parseBookingDate($_POST['end_date'] ?? null);
 $roomId = roomiePositiveId($_POST['selectedWorkspace'] ?? null);
-$today = roomieBookingToday();
+$now = new DateTimeImmutable('now', $startDate?->getTimezone() ?? new DateTimeZone('Europe/Berlin'));
+$today = $now->setTime(0, 0);
 $horizon = $today->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days');
 $timePeriod = $_POST['time_period'] ?? null;
 $approvalIntent = $_POST['approval_request'] ?? null;
@@ -55,7 +56,7 @@ if ($custom) {
         exit;
     }
     try {
-        [$startTime, $endTime] = roomieParseCustomBookingTimes($startDate, $_POST['start_time'] ?? null, $_POST['end_time'] ?? null);
+        [$startTime, $endTime] = roomieParseCustomBookingTimes($startDate, $_POST['start_time'] ?? null, $_POST['end_time'] ?? null, $now);
     } catch (DomainException $error) {
         bookingError($error->getMessage());
         exit;
@@ -86,10 +87,12 @@ try {
         exit;
     }
 
+    // A slot may have closed while this request waited for the write lock.
+    $now = new DateTimeImmutable('now', $startDate->getTimezone());
+    $today = $now->setTime(0, 0);
     if ($custom) {
-        // The start may have passed while this request waited for the write lock.
         try {
-            roomieParseCustomBookingTimes($startDate, $startTime, $endTime);
+            roomieParseCustomBookingTimes($startDate, $startTime, $endTime, $now);
         } catch (DomainException $error) {
             $db->exec('ROLLBACK');
             bookingError($error->getMessage());
@@ -127,6 +130,9 @@ try {
                     $rejection = $error->getMessage();
                 }
             }
+        } elseif (!$custom && !roomieBookingPresetIsOpen($startDate, $startTime, $endTime, $now)) {
+            // Reject the entire range when its first occurrence has already ended.
+            $rejection = 'Der gewählte Zeitraum am ' . $startDate->format('d.m.Y') . ' ist bereits abgelaufen.';
         }
     }
 
@@ -151,13 +157,6 @@ try {
     }
 
     if ($rejection === null && $requestId === null) {
-        // The indexed prefilter can include an extra touching row with seconds;
-        // the shared conflict check compares the full timestamps.
-        $checkBookings = $db->prepare(
-            'SELECT user_id, start_time, end_time FROM bookings
-             WHERE room_id = :room AND date = :date AND start_time < :end_time AND end_time > :start_time'
-        );
-        $checkBookings->setFetchMode(PDO::FETCH_ASSOC);
         $insert = $db->prepare(
             'INSERT INTO bookings (user_id, room_id, seat_id, date, start_time, end_time)
              VALUES (:user_id, :room_id, NULL, :date, :start_time, :end_time)'
@@ -168,9 +167,8 @@ try {
                 $rejection = 'Der Raum ist am ' . $day->format('d.m.Y') . ' zur gewählten Zeit gesperrt.';
                 break;
             }
-            $checkBookings->execute(['room' => $roomId, 'date' => $date, 'start_time' => $startTime, 'end_time' => $endTime]);
-            $conflict = roomieBookingConflict($checkBookings, (int) $room['capacity'], $userId, $startTime, $endTime);
-            $checkBookings->closeCursor();
+            $rows = roomieRoomBookingRows($db, $roomId, $date);
+            $conflict = roomieBookingConflict($rows, (int) $room['capacity'], $userId, $startTime, $endTime);
             if ($conflict === 'own') {
                 $rejection = 'Sie haben den Raum am ' . $day->format('d.m.Y') . ' bereits gebucht.';
                 break;

@@ -6,13 +6,13 @@ Roomie is a web application for managing and booking rooms in an office building
 
 - **Dashboard:** See your current or next booking, jump to the floor plan, or book several days.
 - **Floor plans:** Upload PNG/JPEG plans, draw room zones and find available rooms directly on the plan. The room list and the legacy grid remain available.
-- **Bookings:** View your bookings first, export an ICS file and cancel when eligible. Book a free time window from a room's details.
+- **Bookings:** See upcoming bookings, download an ICS file and cancel when eligible. Book a free time window, plan a weekly series or request approval for rooms that require it.
 - **Rooms:** Find rooms by name or number and keep frequently used rooms in Favorites.
-- **Administration:** Search and page through accounts and room permissions. Account deletion has a separate confirmation.
+- **Administration:** Manage room closures, booking requests, accounts and room permissions. Account deletion has a separate confirmation.
 
 ## Technologies
 
-- **Frontend**: HTML, CSS, JavaScript, Alpine.js, Tailwind CSS
+- **Frontend**: HTML, CSS, JavaScript, Tailwind CSS
 - **Backend**: PHP, SQLite
 
 ## Screenshots
@@ -103,15 +103,17 @@ bookmark forwards to the integrated page. No new database schema is needed.
 
 ### Find and book a time
 
-In the room plan, select a date and **Von** / **Bis**, then enable
-**Nur freie Räume** to compare availability for that window. Choose a room
-and book the selected time. Room details also accept an individual slot.
+Pick a date, search by name or number, or select **Nur frei**. For a
+specific window, equipment or a different view, open **Filter und Ansicht**.
+If a floor plan image cannot load, switch to the room list without losing the
+date or active filters. Admins open the legacy grid in a separate edit mode.
+
 Custom slots are for one day, between 09:00 and 17:00 (Europe/Berlin), in
-15-minute increments. The existing presets and multi-day booking still work.
-Room permissions and available places are checked again on save; the filter
-does not reserve a room. No database change is needed for custom times. Under optional **Ausstattung**,
-select all equipment the room must have. It combines with the availability
-and favorites filters.
+15-minute increments. An ordinary preset can be booked until its end; a
+custom time or approval request must still start in the future. For a
+multi-day booking, a completed first slot rejects the whole request.
+Availability counts old seat-only bookings against their room as well.
+Permissions and places are checked again on save; filters do not reserve rooms.
 
 Under **Buchungen → Optionen → Verschieben**, change the date and time of an
 upcoming booking in the same room. If the new time is taken or the booking has
@@ -133,7 +135,8 @@ exported separately; Roomie does not yet edit the series as a group.
 read-only integration proposal. It is not enabled or implemented.
 
 Run `node --test build-files/*.test.mjs` to check the frontend data
-contract without a running PHP server.
+contract without a running PHP server. Run `php build-files/room-search.php`
+for the room-directory search fixtures.
 
 ### Room closures
 

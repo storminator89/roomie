@@ -24,12 +24,13 @@ try {
     // The list reflects the write endpoint's room grants, including for administrators.
     $rooms = roomieListRooms($db, $userId, false);
     $approvalRooms = array_fill_keys(roomieApprovalRoomIds($db), true);
+    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
     $query = $db->prepare(
-        'SELECT r.name AS room_name, b.date, b.start_time, b.end_time
-           FROM bookings b JOIN rooms r ON b.room_id = r.id
+        "SELECT r.name AS room_name, b.date, b.start_time, b.end_time
+           FROM bookings b JOIN rooms r ON r.id = $effectiveRoom
           WHERE b.user_id = :user AND b.date >= :today
             AND (b.date > :today OR time(b.end_time) > :now)
-          ORDER BY b.date, time(b.start_time), b.id LIMIT 1'
+          ORDER BY b.date, time(b.start_time), b.id LIMIT 1"
     );
     $query->execute(['user' => $userId, 'today' => $today, 'now' => $now->format('H:i:s')]);
     $nextBooking = $query->fetch(PDO::FETCH_ASSOC) ?: null;

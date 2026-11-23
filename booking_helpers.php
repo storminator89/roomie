@@ -10,6 +10,23 @@ const ROOMIE_BOOKING_OPEN_TIME = '09:00';
 const ROOMIE_BOOKING_CLOSE_TIME = '17:00';
 const ROOMIE_BOOKING_STEP_MINUTES = 15;
 
+// Use the explicit room when present; otherwise resolve a legacy seat-only booking.
+// Queries using this expression alias bookings as b. Each booking contributes at most one row.
+const ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL =
+    'COALESCE(b.room_id, (SELECT s.room_id FROM seats s WHERE s.id = b.seat_id))';
+
+function roomieBookingPresetIsOpen(
+    DateTimeImmutable $date,
+    string $startTime,
+    string $endTime,
+    DateTimeImmutable $now,
+    bool $requiresApproval = false
+): bool {
+    // Preset bounds are validated by their callers, and booking dates use Europe/Berlin.
+    // Instant bookings may claim a running preset, but approval requests must start in the future.
+    return $date->modify($requiresApproval ? $startTime : $endTime) > $now;
+}
+
 function roomieBookingToday(): DateTimeImmutable
 {
     return new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin'));
@@ -66,6 +83,28 @@ function roomieBookingClock(mixed $time): ?string
     }
     // Compare legacy values with seconds and newer minute-only values on the same scale.
     return strlen($time) === 5 ? $time . ':00' : $time;
+}
+
+/**
+ * Internal room/day lookup. Callers establish room visibility or write permission first.
+ * Return the whole day's schedule so legacy clock precision is normalized by the consumer.
+ */
+function roomieRoomBookingRows(PDO $db, int $roomId, string $date, ?int $excludeBookingId = null): array
+{
+    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
+    $sql = "SELECT b.user_id, b.start_time, b.end_time FROM bookings b
+        WHERE b.date = :day AND $effectiveRoom = :room";
+    if ($excludeBookingId !== null) {
+        $sql .= ' AND b.id <> :excluded';
+    }
+    $stmt = $db->prepare($sql);
+    $stmt->bindValue(':room', $roomId, PDO::PARAM_INT);
+    $stmt->bindValue(':day', $date, PDO::PARAM_STR);
+    if ($excludeBookingId !== null) {
+        $stmt->bindValue(':excluded', $excludeBookingId, PDO::PARAM_INT);
+    }
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 /**

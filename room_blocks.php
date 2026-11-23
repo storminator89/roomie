@@ -136,23 +136,12 @@ function roomieCountBookingsBlockingRoomBlock(
     string $endTime
 ): int {
     [$start, $end] = roomieRoomBlockInterval($startTime, $endTime);
-    // Check both references: old reservations can point at a seat without a matching room_id.
-    // Do not prefilter by the time strings, which can differ in precision or be malformed.
-    $stmt = $db->prepare('SELECT b.start_time, b.end_time FROM bookings b
-        WHERE b.date = :day AND (b.room_id = :room OR EXISTS (
-            SELECT 1 FROM seats s WHERE s.id = b.seat_id AND s.room_id = :seat_room
-        ))');
-    $stmt->bindValue(':day', $date, PDO::PARAM_STR);
-    $stmt->bindValue(':room', $roomId, PDO::PARAM_INT);
-    $stmt->bindValue(':seat_room', $roomId, PDO::PARAM_INT);
-    $stmt->execute();
     $count = 0;
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+    foreach (roomieRoomBookingRows($db, $roomId, $date) as $row) {
         if (roomieScheduleRowBlocksWindow($row, $start, $end)) {
             ++$count;
         }
     }
-    $stmt->closeCursor();
     return $count;
 }
 

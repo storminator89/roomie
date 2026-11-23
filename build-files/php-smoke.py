@@ -234,6 +234,25 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
         if (roomieParseCustomBookingTimes($date, '10:30', '10:45', $now) !== ['10:30', '10:45']) {
             fwrite(STDERR, 'Unexpected result for future same-day slot'); exit(1);
         }
+        // Berlin is UTC+2 on this date. Instant presets stay bookable until (but not at) their end;
+        // approval presets are already closed at their exact start.
+        foreach ([
+            ['06:59:59', '09:00', '12:00', true, true],
+            ['07:00:00', '09:00', '12:00', true, false],
+            ['09:59:59', '09:00', '12:00', true, false],
+            ['10:00:00', '09:00', '12:00', false, false],
+            ['10:00:01', '09:00', '12:00', false, false],
+            ['14:59:59', '13:00', '17:00', true, false],
+            ['15:00:00', '13:00', '17:00', false, false],
+            ['15:00:00', '09:00', '17:00', false, false],
+        ] as [$utc, $start, $end, $instantOpen, $approvalOpen]) {
+            $clock = new DateTimeImmutable('2026-06-01T' . $utc . 'Z');
+            if (roomieBookingPresetIsOpen($date, $start, $end, $clock) !== $instantOpen
+                || roomieBookingPresetIsOpen($date, $start, $end, $clock, true) !== $approvalOpen
+                || !roomieBookingPresetIsOpen($date->modify('+1 day'), $start, $end, $clock, true)) {
+                fwrite(STDERR, 'Unexpected preset state at ' . $utc); exit(1);
+            }
+        }
     """], root, env)
     with closing(sqlite3.connect(db_path)) as db, db:
         ids = dict(db.execute("SELECT email, id FROM users"))
@@ -252,16 +271,23 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
                                      (f"QA Flex {name}", kind, capacity)).lastrowid
         db.execute("INSERT INTO permissions (user_id, room_id) VALUES (?, ?)", (colleague_id, rooms["Restricted"]))
         next_date = (dt.date.fromisoformat(date) + dt.timedelta(days=1)).isoformat()
-        for who, room, on, start, end in (
-            (colleague_id, "Gap", date, "09:00", "10:00:00"),
-            (colleague_id, "Gap", date, "11:00:00", "17:00"),
-            (colleague_id, "Capacity", date, "10:00:00", "10:30:00"),
-            (admin_id, "Capacity", date, "10:30", "11:00"),
-            (user_id, "Own overlap", date, "12:00", "12:30"),
-            (colleague_id, "Range", next_date, "09:00", "17:00"),
+        fixture_bookings = {}
+        for who, room, on, start, end, links in (
+            (colleague_id, "Gap", date, "09:00", "10:00:00", "seat"),
+            (colleague_id, "Gap", date, "11:00:00", "17:00", "room"),
+            (colleague_id, "Capacity", date, "10:00:00", "10:30:00", "seat"),
+            (admin_id, "Capacity", date, "10:30", "11:00", "both"),
+            (user_id, "Own overlap", date, "12:00", "12:30", "seat"),
+            (colleague_id, "Range", next_date, "09:00", "17:00", "room"),
+            (colleague_id, "Restricted", date, "15:00", "16:00", "seat"),
         ):
-            db.execute("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, ?, ?)",
-                       (who, rooms[room], on, start, end))
+            seat = None
+            if links in ("seat", "both"):
+                seat = db.execute("INSERT INTO seats (room_id, top, left_pos) VALUES (?, '0', '0')",
+                                  (rooms[room],)).lastrowid
+            fixture_bookings[room] = db.execute(
+                "INSERT INTO bookings (user_id, room_id, seat_id, date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?)",
+                (who, rooms[room] if links != "seat" else None, seat, on, start, end)).lastrowid
 
     colleague = Client(user.base_url)
     colleague_status = colleague.login("smoke-other@example.test", env["ROOMIE_SMOKE_PASSWORD"])
@@ -314,6 +340,9 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
     hidden_url = 'get_bookings.php?' + urlencode({"room_id": rooms["Restricted"], "start_date": date})
     expect(guest.request(hidden_url)[0] == 401, "Room occupancy must stay private to a signed-in session")
     expect(user.request(hidden_url)[0] == 404, "Restricted occupancy must be hidden from ungranted members")
+    code, _, raw = user.request('get_bookings.php?' + urlencode({"start_date": date}))
+    expect(code == 200 and all(item["room_id"] != rooms["Restricted"] for item in json.loads(raw)),
+           "Bulk availability may not leak a restricted room through a legacy seat")
     expect(user.request(f"room_details.php?id={rooms['Restricted']}&date={date}")[0] == 404,
            "A restricted room must not leak through room details")
     submit(fields("Restricted"), expected=False, description="Reject ungranted member booking")
@@ -354,6 +383,20 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
            and "Der im Raumplan gewählte Zeitraum ist nicht verfügbar." in html
            and parse_qs(urlsplit(linked.map_back or "").query)["end_time"] == ["11:15"],
            "A deep-linked unavailable interval must not be selected or silently replaced")
+    code, _, raw = user.request('get_monthly_bookings.php?' + urlencode({
+        "room_id": rooms["Own overlap"], "year": date[:4], "month": int(date[5:7]),
+    }))
+    expect(code == 200 and json.loads(raw) == [date], "A seat-only reservation must appear in monthly occupancy")
+    code, _, html = user.request('bookings.php?' + urlencode({"date": date}))
+    expect(code == 200 and 'QA Flex Own overlap' in html
+           and f'download=calendar&amp;booking_id={fixture_bookings["Own overlap"]}' in html,
+           "The owner must see a seat-only booking and its calendar action")
+    code, _, calendar = user.request(f'bookings.php?download=calendar&booking_id={fixture_bookings["Own overlap"]}')
+    expect(code == 200 and "SUMMARY:QA Flex Own overlap" in calendar, "Seat-only ICS must use the effective room name")
+    code, _, _ = admin.request("update_room.php", content_type="application/json", csrf=admin_token,
+                               data=json.dumps({"id": rooms["Own overlap"], "name": "QA Flex Own overlap",
+                                   "number": "", "type": "shared-desk", "capacity": 2, "amenities": []}).encode())
+    expect(code == 409, "Reducing capacity must also respect a seat-only future booking")
     code, _, html = user.request(f"room_details.php?id={rooms['Own overlap']}&date={date}")
     own_picker = BookingDetailsHTML(html)
     expect(code == 200 and own_picker.available_until.get("11:45") == "12:00"
@@ -365,13 +408,23 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
     submit(fields("Gap"), expected=True, description="Custom interval fits a gap between legacy bookings")
     submit(fields("Gap", "09:45", "10:15"), actor=admin, token=admin_token, expected=False,
            description="Overlapping a booking by 15 minutes blocks a single-place room")
-    submit(fields("Own overlap", "12:15", "12:45"), expected=False,
-           description="Own overlap is blocked despite spare capacity")
+    _, own_conflict = submit(fields("Own overlap", "12:15", "12:45"), expected=False,
+                             description="Own seat-only overlap is blocked despite spare capacity")
+    expect("bereits gebucht" in own_conflict.get("error", ""), "Expect own overlap, not a capacity rejection")
     submit(fields("Own overlap", "12:30", "12:45"), expected=True,
            description="Own adjacent booking is permitted")
-    submit(fields("Capacity"), expected=True, description="Adjacent bookings consume one place each, not two")
-    submit(fields("Capacity", "10:15", "10:30"), actor=admin, token=admin_token, expected=False,
-           description="Peak concurrent capacity must be respected")
+    submit(fields("Capacity"), expected=True,
+           description="A double-linked reservation counts once and adjacent reservations do not accumulate")
+    _, capacity_conflict = submit(fields("Capacity", "10:15", "10:30"), actor=admin, token=admin_token, expected=False,
+                                  description="A third overlapping booking must fail when one place is seat-only")
+    expect("Kapazität" in capacity_conflict.get("error", ""), "Expect capacity, not an own-booking rejection")
+    code, _, raw = user.request('get_bookings.php?' + urlencode({"room_id": rooms["Capacity"], "start_date": date}))
+    capacity_rows = json.loads(raw)
+    expect(code == 200 and len(capacity_rows) == 3 and all(row["room_id"] == rooms["Capacity"] for row in capacity_rows),
+           "Availability should return the legacy, double-linked and current bookings each once")
+    code, _, html = admin.request(f"room_details.php?id={rooms['Capacity']}&date={date}")
+    expect(code == 200 and "10:15" not in BookingDetailsHTML(html).available_until,
+           "Details should not offer a slot when effective occupancy reaches capacity for a non-overlapping viewer")
     submit(dict(fields("Range"), time_period="ganzerTag", end_date=next_date), expected=False,
            description="A blocked date must roll back the entire multi-day booking")
 
@@ -419,8 +472,9 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
         local = dt.datetime.combine(dt.date.fromisoformat(date), dt.time(hour), ZoneInfo("Europe/Berlin"))
         stamp = local.astimezone(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         expect(f"{label}:{stamp}" in ics.split("\r\n"), f"Custom ICS must preserve converted {label}")
-    print("Flexible bookings: validation, presets, gap, peak capacity, own overlap, rollback, "
-          "room grants, private map data and ICS passed" + ("; concurrent last place passed" if concurrent else ""), flush=True)
+    print("Flexible bookings: validation, preset clock boundaries, legacy seat occupancy, peak capacity, "
+          "own overlap/adjacency, rollback, room grants, private map data and ICS passed"
+          + ("; concurrent last place passed" if concurrent else ""), flush=True)
 
 
 class MoveFormsHTML(HTMLParser):
@@ -480,8 +534,8 @@ def smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, c
 
         main = room("Main", 1)
         main_seat = seat(main)
-        own = booking(who, main, date, "09:00:00", "10:00:00", main_seat)
-        conflicting = booking(other, main, next_date, "10:15", "11:15")
+        own = booking(who, None, date, "09:00:00", "10:00:00", main_seat)
+        conflicting = booking(other, None, next_date, "10:15", "11:15", seat(main))
         ended = booking(who, main, past_day, "09:00", "10:00")
         started = booking(who, main, today, "00:00", "23:59:59") if now.time() > dt.time() else None
         restricted = room("Restricted", 2, "fk-office")
@@ -716,8 +770,11 @@ def smoke_series(command, root, env, date, guest, admin, admin_status, user, use
                                      ("DST", 1, "office")):
             rooms[name] = db.execute("INSERT INTO rooms (name, type, capacity) VALUES (?, ?, ?)",
                                      (f"QA Series {name}", kind, capacity)).lastrowid
+        seat = db.execute("INSERT INTO seats (room_id, top, left_pos) VALUES (?, '0', '0')",
+                          (rooms["Other members"],)).lastrowid
+        db.execute("INSERT INTO bookings (user_id, seat_id, date, start_time, end_time) VALUES (?, ?, ?, '09:00', '12:00')",
+                   (admin_id, seat, days[1]))
         db.executemany("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, ?, ?)", (
-            (admin_id, rooms["Other members"], days[1], "09:00", "12:00"),
             (ids["smoke-other@example.test"], rooms["Other members"], days[1], "10:00", "11:00"),
             (user_id, rooms["Own"], days[1], "10:00", "11:00"),
         ))
@@ -929,8 +986,10 @@ def smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, 
                             ("Series", "office"), ("Race", "office")):
             rooms[label] = db.execute("INSERT INTO rooms (name, type, capacity) VALUES (?, ?, 2)",
                                       (f"QA Block {label}", kind)).lastrowid
-        occupied = db.execute("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, '10:15:00', '10:45:00')",
-                              (other_id, rooms["Occupied"], date)).lastrowid
+        occupied_seat = db.execute("INSERT INTO seats (room_id, top, left_pos) VALUES (?, '0', '0')",
+                                   (rooms["Occupied"],)).lastrowid
+        occupied = db.execute("INSERT INTO bookings (user_id, seat_id, date, start_time, end_time) VALUES (?, ?, ?, '10:15:00', '10:45:00')",
+                              (other_id, occupied_seat, date)).lastrowid
         move_id = db.execute("INSERT INTO bookings (user_id, room_id, date, start_time, end_time) VALUES (?, ?, ?, '15:00', '16:00')",
                              (user_id, rooms["Open"], date)).lastrowid
 
@@ -973,8 +1032,11 @@ def smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, 
     expect(code == 200 and 'Sperr' in html, "Administrators need an accessible maintenance management page")
     code, _, conflict_html = admin.request(endpoint, create(rooms["Occupied"]))
     expect(code == 409 and "Smoke Other Member" not in conflict_html, "An overlapping existing booking cannot be displaced or disclosed")
-    expect(rows("bookings", rooms["Occupied"]) == [(occupied, date, "10:15:00", "10:45:00")]
-           and rows("room_blocks", rooms["Occupied"]) == [], "Rejecting maintenance must preserve the original reservation")
+    with closing(sqlite3.connect(db_path)) as db:
+        persisted = db.execute("SELECT room_id, seat_id, date, start_time, end_time FROM bookings WHERE id = ?",
+                               (occupied,)).fetchone()
+    expect(persisted == (None, occupied_seat, date, "10:15:00", "10:45:00")
+           and rows("room_blocks", rooms["Occupied"]) == [], "Rejecting maintenance must preserve the legacy reservation")
 
     series_room = rooms["Series"]
     stale, _ = preview(series_room)
@@ -1080,6 +1142,7 @@ def smoke_booking_approvals(env, scratch, date, guest, admin, admin_status, conc
         for label, capacity, kind, required in (
             ("Default", 1, "office", False), ("Queue", 1, "meeting", True),
             ("Restricted", 1, "fk-office", True), ("Block after request", 1, "office", True),
+            ("Seat after request", 1, "office", True),
             ("Expired", 1, "office", True), ("Horizon", 1, "office", True),
             ("Race", 1, "office", True), ("Stale series", 1, "office", False),
             ("Move", 1, "office", True), ("Toggle", 1, "office", False),
@@ -1219,6 +1282,16 @@ def smoke_booking_approvals(env, scratch, date, guest, admin, admin_status, conc
     expect(status == 303, "Adding a block after an otherwise valid pending request should succeed")
     expect(decide(req) == 409 and snapshot(req)[3:] == ("pending", None) and schedule(blocked) == [],
            "Approval must recheck maintenance added after request submission")
+
+    seat_room = rooms["Seat after request"]
+    req = pending(seat_room)
+    with closing(sqlite3.connect(db_path)) as db, db:
+        seat = db.execute("INSERT INTO seats (room_id, top, left_pos) VALUES (?, '0', '0')", (seat_room,)).lastrowid
+        db.execute("INSERT INTO bookings (user_id, seat_id, date, start_time, end_time) VALUES (?, ?, ?, '10:15', '10:45')",
+                   (ids["peer"], seat, date))
+    expect(decide(req) == 409 and snapshot(req)[3:] == ("pending", None) and schedule(seat_room) == [],
+           "Approving a pending request must recheck capacity taken by a seat-only booking")
+    expect(request_booking(seat_room).get("success") is False, "New approval requests must count seat-only bookings")
 
     for room, invalid in ((rooms["Expired"], now - dt.timedelta(days=1)), (rooms["Horizon"], now + dt.timedelta(days=91))):
         req = pending(room)

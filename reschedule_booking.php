@@ -67,7 +67,9 @@ try {
         throw new RoomieRescheduleRejected('Deine Sitzung ist nicht mehr gültig. Bitte melde dich erneut an.', 403);
     }
 
-    $find = $db->prepare('SELECT room_id, seat_id, date, start_time, end_time FROM bookings WHERE id = ? AND user_id = ?');
+    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
+    $find = $db->prepare("SELECT $effectiveRoom AS room_id, b.seat_id, b.date, b.start_time, b.end_time
+        FROM bookings b WHERE b.id = ? AND b.user_id = ?");
     $find->execute([$bookingId, $userId]);
     $booking = $find->fetch(PDO::FETCH_ASSOC);
     $find->closeCursor();
@@ -142,12 +144,8 @@ try {
         }
     }
 
-    $roomBookings = $db->prepare('SELECT user_id, start_time, end_time FROM bookings
-        WHERE room_id = ? AND date = ? AND id <> ? AND start_time < ? AND end_time > ?');
-    $roomBookings->setFetchMode(PDO::FETCH_ASSOC);
-    $roomBookings->execute([$roomId, $date, $bookingId, $end, $start]);
+    $roomBookings = roomieRoomBookingRows($db, $roomId, $date, $bookingId);
     $conflict = roomieBookingConflict($roomBookings, (int) $room['capacity'], $userId, $start, $end);
-    $roomBookings->closeCursor();
     if ($conflict === 'own') {
         throw new RoomieRescheduleRejected('Du hast den Raum zur gewählten Zeit bereits gebucht.', 409);
     }

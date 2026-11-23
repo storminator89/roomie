@@ -1,6 +1,6 @@
 import { createRoomplanApi } from './api.js';
-import { renderFloorPosition } from './floor-view.js';
-import { bookingWindowInFuture, firstFreeBookingWindow, periodCanBeBooked, validBookingWindow } from './booking-window.js';
+import { matchesRoomSearch, normalizeRoomSearch, renderFloorPosition } from './floor-view.js';
+import { bookingWindowInFuture, firstFreeBookingWindow, periodCanBeBooked, presetBookingWindowOpen, validBookingWindow } from './booking-window.js';
 
 const types = new Map([
   ['mediaroom', 'Mediaraum'], ['office', 'Büro'], ['open-office', 'Großraumbüro'],
@@ -222,6 +222,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   const pendingStars = new Set();
 
   const toolbar = el('div', 'rp-view-toolbar');
+  const primary = el('div', 'rp-primary-filters');
   const dateLabelNode = el('label', 'rp-date-label');
   dateLabelNode.textContent = 'Datum';
   const dateInput = el('input', 'rp-date');
@@ -231,6 +232,15 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   dateLabelNode.htmlFor = dateInput.id;
   const dateControl = el('div', 'rp-date-control');
   dateControl.append(dateLabelNode, dateInput);
+  const search = el('input', 'rp-date rp-search');
+  search.type = 'search';
+  search.id = 'rp-room-search';
+  search.placeholder = 'Name oder Nummer';
+  search.maxLength = 100;
+  const searchLabel = el('label', 'rp-date-label', 'Raum suchen');
+  searchLabel.htmlFor = search.id;
+  const searchControl = el('div', 'rp-search-control');
+  searchControl.append(searchLabel, search);
   const dateRange = timeRangeControls('rp-filter');
   function defaultFilterRange(date, now = new Date()) {
     return [timeOptions.slice(0, -1).find(time => bookingWindowInFuture(date, time, now)) ?? opening, closing];
@@ -239,24 +249,27 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   const secondaryButton = 'roomplan-action roomplan-action-secondary rp-button rp-button-secondary';
   const resetDate = button('Heute', secondaryButton);
   resetDate.disabled = initialView.date === today;
-  const freeFilter = button('Nur freie Räume', secondaryButton);
+  const freeFilter = button('Nur frei', secondaryButton + ' rp-free-filter');
   freeFilter.setAttribute('aria-pressed', String(onlyFree));
   const filter = button('Nur Favoriten', secondaryButton);
   filter.setAttribute('aria-pressed', String(onlyFavorites));
   filter.disabled = true;
-  const mode = button('Listenansicht', secondaryButton);
-  mode.setAttribute('aria-pressed', String(listMode));
-  mode.hidden = true;
+  const moreOptions = el('details', 'rp-more-options');
+  const optionsSummary = el('summary', secondaryButton + ' rp-options-summary');
+  const optionsTitle = el('span', '', 'Filter und Ansicht');
+  const activeOptions = el('span', 'rp-active-options');
+  const optionsChevron = el('span', 'rp-options-chevron', '▾');
+  optionsChevron.setAttribute('aria-hidden', 'true');
+  optionsSummary.append(optionsTitle, activeOptions, optionsChevron);
+  const optionsPanel = el('div', 'rp-options-panel');
+  const optionControls = el('div', 'rp-option-controls');
+  const rangeSummary = el('p', 'rp-range-summary');
+  rangeSummary.id = 'rp-filter-range';
+  freeFilter.setAttribute('aria-describedby', rangeSummary.id);
   const floorPick = el('label', 'rp-floor-pick', 'Ansicht');
   const floorSelect = el('select');
   floorPick.append(floorSelect);
   floorPick.hidden = true;
-  const equipmentFilter = el('details', 'rp-equipment-filter');
-  const equipmentSummary = el('summary', secondaryButton + ' rp-equipment-summary');
-  const equipmentLabel = el('span', '', 'Ausstattung');
-  const equipmentChevron = el('span', 'rp-equipment-chevron', '▾');
-  equipmentChevron.setAttribute('aria-hidden', 'true');
-  equipmentSummary.append(equipmentLabel, equipmentChevron);
   const equipmentGroup = el('fieldset', 'rp-equipment-group');
   const equipmentHint = el('p', 'rp-equipment-hint', 'Räume müssen alle ausgewählten Merkmale haben.');
   equipmentHint.id = 'rp-equipment-hint';
@@ -274,31 +287,42 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   }
   const clearEquipment = button('Auswahl löschen', secondaryButton);
   equipmentGroup.append(el('legend', '', 'Benötigte Ausstattung'), equipmentHint, equipmentOptions, clearEquipment);
-  equipmentFilter.append(equipmentSummary, equipmentGroup);
   function syncEquipmentFilter() {
-    equipmentLabel.textContent = selectedEquipment.length ? `Ausstattung (${selectedEquipment.length})` : 'Ausstattung';
-    equipmentFilter.classList.toggle('rp-equipment-active', selectedEquipment.length > 0);
     for (const [key, checkbox] of equipmentInputs) checkbox.checked = selectedEquipment.includes(key);
     clearEquipment.disabled = !selectedEquipment.length;
   }
+  function syncFilterSummary() {
+    const activeCount = Number(onlyFavorites) + selectedEquipment.length;
+    activeOptions.textContent = activeCount ? ` · ${activeCount} aktiv` : '';
+    const [from, to] = dateRange.value;
+    const rangeText = (onlyFree || rangeIsExplicit) && dateValue(dateInput.value) ? `Zeitraum: ${from}–${to} Uhr` : '';
+    if (rangeSummary.textContent !== rangeText) rangeSummary.textContent = rangeText;
+  }
   syncEquipmentFilter();
-  toolbar.append(dateControl, resetDate, dateRange.root, freeFilter, filter, mode, floorPick, equipmentFilter);
+  syncFilterSummary();
+  primary.append(dateControl, searchControl, freeFilter);
+  optionControls.append(dateRange.root, resetDate, filter, floorPick);
+  optionsPanel.append(optionControls, equipmentGroup);
+  moreOptions.append(optionsSummary, optionsPanel);
+  toolbar.append(primary, rangeSummary, moreOptions);
 
   const notice = el('div', 'rp-status');
   notice.setAttribute('role', 'status');
   notice.setAttribute('aria-live', 'polite');
   notice.setAttribute('aria-atomic', 'true');
-  const equipmentResult = el('p', 'rp-equipment-result');
-  equipmentResult.setAttribute('role', 'status');
-  equipmentResult.setAttribute('aria-atomic', 'true');
+  const filterResult = el('p', 'rp-filter-result');
+  filterResult.setAttribute('role', 'status');
+  filterResult.setAttribute('aria-atomic', 'true');
   const content = el('div', 'rp-view-content');
   content.id = 'rp-view-content';
   content.tabIndex = -1;
+  content.setAttribute('role', 'region');
+  content.setAttribute('aria-label', 'Raumplan-Ergebnisse');
   const retry = button('Erneut laden', secondaryButton + ' rp-retry');
   retry.hidden = true;
   toolbar.setAttribute('role', 'group');
   toolbar.setAttribute('aria-label', 'Raumplan filtern');
-  view.replaceChildren(toolbar, notice, retry, equipmentResult, content);
+  view.replaceChildren(toolbar, notice, retry, filterResult, content);
 
   function preferredRange() {
     return onlyFree || rangeIsExplicit ? dateRange.value : null;
@@ -319,8 +343,8 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     return floors.find(floor => floor.id === floorChoice) ?? floors[0] ?? null;
   }
 
-  function syncFloorControl() {
-    floorPick.hidden = !floors.length || onlyFavorites;
+  function syncFloorControl(hasGrid = plan?.layout.some(Boolean)) {
+    floorPick.hidden = onlyFavorites || (!floors.length && !hasGrid);
     const options = floors.map(floor => [String(floor.id), floor.title]);
     options.push(['grid', 'Raster'], ['list', 'Liste']);
     floorSelect.replaceChildren(...options.map(([id, label]) => {
@@ -354,14 +378,21 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     if (plan && dateValue(dateInput.value)) render();
   }
 
-  floorSelect.addEventListener('change', () => {
-    const value = floorSelect.value;
+  function chooseView(value) {
+    if (loadPlanError || !dateValue(dateInput.value)) return;
     listMode = value === 'list';
-    floorChoice = value === 'grid' || value === 'list' ? (value === 'grid' ? value : null) : Number(value);
+    floorChoice = value === 'grid' ? 'grid' : value === 'list' ? null : Number(value);
     selectedFloorRoom = null;
-    mode.setAttribute('aria-pressed', String(listMode));
     rememberView();
     render();
+  }
+  floorSelect.addEventListener('change', () => chooseView(floorSelect.value));
+
+  search.addEventListener('input', () => {
+    floorFilters.query = search.value;
+    if (loadPlanError || !dateValue(dateInput.value)) return;
+    if (activeFloorView) activeFloorView.refreshQuery();
+    else render();
   });
 
   function status(text, isError = false) {
@@ -387,7 +418,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       status(favorite ? `${room.name} zu Favoriten hinzugefügt.` : `${room.name} aus Favoriten entfernt.`);
       if (onlyFavorites && !favorite) {
         render();
-        filter.focus();
+        (moreOptions.open ? filter : optionsSummary).focus();
       }
     } catch (error) {
       status(error.message || 'Favoriten konnten nicht aktualisiert werden.', true);
@@ -483,9 +514,14 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     if (!selectedBooking || bookPending) return;
     const period = new FormData(roomForm).get('period');
     const custom = period === customPeriod;
-    if (!custom && !periods.some(item => item[0] === period)) return;
+    const preset = periods.find(item => item[0] === period);
+    if (!custom && !preset) return;
     const attempted = selectedBooking;
     const [startTime, endTime] = customControls.value;
+    if (preset && !presetBookingWindowOpen(attempted.date, preset[2], preset[3], attempted.room.requiresApproval)) {
+      feedback.textContent = 'Dieser Zeitraum ist nicht mehr buchbar.';
+      return;
+    }
     if (custom && (!validBookingWindow(startTime, endTime) || !bookingWindowInFuture(attempted.date, startTime))) {
       feedback.textContent = 'Bitte eine gültige Zeit in der Zukunft wählen.';
       customControls.start.focus();
@@ -536,8 +572,8 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     const ready = bookingStatus === 'ready';
     return {
       booked,
-      presets: ready ? availablePeriods(room.capacity, booked).filter(([, , from]) =>
-        !room.requiresApproval || bookingWindowInFuture(dateInput.value, from, now)) : [],
+      presets: ready && dateIsBookable() ? availablePeriods(room.capacity, booked).filter(([, , from, to]) =>
+        presetBookingWindowOpen(dateInput.value, from, to, room.requiresApproval, now)) : [],
       custom: ready && dateIsBookable() ? firstFreeBookingWindow(room.capacity, booked, dateInput.value, now) : null,
     };
   }
@@ -620,17 +656,21 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     return element;
   }
 
-  function showEquipmentResults(count, inFloor = false) {
+  function showFilterResults(count, inFloor = false) {
     let text = '';
-    if (selectedEquipment.length && (!onlyFree || bookingStatus === 'ready')) {
+    const hasSearch = normalizeRoomSearch(floorFilters.query).length > 0;
+    const hasFilters = hasSearch || selectedEquipment.length > 0 || onlyFree;
+    if (hasFilters && (!onlyFree || bookingStatus === 'ready')) {
       if (count > 0) text = count === 1 ? '1 passender Raum' : `${count} passende Räume`;
       else if (onlyFavorites && !plan.favorites.length) text = 'Noch keine Favoriten.';
-      else if (onlyFree) text = 'Keine passenden freien Räume für diesen Zeitraum. Passe die Filter an.';
-      else text = inFloor ? 'Keine passenden Räume auf diesem Grundriss. Passe die Filter an.'
-        : 'Keine passenden Räume mit dieser Ausstattung. Passe die Filter an.';
+      else if (inFloor) text = 'Keine passenden Räume auf diesem Grundriss.';
+      else if (onlyFree) text = 'Keine passenden freien Räume für diesen Zeitraum.';
+      else if (hasSearch) text = 'Keine passenden Räume für diese Suche.';
+      else text = 'Keine passenden Räume mit dieser Ausstattung.';
     }
     // Keep a live region outside the replaced result content so it also announces zero matches.
-    if (equipmentResult.textContent !== text) equipmentResult.textContent = text;
+    if (filterResult.textContent !== text) filterResult.textContent = text;
+    return hasFilters;
   }
 
   function render(focusRoom) {
@@ -653,15 +693,17 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       return availabilityCache.get(room.id);
     };
     const [from, to] = dateRange.value;
-    const matchable = bookingStatus === 'ready' && dateIsBookable()
-      && validBookingWindow(from, to) && bookingWindowInFuture(dateInput.value, from, now);
+    const matchable = bookingStatus === 'ready' && dateIsBookable() && validBookingWindow(from, to);
+    const presetWindow = periods.some(([, , start, end]) => start === from && end === to);
+    const futureStart = bookingWindowInFuture(dateInput.value, from, now);
     const matchesFreeFilter = room => matchable && room.canBook !== false
+      && (futureStart || (rangeIsExplicit && presetWindow && !room.requiresApproval
+        && presetBookingWindowOpen(dateInput.value, from, to, false, now)))
       && periodCanBeBooked(room.capacity, bookingsByRoom?.get(room.id) ?? [], from, to);
     const matchesEquipment = room => matchesRoomAmenities(room, selectedEquipment);
     const drawCard = room => card(room, availabilityFor(room));
     filter.disabled = !plan.rooms.length;
-    syncFloorControl();
-    mode.hidden = onlyFavorites || Boolean(floors.length) || !slots.some(Boolean);
+    syncFloorControl(slots.some(Boolean));
     const floor = !onlyFavorites && activeFloor();
     if (floor) {
       const panel = section(floor.title);
@@ -671,12 +713,13 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       const previousKey = activeFloorView?.contains(active) ? active.dataset.floorFocusKey : null;
       const previousView = activeFloorViewId === floor.id ? activeFloorView?.snapshot() : null;
       const findControl = key => [...visual.querySelectorAll('[data-floor-focus-key]')]
-        .find(control => control.dataset.floorFocusKey === key && !control.closest('[hidden]') && !control.disabled);
+        .find(control => control.dataset.floorFocusKey === key
+          && !control.closest('[hidden], details:not([open])') && !control.disabled);
       function closeDetails() {
-        const opener = findControl(floorRoomOpener);
+        const opener = findControl(floorRoomOpener) || findControl(`list-${selectedFloorRoom}`);
         selectedFloorRoom = null;
         updateFocus();
-        (opener || findControl('search') || visual).focus();
+        (opener || search).focus();
       }
       function updateFocus(moveFocus = false) {
         const room = plan.rooms.find(candidate => candidate.id === selectedFloorRoom);
@@ -710,7 +753,11 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
         floor, rooms: plan.rooms, filters: floorFilters, roomDetails: focus,
         availabilityStatus: bookingStatus,
         canBook: matchesFreeFilter, matchesEquipment,
-        onResultCount: count => showEquipmentResults(count, true),
+        onResultCount: count => showFilterResults(count, true),
+        onOpenList() {
+          chooseView('list');
+          content.focus();
+        },
         availability(room) {
           if (bookingStatus !== 'ready') return 'unknown';
           if (onlyFree) return matchesFreeFilter(room) ? 'free' : 'busy';
@@ -738,23 +785,22 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       activeFloorView = visual;
       activeFloorViewId = floor.id;
       updateFocus();
-      if (previousKey && !previousId) (findControl(previousKey) || findControl('search') || visual).focus();
-      if (focusRoom != null && !visual.isFloorRoomShown(focusRoom)) (findControl('search') || visual).focus();
+      if (previousKey && !previousId) (findControl(previousKey) || search).focus();
+      if (focusRoom != null && !visual.isFloorRoomShown(focusRoom)) search.focus();
       return;
     }
     activeFloorView = null;
     activeFloorViewId = null;
     const visible = plan.rooms.filter(room => (!onlyFavorites || plan.favorites.includes(room.id))
+      && matchesRoomSearch(`${room.number ?? ''} ${room.name ?? ''}`, floorFilters.query)
       && matchesEquipment(room) && (!onlyFree || matchesFreeFilter(room)));
-    showEquipmentResults(visible.length);
+    const hasFilters = showFilterResults(visible.length);
     if (!visible.length) {
       const noFavorites = onlyFavorites && !plan.favorites.length;
-      const text = selectedEquipment.length ? '' : noFavorites ? 'Noch keine Favoriten.' : onlyFree
-        ? (bookingStatus === 'ready' ? 'Keine freien Räume für diesen Zeitraum.' : '')
-        : 'Keine Räume verfügbar.';
+      const text = hasFilters ? '' : noFavorites ? 'Noch keine Favoriten.' : 'Keine Räume verfügbar.';
       content.replaceChildren(...(text ? [el('p', 'rp-empty', text)] : []));
       if (previousCard || focusRoom != null) {
-        (noFavorites ? filter : selectedEquipment.length ? equipmentSummary : onlyFree ? freeFilter : content).focus();
+        (noFavorites || selectedEquipment.length ? optionsSummary : floorFilters.query ? search : onlyFree ? freeFilter : content).focus();
       }
       return;
     }
@@ -866,7 +912,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       loadPlanError = true;
       retry.hidden = false;
       content.replaceChildren();
-      equipmentResult.textContent = '';
+      filterResult.textContent = '';
       status(error.message || 'Raumplan konnte nicht geladen werden.', true);
     } finally {
       if (invocation === planRun) content.setAttribute('aria-busy', 'false');
@@ -880,14 +926,16 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       bookingsByRoom = null;
       bookingStatus = 'idle';
       content.replaceChildren();
-      equipmentResult.textContent = '';
+      filterResult.textContent = '';
       content.setAttribute('aria-busy', 'false');
       status('Bitte ein Datum auswählen.', true);
       resetDate.disabled = false;
+      syncFilterSummary();
       return;
     }
     resetDate.disabled = dateInput.value === today;
     if (!rangeIsExplicit) dateRange.value = defaultFilterRange(dateInput.value);
+    syncFilterSummary();
     rememberView();
     if (plan && !loadPlanError) void loadBookings();
   });
@@ -895,11 +943,13 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     dateInput.value = today;
     resetDate.disabled = true;
     if (!rangeIsExplicit) dateRange.value = defaultFilterRange(today);
+    syncFilterSummary();
     rememberView();
     dateInput.focus();
     if (plan && !loadPlanError) void loadBookings();
   });
   function applyViewRange() {
+    syncFilterSummary();
     if (loadPlanError || !dateValue(dateInput.value)) return;
     rememberView();
     render();
@@ -928,20 +978,13 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     if (loadPlanError || !dateValue(dateInput.value)) return;
     onlyFavorites = !onlyFavorites;
     filter.setAttribute('aria-pressed', String(onlyFavorites));
-    rememberView();
-    render();
-  });
-  mode.addEventListener('click', () => {
-    if (loadPlanError || !dateValue(dateInput.value)) return;
-    listMode = !listMode;
-    mode.setAttribute('aria-pressed', String(listMode));
-    rememberView();
-    render();
+    applyViewRange();
   });
   retry.addEventListener('click', () => {
     if (!dateValue(dateInput.value)) {
       dateInput.value = today;
       resetDate.disabled = true;
+      syncFilterSummary();
     }
     dateInput.focus();
     if (loadPlanError || !plan) void loadPlan();
@@ -963,19 +1006,22 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     selectedFloorRoom = null;
     filter.setAttribute('aria-pressed', String(onlyFavorites));
     freeFilter.setAttribute('aria-pressed', String(onlyFree));
-    mode.setAttribute('aria-pressed', String(listMode));
     resetDate.disabled = state.date === today;
+    syncFilterSummary();
     if (!plan || loadPlanError) return;
     if (dateChanged) void loadBookings();
     else render();
   });
 
   if (isAdmin && edit && editor) {
+    const editorActions = edit.closest('.rp-floor-actions');
     const closeEditor = () => {
       if (editorMounted?.canClose && !editorMounted.canClose()) return;
       editorMounted?.destroy?.();
       editorMounted = null;
       editor.hidden = true;
+      view.hidden = false;
+      if (editorActions) editorActions.hidden = false;
       editorOpened = false;
       edit.setAttribute('aria-expanded', 'false');
       if (legacyActions) {
@@ -987,7 +1033,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     edit.setAttribute('aria-controls', 'roomplan-editor');
     edit.setAttribute('aria-expanded', 'false');
     edit.addEventListener('click', async () => {
-      if (!plan || floorEditor || editorOpening) return;
+      if (!plan || loadPlanError || floorEditor || editorOpening) return;
       if (editorOpened) {
         closeEditor();
         return;
@@ -997,6 +1043,8 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       try {
         const { mountEditor } = await import('./editor.js');
         editor.hidden = false;
+        view.hidden = true;
+        if (editorActions) editorActions.hidden = true;
         editorOpened = true;
         edit.setAttribute('aria-expanded', 'true');
         editorMounted = await mountEditor({

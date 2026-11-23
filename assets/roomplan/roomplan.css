@@ -106,11 +106,35 @@
     .roomie-shell-menu-chevron { display: none; }
 }
 
-.rp-view-toolbar, .rp-card-header, .rp-card-actions, .rp-dialog-actions {
+.rp-card-header, .rp-card-actions, .rp-dialog-actions {
     display: flex; flex-wrap: wrap; align-items: center; gap: .625rem;
 }
-.rp-view-toolbar { margin-block-end: .95rem; }
+.rp-view-toolbar { display: grid; gap: .55rem; margin-block-end: .95rem; }
+.rp-primary-filters {
+    display: grid; grid-template-columns: minmax(9rem, 11rem) minmax(10rem, 22rem) auto;
+    gap: .55rem .75rem; align-items: end; justify-content: start;
+}
+.rp-primary-filters > :is(.rp-date-control, .rp-search-control) { display: grid; gap: .25rem; min-width: 0; }
+.rp-primary-filters .rp-date { width: 100%; min-width: 0; }
+.rp-free-filter { white-space: nowrap; }
 .rp-view-toolbar button[aria-pressed="true"] { background: #fff3d1; border-color: #946700; }
+.rp-range-summary { margin: 0; color: var(--roomplan-muted); font-size: .875rem; }
+.rp-range-summary:empty { display: none; }
+.rp-more-options { min-width: 0; }
+.rp-options-summary { list-style: none; width: fit-content; }
+.rp-options-summary::-webkit-details-marker { display: none; }
+.rp-more-options[open] .rp-options-chevron { transform: rotate(180deg); }
+.rp-active-options { color: var(--roomplan-muted); font-weight: 500; }
+.rp-active-options:empty { display: none; }
+.rp-options-panel {
+    display: grid; gap: .6rem; min-width: 0; margin-block-start: .5rem; padding: .75rem;
+    background: var(--roomplan-surface); border: 1px solid var(--roomplan-border); border-radius: .75rem;
+}
+.rp-option-controls { display: flex; flex-wrap: wrap; align-items: end; gap: .5rem; }
+@media (max-width: 36rem) {
+    .rp-primary-filters { grid-template-columns: minmax(0, 1fr) auto; }
+    .rp-primary-filters > .rp-date-control { grid-column: 1 / -1; }
+}
 .rp-date-control, .rp-periods { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
 .rp-date-label, .rp-time-label, .rp-period, .rp-floor-pick { color: var(--roomplan-muted); font-size: .875rem; font-weight: 600; }
 .rp-period input { accent-color: #8d650e; }
@@ -191,22 +215,16 @@
     white-space: nowrap;
 }
 .rp-legacy-panel button { border-color: transparent; }
-.rp-floor-pick { align-items: center; display: flex; gap: .4rem; max-width: 100%; }
+.rp-floor-pick { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem; max-width: 100%; }
 .rp-floor-pick select {
-    min-height: 2.75rem; min-width: 0; max-width: 19rem; border: 1px solid var(--roomplan-control-border);
+    min-height: 2.75rem; min-width: 0; max-width: min(19rem, 100%); border: 1px solid var(--roomplan-control-border);
     border-radius: .65rem; background: #fff; color: var(--roomplan-ink); padding: .45rem .65rem; font: inherit; font-weight: 400;
 }
 .rp-floor-focus { margin-top: .75rem; }
 .rp-floor-focus .rp-card { max-width: 36rem; }
 
-.rp-equipment-filter { max-width: 100%; }
-.rp-equipment-filter[open] { flex: 1 0 100%; }
-.rp-equipment-summary { list-style: none; }
-.rp-equipment-summary::-webkit-details-marker { display: none; }
-.rp-equipment-filter[open] .rp-equipment-chevron { transform: rotate(180deg); }
-.rp-equipment-active .rp-equipment-summary { background: #fff3d1; border-color: #946700; }
 .rp-equipment-group {
-    min-width: 0; margin: .5rem 0 0; padding: .5rem .75rem .75rem; border: 1px solid var(--roomplan-border);
+    min-width: 0; margin: 0; padding: .5rem .75rem .75rem; border: 1px solid var(--roomplan-border);
     border-radius: .65rem; background: var(--roomplan-surface);
 }
 .rp-equipment-group legend { padding-inline: .25rem; font-size: .9rem; font-weight: 650; }
@@ -217,5 +235,5 @@
 .rp-equipment-option { display: flex; align-items: center; gap: .45rem; min-height: 2.75rem; cursor: pointer; }
 .rp-equipment-option input { accent-color: #8d650e; }
 .rp-equipment-option span { overflow-wrap: anywhere; }
-.rp-equipment-result { margin: 0; color: var(--roomplan-muted); font-size: .875rem; }
-.rp-equipment-result:not(:empty) { margin-block-end: .7rem; }
+.rp-filter-result { margin: 0; color: var(--roomplan-muted); font-size: .875rem; }
+.rp-filter-result:not(:empty) { margin-block-end: .7rem; }

@@ -28,10 +28,11 @@ if (($_GET['cancelled'] ?? '') === '1') {
 
 function findOwnBooking(PDO $db, int $userId, int $bookingId): ?array
 {
-    $stmt = $db->prepare('SELECT b.id, b.date, b.start_time, b.end_time, r.name AS room_name,
+    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
+    $stmt = $db->prepare("SELECT b.id, b.date, b.start_time, b.end_time, r.name AS room_name,
         u.name AS user_name, u.email AS user_email
-        FROM bookings b JOIN rooms r ON r.id = b.room_id JOIN users u ON u.id = b.user_id
-        WHERE b.id = :booking_id AND b.user_id = :user_id');
+        FROM bookings b JOIN rooms r ON r.id = $effectiveRoom JOIN users u ON u.id = b.user_id
+        WHERE b.id = :booking_id AND b.user_id = :user_id");
     $stmt->execute(['booking_id' => $bookingId, 'user_id' => $userId]);
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
@@ -113,9 +114,10 @@ try {
         }
     }
     [$rule, $params] = roomieBookingAccessSql('r', $user_id, $isAdmin);
+    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
     $query = "SELECT b.id, r.id AS room_id, r.name AS room_name, b.date, b.start_time, b.end_time, b.user_id,
                 CASE WHEN b.user_id = :viewer_id OR :show_details = 1 THEN u.name ELSE 'Belegt' END AS user_name
-              FROM bookings b JOIN rooms r ON b.room_id = r.id JOIN users u ON b.user_id = u.id
+              FROM bookings b JOIN rooms r ON r.id = $effectiveRoom JOIN users u ON b.user_id = u.id
               WHERE b.date >= :current_date AND ((b.date <= :last_date AND $rule) OR b.user_id = :owner_id)";
     $params += [
         'viewer_id' => $user_id,
@@ -169,11 +171,22 @@ function bookingEscape(string $content): string
 {
     return htmlspecialchars($content, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
+function bookingListDateLabel(string $date, DateTimeImmutable $today): string
+{
+    $day = parseBookingDate($date);
+    if ($day === null) {
+        return '';
+    }
+    $weekday = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][(int) $day->format('N') - 1];
+    $prefix = $date === $today->format('Y-m-d') ? 'Heute' : $weekday;
+    return $prefix . ', ' . $day->format($day->format('Y') === $today->format('Y') ? 'd.m.' : 'd.m.Y');
+}
 $groups = [];
 foreach ($bookings as $booking) {
     $groups[$booking['date']][] = $booking;
 }
 $planUrl = 'raumplan.php' . ($filterDate !== '' ? '?date=' . rawurlencode($filterDate) : '');
+$hasFilters = $filterDate !== '' || $searchName !== '';
 $hasMail = roomieMailFrom() !== null;
 $moveTimes = [];
 $moveStep = new DateInterval('PT' . ROOMIE_BOOKING_STEP_MINUTES . 'M');
@@ -195,75 +208,41 @@ $requestLabels = [
     <title>Buchungen · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/bookings/booking-pages.css">
+    <link rel="stylesheet" href="assets/bookings/booking-list.css">
 </head>
 <body class="roomplan-page">
 <?php $roomieActivePage = 'bookings.php'; require __DIR__ . '/roomplan_shell.php'; ?>
-<main id="roomplan" class="roomplan-main rb-page" tabindex="-1">
+<main id="roomplan" class="roomplan-main rb-page rb-booking-list" tabindex="-1">
     <header class="rb-header">
         <h1>Buchungen</h1>
-        <div class="rp-floor-actions">
-            <?php if ($isAdmin) : ?><a class="roomplan-action roomplan-action-secondary" href="admin_booking_requests.php">Anfragen verwalten</a><?php endif; ?>
-            <a class="roomplan-action" href="<?= bookingEscape($planUrl) ?>">Raum buchen</a>
-        </div>
+        <a class="roomplan-action" href="<?= bookingEscape($planUrl) ?>">Raum buchen</a>
     </header>
-    <nav class="rb-segments" aria-label="Buchungsansicht">
-        <a href="<?= bookingEscape(bookingPageUrl('mine', $filterDate)) ?>"<?= $scope === 'mine' ? ' aria-current="page"' : '' ?>>Meine Buchungen</a>
-        <a href="<?= bookingEscape(bookingPageUrl('all', $filterDate)) ?>"<?= $scope === 'all' ? ' aria-current="page"' : '' ?>>Alle Buchungen</a>
-    </nav>
-    <form class="rb-filter" method="get" action="bookings.php">
-        <?php if ($scope === 'all') : ?><input type="hidden" name="scope" value="all"><?php endif; ?>
-        <label>Datum<input type="date" name="date" value="<?= bookingEscape($filterDate) ?>"></label>
-        <?php if ($scope === 'all' && $isAdmin) : ?>
-        <label>Name<input type="search" name="search" maxlength="100" value="<?= bookingEscape($searchName) ?>"></label>
-        <?php endif; ?>
-        <button class="roomplan-action roomplan-action-secondary" type="submit">Filtern</button>
-        <?php if ($filterDate !== '' || $searchName !== '') : ?>
-        <a class="rb-inline-link" href="<?= bookingEscape(bookingPageUrl($scope)) ?>">Filter zurücksetzen</a>
-        <?php endif; ?>
-    </form>
+    <div class="rb-list-controls">
+        <nav class="rb-segments" aria-label="Buchungsansicht">
+            <a href="<?= bookingEscape(bookingPageUrl('mine', $filterDate)) ?>"<?= $scope === 'mine' ? ' aria-current="page"' : '' ?>>Meine Buchungen</a>
+            <a href="<?= bookingEscape(bookingPageUrl('all', $filterDate)) ?>"<?= $scope === 'all' ? ' aria-current="page"' : '' ?>>Alle Buchungen</a>
+        </nav>
+        <div class="rb-list-context">
+            <p><?php if ($filterDate !== '') : ?>
+                <time datetime="<?= bookingEscape($filterDate) ?>"><?= bookingEscape(bookingListDateLabel($filterDate, $today)) ?></time>
+            <?php else : ?>Ab heute<?php endif; ?></p>
+            <a class="rb-inline-link" href="#rb-booking-filter-fields"><?= $hasFilters ? 'Filter aktiv' : 'Filter' ?></a>
+            <?php if ($ownRequests) : ?><a class="rb-inline-link" href="#rb-booking-requests">Meine Anfragen</a><?php endif; ?>
+        </div>
+    </div>
 
     <?php if ($successMessage) : ?><p class="rb-notice" role="status"><?= bookingEscape($successMessage) ?></p><?php endif; ?>
     <?php if ($error) : ?><p class="rb-notice rb-notice-error" role="alert"><?= bookingEscape($error) ?></p><?php endif; ?>
 
-    <?php if ($scope === 'mine') : ?>
-    <section id="rb-booking-requests" class="rb-day" aria-labelledby="rb-booking-requests-title" tabindex="-1"<?= !$ownRequests ? ' hidden' : '' ?>>
-        <h2 id="rb-booking-requests-title">Meine Anfragen</h2>
-        <ul class="rb-list">
-        <?php foreach ($ownRequests as $request) :
-            $state = (string) $request['status'];
-            $pendingRequest = $state === 'pending';
-        ?>
-            <li class="rb-entry">
-                <div class="rb-entry-main">
-                    <h3><?= bookingEscape((string) $request['room_name']) ?></h3>
-                    <p><time datetime="<?= bookingEscape((string) $request['date']) ?>"><?= bookingEscape(roomieDateLabel($request['date'])) ?></time> ·
-                        <?= bookingEscape(substr((string) $request['start_time'], 0, 5) . '–' . substr((string) $request['end_time'], 0, 5)) ?> Uhr</p>
-                </div>
-                <div class="rb-entry-actions">
-                    <span class="rb-request-status<?= $pendingRequest ? ' rb-request-pending' : '' ?>"><?= bookingEscape($requestLabels[$state] ?? 'Erledigt') ?></span>
-                    <?php if ($pendingRequest) : ?>
-                    <form method="post" action="booking_request_action.php">
-                        <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">
-                        <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
-                        <button type="submit" name="action" value="cancel" class="roomplan-action roomplan-action-secondary">Anfrage zurückziehen</button>
-                    </form>
-                    <?php endif; ?>
-                </div>
-            </li>
-        <?php endforeach; ?>
-        </ul>
-    </section>
-    <?php endif; ?>
-
     <?php if (!$groups) : ?>
         <p class="roomplan-panel rb-empty"><?= $error ? 'Liste nicht verfügbar.'
-            : ($filterDate !== '' || $searchName !== '' ? 'Keine Buchungen für diesen Filter.'
+            : ($hasFilters ? 'Keine Buchungen für diesen Filter.'
             : ($ownRequests ? 'Keine bestätigten Buchungen.' : ($scope === 'mine' ? 'Du hast keine anstehenden Buchungen.' : 'Keine anstehenden Buchungen.'))) ?></p>
     <?php endif; ?>
 
     <?php foreach ($groups as $date => $entries) : ?>
         <section class="rb-day">
-            <h2><time datetime="<?= bookingEscape((string) $date) ?>"><?= $date === $todayKey ? 'Heute · ' : '' ?><?= bookingEscape(roomieDateLabel($date)) ?></time></h2>
+            <h2><time datetime="<?= bookingEscape((string) $date) ?>"><?= bookingEscape(bookingListDateLabel($date, $today)) ?></time></h2>
             <ul class="rb-list">
             <?php foreach ($entries as $booking) :
                 $bookingId = (int) $booking['id'];
@@ -272,18 +251,20 @@ $requestLabels = [
                 $canMove = $owner && !isset($approvalRooms[(int) $booking['room_id']]) && $startClock !== null
                     && ($date > $todayKey || ($date === $todayKey && $startClock > $now->format('H:i:s')));
                 $reopenMove = $canMove && $bookingId === $editBookingId;
+                $clockLabel = substr((string) $booking['start_time'], 0, 5) . '–' . substr((string) $booking['end_time'], 0, 5);
+                $optionLabel = 'Optionen für ' . $booking['room_name'] . ', ' . roomieDateLabel($date) . ', ' . $clockLabel . ' Uhr';
             ?>
-                <li class="rb-entry"<?= $owner ? ' id="booking-' . $bookingId . '" tabindex="-1"' : '' ?>>
+                <li class="rb-entry<?= $owner ? ' rb-entry-with-options' : '' ?>"<?= $owner ? ' id="booking-' . $bookingId . '" tabindex="-1"' : '' ?>>
                     <div class="rb-entry-main">
                         <h3><?= bookingEscape((string) $booking['room_name']) ?></h3>
-                        <p><?= bookingEscape(substr((string) $booking['start_time'], 0, 5) . '–' . substr((string) $booking['end_time'], 0, 5)) ?> Uhr
+                        <p><?= bookingEscape($clockLabel) ?> Uhr
                         <?php if ($scope === 'all') : ?> · <?= $owner ? 'Eigene Buchung' : bookingEscape((string) $booking['user_name']) ?><?php endif; ?></p>
                     </div>
                     <?php if ($owner) : ?>
-                    <div class="rb-entry-actions">
-                        <a class="roomplan-action roomplan-action-secondary" href="bookings.php?download=calendar&amp;booking_id=<?= (int) $booking['id'] ?>" aria-label="Kalenderdatei für <?= bookingEscape((string) $booking['room_name']) ?> herunterladen">Kalender</a>
-                        <details class="rb-more"<?= $reopenMove ? ' open' : '' ?>>
-                            <summary aria-label="Optionen für <?= bookingEscape((string) $booking['room_name']) ?>">Optionen</summary>
+                    <details class="rb-more rb-row-options" name="rb-booking-row"<?= $reopenMove ? ' open' : '' ?>>
+                        <summary aria-label="<?= bookingEscape($optionLabel) ?>">Optionen</summary>
+                        <div class="rb-row-menu">
+                            <a class="roomplan-action roomplan-action-secondary" href="bookings.php?download=calendar&amp;booking_id=<?= $bookingId ?>">Kalenderdatei (.ics)</a>
                             <?php if ($canMove) :
                                 $moveDate = $date <= $lastDate ? $date : '';
                                 $moveStart = substr((string) $booking['start_time'], 0, 5);
@@ -333,8 +314,8 @@ $requestLabels = [
                                 <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>">
                                 <button type="submit" class="roomplan-action roomplan-action-secondary rb-danger">Buchung stornieren</button>
                             </form>
-                        </details>
-                    </div>
+                        </div>
+                    </details>
                     <?php endif; ?>
                 </li>
             <?php endforeach; ?>
@@ -346,6 +327,61 @@ $requestLabels = [
     <nav class="rb-pagination" aria-label="Buchungsseiten">
         <?php if ($page > 1) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= bookingEscape(bookingPageUrl($scope, $filterDate, $searchName, $page - 1)) ?>">Zurück</a><?php endif; ?>
         <?php if ($hasNext) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= bookingEscape(bookingPageUrl($scope, $filterDate, $searchName, $page + 1)) ?>">Weiter</a><?php endif; ?>
+    </nav>
+    <?php endif; ?>
+
+    <details class="rb-booking-filters"<?= $hasFilters ? ' open' : '' ?>>
+        <summary>Weitere Filter</summary>
+        <form class="rb-filter" id="rb-booking-filter-fields" method="get" action="bookings.php" tabindex="-1">
+            <?php if ($scope === 'all') : ?><input type="hidden" name="scope" value="all"><?php endif; ?>
+            <label>Datum<input type="date" name="date" value="<?= bookingEscape($filterDate) ?>"></label>
+            <?php if ($scope === 'all' && $isAdmin) : ?>
+            <label>Name<input type="search" name="search" maxlength="100" value="<?= bookingEscape($searchName) ?>"></label>
+            <?php endif; ?>
+            <button class="roomplan-action roomplan-action-secondary" type="submit">Filtern</button>
+            <?php if ($hasFilters) : ?>
+            <a class="rb-inline-link" href="<?= bookingEscape(bookingPageUrl($scope)) ?>">Filter zurücksetzen</a>
+            <?php endif; ?>
+        </form>
+    </details>
+
+    <?php if ($scope === 'mine') : ?>
+    <section id="rb-booking-requests" class="rb-day" aria-labelledby="rb-booking-requests-title" tabindex="-1"<?= !$ownRequests ? ' hidden' : '' ?>>
+        <h2 id="rb-booking-requests-title">Meine Anfragen</h2>
+        <ul class="rb-list">
+        <?php foreach ($ownRequests as $request) :
+            $state = (string) $request['status'];
+            $pendingRequest = $state === 'pending';
+            $requestClockLabel = substr((string) $request['start_time'], 0, 5) . '–' . substr((string) $request['end_time'], 0, 5);
+        ?>
+            <li class="rb-entry<?= $pendingRequest ? ' rb-entry-with-options' : '' ?>">
+                <div class="rb-entry-main">
+                    <h3><?= bookingEscape((string) $request['room_name']) ?></h3>
+                    <p><time datetime="<?= bookingEscape((string) $request['date']) ?>"><?= bookingEscape(bookingListDateLabel($request['date'], $today)) ?></time>
+                        · <?= bookingEscape($requestClockLabel) ?> Uhr</p>
+                    <span class="rb-request-status<?= $pendingRequest ? ' rb-request-pending' : '' ?>"><?= bookingEscape($requestLabels[$state] ?? 'Erledigt') ?></span>
+                </div>
+                <?php if ($pendingRequest) : ?>
+                <details class="rb-more rb-row-options" name="rb-booking-row">
+                    <summary aria-label="Optionen für Anfrage: <?= bookingEscape($request['room_name'] . ', ' . roomieDateLabel($request['date']) . ', ' . $requestClockLabel . ' Uhr') ?>">Optionen</summary>
+                    <div class="rb-row-menu">
+                        <form method="post" action="booking_request_action.php">
+                            <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">
+                            <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
+                            <button type="submit" name="action" value="cancel" class="roomplan-action roomplan-action-secondary rb-danger">Anfrage zurückziehen</button>
+                        </form>
+                    </div>
+                </details>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+        </ul>
+    </section>
+    <?php endif; ?>
+
+    <?php if ($isAdmin) : ?>
+    <nav class="rb-booking-admin" aria-label="Buchungsverwaltung">
+        <a class="rb-inline-link" href="admin_booking_requests.php">Freigabe-Warteschlange</a>
     </nav>
     <?php endif; ?>
 </main>

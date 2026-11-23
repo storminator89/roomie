@@ -19,7 +19,8 @@ try {
         roomieBookingJson(['error' => 'Raum nicht gefunden.'], 404);
         exit;
     }
-    $stmt = $db->prepare("SELECT DISTINCT b.date FROM bookings b JOIN rooms r ON r.id = b.room_id
+    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
+    $stmt = $db->prepare("SELECT DISTINCT b.date FROM bookings b JOIN rooms r ON r.id = $effectiveRoom
         WHERE r.id = :room_id AND b.date BETWEEN :start_date AND :end_date AND $rule ORDER BY b.date");
     $stmt->execute($params + [
         'room_id' => $roomId,

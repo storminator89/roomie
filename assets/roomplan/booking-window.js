@@ -41,6 +41,12 @@ export function bookingWindowInFuture(date, start, now = new Date()) {
   return date > current.date || (date === current.date && a > current.seconds);
 }
 
+// Ordinary standard slots may be booked once started, never once completed.
+// Approval requests and custom times must still start in the future.
+export function presetBookingWindowOpen(date, from, to, requiresApproval, now = new Date()) {
+  return validBookingWindow(from, to) && bookingWindowInFuture(date, requiresApproval ? from : to, now);
+}
+
 function available(capacity, bookings, a, b) {
   const deltas = new Map();
   for (const row of bookings) {

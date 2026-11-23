@@ -68,12 +68,11 @@ try {
     // Restrict to visible rooms before applying viewer-controlled filters.
     $visible = roomieListRooms($db, $userId, $admin);
     $favoriteSet = array_fill_keys(roomieFavoriteIds($db, $userId), true);
-    $needle = '/' . preg_quote($q, '/') . '/iu';
+    $terms = roomieRoomSearchTokens($q);
     foreach ($visible as $room) {
         $isFavorite = isset($favoriteSet[(int) $room['id']]);
         if ($onlyFavorites && !$isFavorite) continue;
-        if ($q !== '' && preg_match($needle, (string) $room['name']) !== 1
-            && preg_match($needle, (string) ($room['number'] ?? '')) !== 1) continue;
+        if (!roomieRoomMatchesSearch($terms, (string) $room['name'], (string) ($room['number'] ?? ''))) continue;
         $room['viewer_favorite'] = $isFavorite;
         $rooms[] = $room;
     }

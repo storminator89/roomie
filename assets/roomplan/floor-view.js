@@ -6,6 +6,7 @@ const availabilityStates = new Map([
   ['unknown', { label: 'Belegung unbekannt', symbol: '?' }],
 ]);
 const zooms = [100, 150, 200, 300];
+export const FLOOR_IMAGE_UNAVAILABLE = 'Der Grundriss konnte nicht geladen werden.';
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -76,26 +77,23 @@ function percentage(num) {
   return (num * 100).toFixed(6) + '%';
 }
 
-function normalizeRoomSearch(value) {
-  return String(value ?? '').toLocaleLowerCase('de-DE')
+export function normalizeRoomSearch(value) {
+  return String(value ?? '').normalize('NFC').toLocaleLowerCase('de-DE')
     .replaceAll('ß', 'ss').replaceAll('ä', 'ae').replaceAll('ö', 'oe').replaceAll('ü', 'ue')
-    .normalize('NFD').replace(/\p{M}/gu, '').trim().split(/\s+/).filter(Boolean);
-}
-
-function simplifyGerman(word) {
-  return word.replace(/([aou])e/g, '$1');
+    .normalize('NFD').replace(/\p{M}/gu, '')
+    .split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(word => word.replace(/([aou])e/g, '$1'));
 }
 
 export function matchesRoomSearch(label, query) {
-  const words = normalizeRoomSearch(query).map(simplifyGerman);
-  const fields = normalizeRoomSearch(label).map(simplifyGerman);
+  const words = normalizeRoomSearch(query);
+  const fields = normalizeRoomSearch(label);
   return words.every(word => fields.some(field => field.includes(word)));
 }
 
 export function renderFloorPosition({
   floor, rooms, availability, onRoomSelect, imageUrl, roomDetails,
   filters = { query: '', onlyBookable: false }, canBook = () => true, availabilityStatus = 'ready',
-  onFilterChange = () => {}, matchesEquipment = () => true, onResultCount = () => {},
+  onFilterChange = () => {}, matchesEquipment = () => true, onResultCount = () => {}, onOpenList,
 }) {
   const frame = el('section', 'rp-floor-position');
   const title = (typeof floor?.title === 'string' && floor.title.trim()) || 'Grundriss';
@@ -108,30 +106,21 @@ export function renderFloorPosition({
     return { ...marker, key, state: availabilityStates.get(key), label: markerLabel(marker.room) };
   });
 
-  const filtersRow = el('div', 'rp-floor-filters');
-  const search = el('input', 'rp-floor-search');
-  search.type = 'search';
-  search.placeholder = 'Raum suchen';
-  search.setAttribute('aria-label', 'Raum suchen');
-  search.dataset.floorFocusKey = 'search';
-  search.maxLength = 100;
-  search.value = filters.query;
-  const resultCount = el('span', 'rp-floor-result-count');
-  resultCount.setAttribute('role', 'status');
-  filtersRow.append(search, resultCount);
-
   const shortcuts = el('details', 'rp-floor-shortcuts');
   const shortcutTitle = el('summary', '', 'Räume im Grundriss');
   const shortcutList = el('ul', 'rp-floor-shortcut-list');
   shortcuts.append(shortcutTitle, shortcutList);
-  const showFallback = () => {
-    const wasFocused = tools.contains(document.activeElement) || viewport.contains(document.activeElement);
-    tools.hidden = true;
-    viewport.hidden = true;
-    hint.textContent = 'Grundrissbild nicht verfügbar.';
-    shortcuts.open = !shortcuts.hidden;
-    if (wasFocused) (!shortcuts.hidden ? shortcutTitle : frame).focus();
-  };
+  const fallback = el('div', 'rp-floor-unavailable');
+  fallback.hidden = true;
+  const fallbackMessage = el('p');
+  fallbackMessage.setAttribute('role', 'status');
+  const fallbackAction = onOpenList
+    ? button('Raumliste öffnen', 'roomplan-action roomplan-action-secondary')
+    : el('a', 'roomplan-action roomplan-action-secondary', 'Raumliste öffnen');
+  fallbackAction.dataset.floorFocusKey = 'room-list';
+  if (onOpenList) fallbackAction.addEventListener('click', onOpenList);
+  else fallbackAction.href = 'rooms.php';
+  fallback.append(fallbackMessage, fallbackAction);
   const entries = new Map();
   let selectedId = null;
   for (const item of markers) {
@@ -210,9 +199,24 @@ export function renderFloorPosition({
   if (markers.length === 0) hint.textContent = 'Keine Räume auf diesem Grundriss markiert.';
   canvas.append(image, overlay);
   viewport.append(canvas);
-  if (markers.length) frame.append(filtersRow, shortcuts);
+  frame.append(fallback);
+  if (markers.length) frame.append(shortcuts);
   if (roomDetails) frame.append(roomDetails);
   frame.append(tools, viewport, hint);
+
+  const showFallback = () => {
+    const active = document.activeElement;
+    const moveFocus = tools.contains(active) || viewport.contains(active);
+    tools.hidden = viewport.hidden = hint.hidden = true;
+    fallback.hidden = false;
+    fallbackMessage.textContent = FLOOR_IMAGE_UNAVAILABLE;
+    shortcuts.open = !shortcuts.hidden;
+    if (moveFocus) {
+      const shortcut = [...entries.values()].find(({ item, li }) =>
+        String(item.room.id) === active.dataset.floorRoomId && !li.hidden)?.link;
+      (shortcut || fallbackAction).focus();
+    }
+  };
 
   function updateSelection(id) {
     selectedId = id;
@@ -224,7 +228,7 @@ export function renderFloorPosition({
   }
 
   function applyFilters(resetOpen = false) {
-    const required = normalizeRoomSearch(filters.query);
+    const hasSearch = normalizeRoomSearch(filters.query).length > 0;
     let count = 0;
     for (const { item, li, marker } of entries.values()) {
       const matches = matchesRoomSearch(item.label, filters.query);
@@ -232,27 +236,23 @@ export function renderFloorPosition({
       li.hidden = marker.hidden = !(matches && matchesEquipment(item.room) && bookable);
       if (!li.hidden) count++;
     }
-    const active = required.length > 0 || filters.onlyBookable || filters.equipmentActive;
+    const active = hasSearch || filters.onlyBookable || filters.equipmentActive;
     shortcuts.hidden = count === 0;
-    shortcutTitle.textContent = required.length ? 'Suchergebnisse' : filters.onlyBookable ? 'Freie Räume'
+    shortcutTitle.textContent = hasSearch ? 'Suchergebnisse' : filters.onlyBookable ? 'Freie Räume'
       : filters.equipmentActive ? 'Passende Räume' : 'Räume im Grundriss';
-    if (active) shortcuts.open = true;
-    else if (resetOpen && !viewport.hidden) shortcuts.open = false;
-    resultCount.textContent = !active || filters.equipmentActive ? '' : filters.onlyBookable && availabilityStatus !== 'ready'
-      ? (availabilityStatus === 'error' ? 'Belegung unbekannt' : 'Belegung wird geladen …')
-      : count === 0 ? 'Keine Treffer' : count === 1 ? '1 Raum' : `${count} Räume`;
+    if (active || viewport.hidden) shortcuts.open = count > 0;
+    else if (resetOpen) shortcuts.open = false;
     onResultCount(count);
   }
-  const notifyFilters = () => {
+  frame.refreshQuery = () => {
     applyFilters(true);
     onFilterChange(selectedId != null && entries.get(selectedId)?.marker.hidden);
   };
-  search.addEventListener('input', () => { filters.query = search.value; notifyFilters(); });
   applyFilters();
   updateSelection(null);
   // Keep the renderer's DOM return contract; expose view state without a re-render.
   frame.selectFloorRoom = updateSelection;
-  frame.isFloorRoomShown = id => entries.has(id) && !entries.get(id).marker.hidden;
+  frame.isFloorRoomShown = id => entries.has(id) && !entries.get(id).li.hidden;
   frame.snapshot = () => ({ zoomIndex, x: viewport.scrollLeft, y: viewport.scrollTop, open: shortcuts.open });
   frame.restore = position => {
     setZoom(position.zoomIndex);
