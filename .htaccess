@@ -3,9 +3,13 @@ Options -Indexes -MultiViews
     RewriteEngine On
     RewriteRule "(^|/)(?:\.[^/]*|uploads|build-files|node_modules)(?:/|$)" - [F,END,NC]
 </IfModule>
-<FilesMatch "(?i)^(?:\..*|init_db\.php|schema_hardening\.php|roomplan_shell\.php|series_booking_view\.php|floorplan_helpers\.php|database\.php|room_access\.php|room_admin_input\.php|booking_calendar\.php|avatars\.php|booking_helpers\.php|room_blocks\.php|booking_approvals\.php|(?:package(?:-lock)?\.json|tailwind\.config\..*)|.*\.(?:db|sqlite|sqlite3)(?:[-.].*)?)$">
+<FilesMatch "(?i)^(?:\..*|init_db\.php|schema_hardening\.php|roomplan_shell\.php|series_booking_view\.php|floorplan_helpers\.php|database\.php|room_access\.php|mcp_booking_data\.php|room_admin_input\.php|booking_calendar\.php|avatars\.php|booking_helpers\.php|room_blocks\.php|booking_approvals\.php|(?:package(?:-lock)?\.json|tailwind\.config\..*)|.*\.(?:db|sqlite|sqlite3)(?:[-.].*)?)$">
     Require all denied
 </FilesMatch>
+<Files "mcp.php">
+    # Preserve Authorization for PHP-CGI/FastCGI; mod_php already passes it.
+    CGIPassAuth On
+</Files>
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
     Header always set X-Frame-Options "SAMEORIGIN"

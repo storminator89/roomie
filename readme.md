@@ -224,3 +224,47 @@ before using the new editor. It does not alter bookings or the existing grid.
 Allow enough room for multipart overhead in PHP `post_max_size` and set
 `upload_max_filesize` to at least 5 MiB. A new installation gets the tables
 through `init_db.php`.
+
+## Read-only MCP endpoint
+
+Roomie exposes `/mcp.php` over **Streamable HTTP** (JSON responses, no stdio,
+no session setup on the server). The endpoint is disabled until configured.
+It does not use browser login cookies and cannot create, change, or cancel
+bookings.
+
+1. Create a dedicated **non-admin** Roomie account. Note its numeric user ID.
+   Give it only the room permissions needed. It can read bookings for rooms
+   visible to a normal Roomie user, including unrestricted rooms. Restricted
+   rooms require an explicit grant. The account must not be used for daily login.
+2. Generate a 256-bit API key with `openssl rand -hex 32`. Set
+   `ROOMIE_MCP_API_KEY` to the resulting 64 hex digits and
+   `ROOMIE_MCP_USER_ID` to the account ID in the PHP service environment.
+   Keep the key out of source control, web files, URLs and logs. Rotate by
+   replacing the environment secret and updating any clients.
+3. Serve the endpoint only over HTTPS (TLS enforced at the web server or reverse
+   proxy). Preserve the `Authorization` header when forwarding to PHP, and apply
+   a per-client rate limit on the endpoint, for example 30 requests per minute
+   with a small burst. Keep web-server denial of `mcp_booking_data.php` when
+   not using the included Apache rules. Do not set CORS headers for this route.
+   Leave `ROOMIE_MCP_ORIGIN` unset for normal server-side MCP clients; requests
+   with an `Origin` are rejected by default. If needed, set it to exactly the
+   published Roomie origin (scheme plus hostname and optional port, no slash).
+
+In an MCP client that supports custom headers, set the transport to
+**Streamable HTTP**, URL to `https://<roomie-host>/mcp.php` and header to
+`Authorization: Bearer <API-key>`. The key is configured directly in the
+client; the endpoint does not offer OAuth discovery or issue tokens.
+
+Tool: `list_room_bookings`. Specify `from` and `to` as YYYY-MM-DD, inclusive
+(up to 31 calendar days). Optionally specify numeric `room_id` and `limit`
+(1–200, default 200). Results show confirmed bookings with room ID/name, date,
+start and end times (Europe/Berlin), not who booked. Pending requests and
+maintenance blocks are not bookings. If `truncated` is true, repeat with a
+narrower interval or a room filter. An ungranted or unknown room ID returns
+the same empty result.
+
+Local regression on a disposable SQLite database:
+
+```sh
+PHP_BIN=php python3 build-files/mcp-http-smoke.py
+```
