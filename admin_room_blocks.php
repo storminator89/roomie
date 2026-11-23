@@ -222,16 +222,17 @@ if ($status !== null && ($status['room_id'] ?? null) === $roomId) {
     <title>Raumsperren · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/admin/admin.css">
+    <link rel="stylesheet" href="assets/admin/area-visuals.css">
 </head>
 <body class="admin-page">
 <?php $roomieActivePage = 'admin_room_blocks.php'; require __DIR__ . '/roomplan_shell.php'; ?>
 <main class="admin-main">
-    <div class="admin-top"><h1>Raumsperren</h1></div>
+    <div class="admin-top rm-area-head"><h1>Raumsperren</h1><img class="rm-area-art" src="assets/illustrations/admin-closed.svg" width="96" height="64" alt=""></div>
     <nav aria-label="Verwaltung">
         <ul class="admin-tabs">
-            <li><a href="admin_users.php">Benutzer</a></li>
-            <li><a href="admin_permissions.php">Berechtigungen</a></li>
-            <li><a href="admin_room_blocks.php" aria-current="page">Raumsperren</a></li>
+            <li><a href="admin_users.php"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#person"></use></svg><span>Benutzer</span></span></a></li>
+            <li><a href="admin_permissions.php"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#key"></use></svg><span>Berechtigungen</span></span></a></li>
+            <li><a href="admin_room_blocks.php" aria-current="page"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#lock"></use></svg><span>Raumsperren</span></span></a></li>
         </ul>
     </nav>
     <?php if ($error !== null) : ?>
@@ -243,7 +244,7 @@ if ($status !== null && ($status['room_id'] ?? null) === $roomId) {
 
     <?php if ($rooms) : ?>
         <section class="admin-card" aria-labelledby="choose-room-title">
-            <h2 id="choose-room-title">Raum auswählen</h2>
+            <h2 id="choose-room-title"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#room"></use></svg><span>Raum auswählen</span></span></h2>
             <form method="get" action="admin_room_blocks.php" class="admin-toolbar">
                 <input type="hidden" name="date" value="<?= roomieBlockAdminHtml($day) ?>">
                 <label class="admin-field">Raum

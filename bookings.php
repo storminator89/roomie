@@ -214,8 +214,8 @@ $requestLabels = [
 <?php $roomieActivePage = 'bookings.php'; require __DIR__ . '/roomplan_shell.php'; ?>
 <main id="roomplan" class="roomplan-main rb-page rb-booking-list" tabindex="-1">
     <header class="rb-header">
-        <h1>Buchungen</h1>
-        <a class="roomplan-action" href="<?= bookingEscape($planUrl) ?>">Raum buchen</a>
+        <h1 class="rb-icon-row"><svg class="rb-icon rb-icon-tile" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18m-12 5 2 2 4-4"/></svg><span>Buchungen</span></h1>
+        <a class="roomplan-action" href="<?= bookingEscape($planUrl) ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Raum buchen</a>
     </header>
     <div class="rb-list-controls">
         <nav class="rb-segments" aria-label="Buchungsansicht">
@@ -226,7 +226,7 @@ $requestLabels = [
             <p><?php if ($filterDate !== '') : ?>
                 <time datetime="<?= bookingEscape($filterDate) ?>"><?= bookingEscape(bookingListDateLabel($filterDate, $today)) ?></time>
             <?php else : ?>Ab heute<?php endif; ?></p>
-            <a class="rb-inline-link" href="#rb-booking-filter-fields"><?= $hasFilters ? 'Filter aktiv' : 'Filter' ?></a>
+            <a class="rb-inline-link rb-icon-row" href="#rb-booking-filter-fields"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5z"/></svg><?= $hasFilters ? 'Filter aktiv' : 'Filter' ?></a>
             <?php if ($ownRequests) : ?><a class="rb-inline-link" href="#rb-booking-requests">Meine Anfragen</a><?php endif; ?>
         </div>
     </div>
@@ -235,14 +235,17 @@ $requestLabels = [
     <?php if ($error) : ?><p class="rb-notice rb-notice-error" role="alert"><?= bookingEscape($error) ?></p><?php endif; ?>
 
     <?php if (!$groups) : ?>
-        <p class="roomplan-panel rb-empty"><?= $error ? 'Liste nicht verfügbar.'
+        <div class="roomplan-panel rb-empty-visual">
+            <?php if (!$error) : ?><img src="assets/illustrations/booking-calendar.svg" width="74" height="62" alt="" decoding="async"><?php endif; ?>
+            <p class="rb-empty"><?= $error ? 'Liste nicht verfügbar.'
             : ($hasFilters ? 'Keine Buchungen für diesen Filter.'
             : ($ownRequests ? 'Keine bestätigten Buchungen.' : ($scope === 'mine' ? 'Du hast keine anstehenden Buchungen.' : 'Keine anstehenden Buchungen.'))) ?></p>
+        </div>
     <?php endif; ?>
 
     <?php foreach ($groups as $date => $entries) : ?>
         <section class="rb-day">
-            <h2><time datetime="<?= bookingEscape((string) $date) ?>"><?= bookingEscape(bookingListDateLabel($date, $today)) ?></time></h2>
+            <h2 class="rb-icon-row"><svg class="rb-icon rb-icon-muted" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg><time datetime="<?= bookingEscape((string) $date) ?>"><?= bookingEscape(bookingListDateLabel($date, $today)) ?></time></h2>
             <ul class="rb-list">
             <?php foreach ($entries as $booking) :
                 $bookingId = (int) $booking['id'];
@@ -257,14 +260,14 @@ $requestLabels = [
                 <li class="rb-entry<?= $owner ? ' rb-entry-with-options' : '' ?>"<?= $owner ? ' id="booking-' . $bookingId . '" tabindex="-1"' : '' ?>>
                     <div class="rb-entry-main">
                         <h3><?= bookingEscape((string) $booking['room_name']) ?></h3>
-                        <p><?= bookingEscape($clockLabel) ?> Uhr
+                        <p><svg class="rb-icon rb-icon-inline rb-icon-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg><?= bookingEscape($clockLabel) ?> Uhr
                         <?php if ($scope === 'all') : ?> · <?= $owner ? 'Eigene Buchung' : bookingEscape((string) $booking['user_name']) ?><?php endif; ?></p>
                     </div>
                     <?php if ($owner) : ?>
                     <details class="rb-more rb-row-options" name="rb-booking-row"<?= $reopenMove ? ' open' : '' ?>>
-                        <summary aria-label="<?= bookingEscape($optionLabel) ?>">Optionen</summary>
+                        <summary class="rb-icon-row" aria-label="<?= bookingEscape($optionLabel) ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Optionen</summary>
                         <div class="rb-row-menu">
-                            <a class="roomplan-action roomplan-action-secondary" href="bookings.php?download=calendar&amp;booking_id=<?= $bookingId ?>">Kalenderdatei (.ics)</a>
+                            <a class="roomplan-action roomplan-action-secondary" href="bookings.php?download=calendar&amp;booking_id=<?= $bookingId ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v11m-4-4 4 4 4-4M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3"/></svg>Kalenderdatei (.ics)</a>
                             <?php if ($canMove) :
                                 $moveDate = $date <= $lastDate ? $date : '';
                                 $moveStart = substr((string) $booking['start_time'], 0, 5);
@@ -312,7 +315,7 @@ $requestLabels = [
                             <form method="post" action="cancel_booking.php">
                                 <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">
                                 <input type="hidden" name="booking_id" value="<?= (int) $booking['id'] ?>">
-                                <button type="submit" class="roomplan-action roomplan-action-secondary rb-danger">Buchung stornieren</button>
+                                <button type="submit" class="roomplan-action roomplan-action-secondary rb-danger"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg>Buchung stornieren</button>
                             </form>
                         </div>
                     </details>
@@ -331,7 +334,7 @@ $requestLabels = [
     <?php endif; ?>
 
     <details class="rb-booking-filters"<?= $hasFilters ? ' open' : '' ?>>
-        <summary>Weitere Filter</summary>
+        <summary class="rb-icon-row"><svg class="rb-icon rb-icon-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>Weitere Filter</summary>
         <form class="rb-filter" id="rb-booking-filter-fields" method="get" action="bookings.php" tabindex="-1">
             <?php if ($scope === 'all') : ?><input type="hidden" name="scope" value="all"><?php endif; ?>
             <label>Datum<input type="date" name="date" value="<?= bookingEscape($filterDate) ?>"></label>
@@ -347,7 +350,7 @@ $requestLabels = [
 
     <?php if ($scope === 'mine') : ?>
     <section id="rb-booking-requests" class="rb-day" aria-labelledby="rb-booking-requests-title" tabindex="-1"<?= !$ownRequests ? ' hidden' : '' ?>>
-        <h2 id="rb-booking-requests-title">Meine Anfragen</h2>
+        <h2 id="rb-booking-requests-title" class="rb-icon-row"><svg class="rb-icon rb-icon-muted" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6m-6 4h6"/></svg><span>Meine Anfragen</span></h2>
         <ul class="rb-list">
         <?php foreach ($ownRequests as $request) :
             $state = (string) $request['status'];
@@ -363,12 +366,12 @@ $requestLabels = [
                 </div>
                 <?php if ($pendingRequest) : ?>
                 <details class="rb-more rb-row-options" name="rb-booking-row">
-                    <summary aria-label="Optionen für Anfrage: <?= bookingEscape($request['room_name'] . ', ' . roomieDateLabel($request['date']) . ', ' . $requestClockLabel . ' Uhr') ?>">Optionen</summary>
+                    <summary class="rb-icon-row" aria-label="Optionen für Anfrage: <?= bookingEscape($request['room_name'] . ', ' . roomieDateLabel($request['date']) . ', ' . $requestClockLabel . ' Uhr') ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Optionen</summary>
                     <div class="rb-row-menu">
                         <form method="post" action="booking_request_action.php">
                             <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">
                             <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
-                            <button type="submit" name="action" value="cancel" class="roomplan-action roomplan-action-secondary rb-danger">Anfrage zurückziehen</button>
+                            <button type="submit" name="action" value="cancel" class="roomplan-action roomplan-action-secondary rb-danger"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg>Anfrage zurückziehen</button>
                         </form>
                     </div>
                 </details>

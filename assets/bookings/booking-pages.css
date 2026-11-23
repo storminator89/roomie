@@ -27,7 +27,7 @@
 .rb-move-form { display:grid; gap:.5rem; justify-items:start; max-width:100%; padding:.55rem; margin-block-end:.5rem; border:1px solid var(--roomplan-border,#dfe3e7); border-radius:.55rem; }
 .rb-more form + form { margin-top:.3rem; }
 .rb-entry-actions > a { align-self:start; }
-.rb-danger { color:#9f1239 !important; }
+.rb-danger { color:var(--rb-danger,#9f1239) !important; }
 .rb-tags { list-style:none; margin:0; padding:0; }
 .rb-tags > * { padding:.2rem .55rem; border-radius:999px; font-size:.875rem; background:#eceff2; }
 .rb-room-columns { display:grid; gap:.7rem; grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -54,3 +54,245 @@
 .rb-page :focus-visible { outline:2px solid #255b91; outline-offset:3px; }
 .rb-page [hidden] { display:none !important; }
 @media (max-width:38rem) { .rb-room-columns { grid-template-columns:minmax(0,1fr); } .rb-entry-actions { width:100%; } }
+
+/* Empty-state art is intentionally compact and sits beside existing copy. */
+.rb-empty-visual {
+    display:flex;
+    align-items:center;
+    gap:.8rem;
+    min-width:0;
+}
+.rb-empty-visual > img { flex:none; object-fit:contain; }
+.rb-empty-visual > p { min-width:0; overflow-wrap:anywhere; }
+.rb-empty-visual-compact { gap:.4rem; }
+@media (max-width:24rem) {
+    .rb-empty-visual:not(.rb-empty-visual-compact) > img { width:52px; height:44px; }
+}
+
+/* Shared booking surfaces, scoped away from the room directory and admin pages. */
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) {
+    --rb-ink: var(--roomie-ink, #182238);
+    --rb-muted: var(--roomie-muted, #526078);
+    --rb-line: var(--roomie-line, #dedee5);
+    --rb-control: var(--roomie-control, #747e93);
+    --rb-paper: var(--roomie-paper, #f8f7f3);
+    --rb-surface: var(--roomie-surface, #fff);
+    --rb-accent: var(--roomie-accent, #453bb2);
+    --rb-accent-hover: var(--roomie-accent-hover, #372d97);
+    --rb-accent-soft: var(--roomie-accent-soft, #efedf9);
+    --rb-focus: var(--roomie-focus, #453bb2);
+    --rb-radius: var(--roomie-radius, 12px);
+    --rb-control-radius: var(--roomie-control-radius, 8px);
+    --rb-danger: #8a2932;
+    --rb-danger-soft: #fcf0ef;
+    color: var(--rb-ink);
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -.045em;
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .rb-header {
+    gap: .75rem 1.25rem;
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .roomplan-panel {
+    border-color: var(--rb-line);
+    border-radius: var(--rb-radius);
+    background: var(--rb-surface);
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .roomplan-action {
+    max-width: 100%;
+    border-radius: var(--rb-control-radius);
+    background: var(--rb-accent);
+    color: #fff;
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .roomplan-action:hover {
+    background: var(--rb-accent-hover);
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .roomplan-action-secondary {
+    border-color: var(--rb-control);
+    background: var(--rb-surface);
+    color: var(--rb-ink);
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .roomplan-action-secondary:hover {
+    background: var(--rb-accent-soft);
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) :is(.rb-inline-link, .rb-empty) { color: var(--rb-muted); }
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .rb-inline-link { text-underline-offset: .2em; }
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .rb-inline-link:hover { color: var(--rb-ink); }
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) :is(.rb-segments a, .rb-more > summary, .rb-move > summary) {
+    border-radius: var(--rb-control-radius);
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .rb-segments { gap: .35rem; }
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .rb-segments a {
+    padding-inline: .8rem;
+    border-color: var(--rb-control);
+    background: var(--rb-surface);
+    font-size: .875rem;
+    font-weight: 600;
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .rb-segments a:hover {
+    border-color: var(--rb-control);
+    background: var(--rb-paper);
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .rb-segments a[aria-current="page"] {
+    border-color: var(--rb-accent);
+    background: var(--rb-accent-soft);
+    color: var(--rb-accent);
+    font-weight: 700;
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .rb-filter :is(input, select) {
+    border-color: var(--rb-control);
+    border-radius: var(--rb-control-radius);
+    background: var(--rb-surface);
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .rb-notice { border-radius: var(--rb-control-radius); }
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) .rb-notice-error {
+    color: var(--rb-danger);
+    background: var(--rb-danger-soft);
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) :is(.rb-move-form, .rb-room-list li) {
+    border-color: var(--rb-line);
+}
+.rb-page:is(.rb-booking-list, .rb-series-page, :has(> .rb-room-columns)) :is(a, button, summary, input, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--rb-focus);
+    outline-offset: 3px;
+}
+
+/* A booking workbench and a lighter occupancy register, rather than two identical cards. */
+.rb-page:has(> .rb-room-columns) { gap: 1rem; }
+.rb-page:has(> .rb-room-columns) > .rb-back {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block-start: -.35rem;
+}
+.rb-page:has(> .rb-room-columns) > .rb-header {
+    justify-content: flex-start;
+    align-items: baseline;
+}
+.rb-page:has(> .rb-room-columns) .rb-tags { gap: .4rem; }
+.rb-page:has(> .rb-room-columns) .rb-tags > :not(.rb-request-status) {
+    padding: .18rem .55rem;
+    border: 1px solid var(--rb-line);
+    border-radius: var(--rb-control-radius);
+    background: var(--rb-surface);
+    color: var(--rb-muted);
+    overflow-wrap: anywhere;
+}
+.rb-page:has(> .rb-room-columns) > form.rb-filter {
+    padding-block-start: .85rem;
+    border-block-start: 1px solid var(--rb-line);
+}
+.rb-page:has(> .rb-room-columns) #rb-room-approval {
+    padding-block-start: 0;
+    border: 0;
+}
+.rb-page:has(> .rb-room-columns) .rb-filter > a[aria-label] { min-width: 44px; }
+.rb-page:has(> .rb-room-columns) .rb-approval-toggle[aria-pressed="true"] {
+    border-color: var(--rb-accent);
+    background: var(--rb-accent-soft);
+}
+.rb-page:has(> .rb-room-columns) .rb-room-columns {
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 1.25rem;
+}
+.rb-page:has(> .rb-room-columns) .rb-room-panel { gap: 1rem; }
+.rb-page:has(> .rb-room-columns) .rb-room-panel h2 {
+    font-size: 1.25rem;
+    line-height: 1.3;
+    font-weight: 700;
+    letter-spacing: -.025em;
+}
+.rb-page:has(> .rb-room-columns) [aria-labelledby="rb-room-occupancy-title"] {
+    padding-inline: .25rem;
+    border: 0;
+    border-block-start: 1px solid var(--rb-line);
+    border-radius: 0;
+    background: transparent;
+}
+.rb-page:has(> .rb-room-columns) .rb-room-panel h2 time {
+    color: var(--rb-muted);
+    font-size: .875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+}
+.rb-page:has(> .rb-room-columns) .rb-room-list { gap: 0; }
+.rb-page:has(> .rb-room-columns) .rb-room-list li { padding-block: .6rem; }
+.rb-page:has(> .rb-room-columns) .rb-room-list li strong { font-variant-numeric: tabular-nums; }
+
+.rb-page:has(> .rb-room-columns) #rb-room-book { gap: .85rem; }
+.rb-page:has(> .rb-room-columns) #rb-room-book > button { justify-self: start; }
+.rb-page:has(> .rb-room-columns) .rb-periods { gap: .45rem; min-width: 0; }
+.rb-page:has(> .rb-room-columns) .rb-periods legend { font-size: .875rem; }
+.rb-page:has(> .rb-room-columns) .rb-periods > label {
+    min-height: 44px;
+    gap: .65rem;
+    padding: .45rem .65rem;
+    border: 1px solid var(--rb-line);
+    border-radius: var(--rb-control-radius);
+    overflow-wrap: anywhere;
+}
+.rb-page:has(> .rb-room-columns) .rb-periods > label:has(input:not(:disabled)) { cursor: pointer; }
+.rb-page:has(> .rb-room-columns) .rb-periods > label:hover:has(input:not(:disabled)) {
+    border-color: var(--rb-control);
+}
+.rb-page:has(> .rb-room-columns) .rb-periods > label:has(input:checked) {
+    border-color: var(--rb-accent);
+    background: var(--rb-accent-soft);
+}
+.rb-page:has(> .rb-room-columns) .rb-periods > label:has(input:disabled) { background: var(--rb-paper); }
+.rb-page:has(> .rb-room-columns) .rb-periods > label input {
+    flex: none;
+    margin: 0;
+    accent-color: var(--rb-accent);
+}
+.rb-page:has(> .rb-room-columns) .rb-periods small {
+    color: var(--rb-muted);
+    font-size: .875rem;
+    font-variant-numeric: tabular-nums;
+}
+.rb-page:has(> .rb-room-columns) .rb-periods > .rp-time-range {
+    flex-wrap: wrap;
+    gap: .45rem .75rem;
+    margin-block: .1rem .2rem;
+}
+.rb-page:has(> .rb-room-columns) .rb-periods .rp-time-label { min-width: 0; color: var(--rb-muted); }
+.rb-page:has(> .rb-room-columns) .rb-periods .rp-time {
+    min-height: 44px;
+    border-color: var(--rb-control);
+    border-radius: var(--rb-control-radius);
+    background: var(--rb-surface);
+    color: var(--rb-ink);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 42rem) {
+    .rb-page:has(> .rb-room-columns) .rb-room-columns { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Icons on booking surfaces are decorative; text remains the control label. */
+.rb-page .rb-icon { flex: none; pointer-events: none; }
+.rb-page .rb-icon-row { display: inline-flex; align-items: center; gap: .4rem; min-width: 0; }
+.rb-page h1.rb-icon-row { gap: .65rem; }
+.rb-page .rb-icon-row > span { min-width: 0; }
+.rb-page .rb-icon-tile {
+    box-sizing: border-box;
+    width: 2.65rem;
+    height: 2.65rem;
+    padding: .53rem;
+    border: 1px solid var(--rb-line);
+    border-radius: var(--rb-control-radius);
+    background: var(--rb-accent-soft);
+    color: var(--rb-accent);
+}
+.rb-page .rb-icon-accent { color: var(--rb-accent); }
+.rb-page .rb-icon-muted { color: var(--rb-muted); }
+.rb-page .rb-icon-inline { vertical-align: -.18em; margin-inline-end: .29rem; }
+.rb-page:has(> .rb-room-columns) > .rb-header { align-items: center; }
+.rb-page:has(> .rb-room-columns) > .rb-header .rb-tags > .rb-icon-row { gap: .28rem; }
+.rb-page:has(> .rb-room-columns) .rb-room-panel h2.rb-icon-row { gap: .49rem; }

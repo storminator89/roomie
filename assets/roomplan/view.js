@@ -51,6 +51,68 @@ function button(label, className) {
   return node;
 }
 
+// Decorative outline icons share one 24px coordinate system. Paths are
+// internal constants; all room names, messages and labels remain plain text.
+const iconPaths = Object.freeze({
+  search: 'M20 20l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z',
+  sliders: 'M4 7h5m4 0h7M4 17h9m4 0h3M9 4v6m8 4v6',
+  chevron: 'm6 9 6 6 6-6',
+  calendar: 'M15 3v4M9 3v4M4 10h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z',
+  calendarPlus: 'M15 3v4M9 3v4M4 10h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm6 8v5m-2.5-2.5h5',
+  clock: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 7v5l3 2',
+  check: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-13 0 2.5 2.5 5.5-5',
+  star: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z',
+  layers: 'm3 8 9-5 9 5-9 5-9-5Zm0 4.5 9 5 9-5m-18 4.5 9 5 9-5',
+  users: 'M15 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2m18 0v-2a4 4 0 0 0-3-3.9M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Zm4-3.9a4 4 0 0 1 0 7.8',
+  shield: 'M12 22s7-3.5 7-10V5l-7-2-7 2v7c0 6.5 7 10 7 10Zm-3-10 2 2 4-4',
+  minus: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM8 12h8',
+  lock: 'M8 11V7a4 4 0 0 1 8 0v4m-9 0h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Zm5 4v2',
+  help: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-11.5-3a2.5 2.5 0 1 1 3.6 2.25C12.4 11.6 12 12 12 13m0 3h.01',
+  warning: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-4v4m0 4h.01',
+  info: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-1v5m0-8h.01',
+  refresh: 'M20 10a8 8 0 1 0-1.9 7.1M20 4v6h-6',
+  arrow: 'M4 12h16m-6-6 6 6-6 6',
+  send: 'M21 3 3 10l7 4 4 7 7-18Zm0 0L10 14',
+  close: 'm6 6 12 12M18 6 6 18',
+});
+const svgNamespace = 'http://www.w3.org/2000/svg';
+
+function icon(name, className = '') {
+  const svg = document.createElementNS(svgNamespace, 'svg');
+  svg.setAttribute('class', className ? `rp-icon ${className}` : 'rp-icon');
+  svg.setAttribute('width', '18');
+  svg.setAttribute('height', '18');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.8');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const path = document.createElementNS(svgNamespace, 'path');
+  path.setAttribute('d', iconPaths[name]);
+  svg.append(path);
+  return svg;
+}
+
+function withIcon(node, name) {
+  node.prepend(icon(name));
+  return node;
+}
+
+const availabilityIcons = Object.freeze({
+  free: 'check', partial: 'clock', busy: 'minus', blocked: 'lock', unknown: 'help', loading: 'clock',
+});
+
+function availabilityLabel(tag, text, state) {
+  const label = el(tag, 'rp-availability');
+  const badge = withIcon(el('span', 'rp-availability-badge', text), availabilityIcons[state]);
+  label.dataset.state = state;
+  label.append(badge);
+  return label;
+}
+
 function timeRangeControls(id) {
   const root = el('div', 'rp-time-range');
   const inputs = [
@@ -247,40 +309,40 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   const search = el('input', 'rp-date rp-search');
   search.type = 'search';
   search.id = 'rp-room-search';
-  search.placeholder = 'Name oder Nummer';
+  search.placeholder = 'Name / Nr.';
   search.maxLength = 100;
   const searchLabel = el('label', 'rp-date-label', 'Raum suchen');
   searchLabel.htmlFor = search.id;
   const searchControl = el('div', 'rp-search-control');
-  searchControl.append(searchLabel, search);
+  const searchField = el('div', 'rp-search-field');
+  searchField.append(icon('search'), search);
+  searchControl.append(searchLabel, searchField);
   const dateRange = timeRangeControls('rp-filter');
   function defaultFilterRange(date, now = new Date()) {
     return [timeOptions.slice(0, -1).find(time => bookingWindowInFuture(date, time, now)) ?? opening, closing];
   }
   dateRange.value = initialView.range ?? defaultFilterRange(initialView.date);
   const secondaryButton = 'roomplan-action roomplan-action-secondary rp-button rp-button-secondary';
-  const resetDate = button('Heute', secondaryButton);
+  const resetDate = withIcon(button('Heute', secondaryButton), 'calendar');
   resetDate.disabled = initialView.date === today;
-  const freeFilter = button('Nur frei', secondaryButton + ' rp-free-filter');
+  const freeFilter = withIcon(button('Nur frei', secondaryButton + ' rp-free-filter'), 'check');
   freeFilter.setAttribute('aria-pressed', String(onlyFree));
-  const filter = button('Nur Favoriten', secondaryButton);
+  const filter = withIcon(button('Nur Favoriten', secondaryButton), 'star');
   filter.setAttribute('aria-pressed', String(onlyFavorites));
   filter.disabled = true;
   const moreOptions = el('details', 'rp-more-options');
   const optionsSummary = el('summary', secondaryButton + ' rp-options-summary');
   const optionsTitle = el('span', '', 'Filter und Ansicht');
   const activeOptions = el('span', 'rp-active-options');
-  const optionsChevron = el('span', 'rp-options-chevron', '▾');
-  optionsChevron.setAttribute('aria-hidden', 'true');
-  optionsSummary.append(optionsTitle, activeOptions, optionsChevron);
+  optionsSummary.append(icon('sliders'), optionsTitle, activeOptions, icon('chevron', 'rp-options-chevron'));
   const optionsPanel = el('div', 'rp-options-panel');
   const optionControls = el('div', 'rp-option-controls');
   const rangeSummary = el('p', 'rp-range-summary');
   rangeSummary.id = 'rp-filter-range';
   freeFilter.setAttribute('aria-describedby', rangeSummary.id);
-  const floorPick = el('label', 'rp-floor-pick', 'Ansicht');
+  const floorPick = el('label', 'rp-floor-pick');
   const floorSelect = el('select');
-  floorPick.append(floorSelect);
+  floorPick.append(withIcon(el('span', 'rp-floor-pick-label', 'Ansicht'), 'layers'), floorSelect);
   floorPick.hidden = true;
   const equipmentGroup = el('fieldset', 'rp-equipment-group');
   const equipmentHint = el('p', 'rp-equipment-hint', 'Räume müssen alle ausgewählten Merkmale haben.');
@@ -305,10 +367,12 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   }
   function syncFilterSummary() {
     const activeCount = Number(onlyFavorites) + selectedEquipment.length;
-    activeOptions.textContent = activeCount ? ` · ${activeCount} aktiv` : '';
+    activeOptions.textContent = activeCount ? `${activeCount} aktiv` : '';
     const [from, to] = dateRange.value;
     const rangeText = (onlyFree || rangeIsExplicit) && dateValue(dateInput.value) ? `Zeitraum: ${from}–${to} Uhr` : '';
-    if (rangeSummary.textContent !== rangeText) rangeSummary.textContent = rangeText;
+    if (rangeSummary.textContent !== rangeText) {
+      rangeSummary.replaceChildren(...(rangeText ? [icon('clock'), rangeText] : []));
+    }
   }
   syncEquipmentFilter();
   syncFilterSummary();
@@ -330,7 +394,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   content.tabIndex = -1;
   content.setAttribute('role', 'region');
   content.setAttribute('aria-label', 'Raumplan-Ergebnisse');
-  const retry = button('Erneut laden', secondaryButton + ' rp-retry');
+  const retry = withIcon(button('Erneut laden', secondaryButton + ' rp-retry'), 'refresh');
   retry.hidden = true;
   toolbar.setAttribute('role', 'group');
   toolbar.setAttribute('aria-label', 'Raumplan filtern');
@@ -408,12 +472,12 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   });
 
   function status(text, isError = false) {
-    notice.textContent = text;
+    notice.replaceChildren(...(text ? [icon(isError ? 'warning' : 'info'), text] : []));
     notice.classList.toggle('rp-status-error', isError);
   }
 
   function drawFavoriteControl(control, favorite) {
-    control.textContent = favorite ? '★' : '☆';
+    if (!control.firstChild) control.append(icon('star'));
     control.setAttribute('aria-pressed', String(favorite));
   }
 
@@ -460,7 +524,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   feedback.setAttribute('aria-live', 'polite');
   const actions = el('div', 'rp-dialog-actions');
   const close = button('Abbrechen', secondaryButton);
-  const submit = button('Buchen', 'roomplan-action rp-button rp-button-primary');
+  const submit = withIcon(button('Buchen', 'roomplan-action rp-button rp-button-primary'), 'calendarPlus');
   submit.type = 'submit';
   actions.append(close, submit);
   roomForm.append(choices, feedback, actions);
@@ -483,7 +547,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     trigger = opener;
     selectedBooking = { room, date: dateInput.value, booked };
     dialogTitle.textContent = room.name + (room.requiresApproval ? ' anfragen' : ' buchen');
-    submit.textContent = room.requiresApproval ? 'Anfrage senden' : 'Buchen';
+    submit.replaceChildren(icon(room.requiresApproval ? 'send' : 'calendarPlus'), room.requiresApproval ? 'Anfrage senden' : 'Buchen');
     approvalNote.hidden = !room.requiresApproval;
     dialogDate.textContent = dateLabel(selectedBooking.date);
     feedback.textContent = '';
@@ -612,8 +676,8 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     header.append(titleGroup, star);
     box.append(header);
     const badges = el('div', 'rp-room-badges');
-    badges.append(el('span', 'rp-badge', room.capacity === 1 ? '1 Platz' : `${room.capacity} Plätze`));
-    if (room.requiresApproval) badges.append(el('span', 'rp-badge rp-badge-approval', 'Freigabe nötig'));
+    badges.append(withIcon(el('span', 'rp-badge', room.capacity === 1 ? '1 Platz' : `${room.capacity} Plätze`), 'users'));
+    if (room.requiresApproval) badges.append(withIcon(el('span', 'rp-badge rp-badge-approval', 'Freigabe nötig'), 'shield'));
     const badgesToShow = new Set([...selectedEquipment, ...normalizeAmenities(room.amenities)]);
     for (const key of [...badgesToShow].slice(0, Math.max(3, selectedEquipment.length))) {
       badges.append(el('span', 'rp-badge', amenities.get(key)));
@@ -628,8 +692,9 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
         const fullyBlocked = roomBookings.some(item => item.blocked === true
           && clock(item.start_time) <= opening && clock(item.end_time) >= closing);
         const summary = onlyFree ? 'Im Zeitraum frei' : fullyBlocked ? 'Gesperrt' : available ? 'Teilweise belegt' : 'Belegt';
+        const state = onlyFree ? 'free' : fullyBlocked ? 'blocked' : available ? 'partial' : 'busy';
         const more = el('details', 'rp-booking-details');
-        more.append(el('summary', 'rp-availability', summary));
+        more.append(availabilityLabel('summary', summary, state));
         const list = el('ul', 'rp-booking-list');
         roomBookings.forEach(item => {
           const from = clock(item.start_time);
@@ -642,20 +707,25 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
         more.append(list);
         occupancy.append(more);
       } else {
-        occupancy.append(el('p', 'rp-availability', available && room.canBook !== false ? 'Verfügbar' : 'Nicht buchbar'));
+        const bookable = available && room.canBook !== false;
+        occupancy.append(availabilityLabel('p', bookable ? 'Verfügbar' : 'Nicht buchbar', bookable ? 'free' : 'busy'));
       }
     } else if (bookingStatus === 'error') {
-      occupancy.append(el('p', 'rp-availability', 'Belegung unbekannt'));
+      occupancy.append(availabilityLabel('p', 'Belegung unbekannt', 'unknown'));
     } else {
-      occupancy.append(el('p', 'rp-availability', 'Belegung wird geladen …'));
+      occupancy.append(availabilityLabel('p', 'Belegung wird geladen …', 'loading'));
     }
     box.append(occupancy);
 
     const footer = el('div', 'rp-card-actions');
     const details = el('a', secondaryButton, 'Details');
+    details.append(icon('arrow'));
     details.href = detailsUrl(room, dateInput.value, preferredRange(), onlyFree);
     details.setAttribute('aria-label', `Details zu ${room.name}`);
-    const book = button(room.requiresApproval ? 'Anfragen' : 'Buchen', 'roomplan-action rp-button rp-button-primary');
+    const book = withIcon(
+      button(room.requiresApproval ? 'Anfragen' : 'Buchen', 'roomplan-action rp-button rp-button-primary'),
+      room.requiresApproval ? 'send' : 'calendarPlus',
+    );
     book.dataset.bookRoomId = String(room.id);
     book.setAttribute('aria-label', `${room.name}${room.requiresApproval ? ' anfragen' : ' buchen'}`);
     book.disabled = !available || room.canBook === false || !dateIsBookable();
@@ -685,6 +755,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       else text = 'Keine passenden Räume mit dieser Ausstattung.';
     }
     // Keep a live region outside the replaced result content so it also announces zero matches.
+    filterResult.toggleAttribute('data-empty', Boolean(text) && count === 0);
     if (filterResult.textContent !== text) filterResult.textContent = text;
     return hasFilters;
   }
@@ -748,7 +819,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
         }
         const selectedCard = drawCard(room);
         selectedCard.tabIndex = -1;
-        const close = button('×', 'rp-icon-button rp-floor-close-detail');
+        const close = withIcon(button('', 'rp-icon-button rp-floor-close-detail'), 'close');
         close.setAttribute('aria-label', `Raumdetails schließen: ${room.name}`);
         close.dataset.floorFocusKey = 'close';
         close.title = 'Schließen';

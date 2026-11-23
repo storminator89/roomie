@@ -38,21 +38,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roomie Login</title>
     <link rel="stylesheet" href="assets/roomie-tailwind.css">
-    <style>
-        body {
-            font-family: 'Source Sans 3', sans-serif;
-        }
-    </style>
+    <link rel="stylesheet" href="assets/admin/area-visuals.css">
 </head>
 
-<body class="bg-gray-100 min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+<body class="rm-account-login bg-gray-100 min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-md w-full space-y-8">
-        <div class="bg-white shadow-2xl rounded-lg overflow-hidden">
+        <div class="rm-login-card bg-white shadow-2xl rounded-lg">
             <div class="px-6 py-8">
-                <div class="text-center">
-                    <img class="h-16 w-auto mx-auto" src="test_white.svg" alt="Roomie Logo">
-                    <h1 class="text-lg font-semibold text-gray-900">Anmelden</h1>
-                </div>
+                <header class="text-center"><div class="rm-area-head rm-login-brand">
+                    <span class="rm-login-wordmark">
+                        <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                            <rect x="1.5" y="1.5" width="21" height="21" rx="5" fill="#f4c247" />
+                            <path d="M3 12h10m0-9v9m0 0h8m-8 4v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                        </svg>
+                        Roomie
+                    </span>
+                    <img class="rm-area-art" src="assets/illustrations/account-welcome.svg" width="96" height="64" alt="">
+                </div><h1 class="mt-2 text-lg font-semibold text-gray-900">Anmelden</h1></header>
 
                 <?php if ($error) : ?>
                     <div class="mt-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded" role="alert">
@@ -75,18 +77,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
 
                     <div>
-                        <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition duration-150 ease-in-out">
-                            <span class="absolute left-0 inset-y-0 flex items-center pl-3">
-                                <svg class="h-5 w-5 text-yellow-500 group-hover:text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
-                                </svg>
-                            </span>
-                            Anmelden
+                        <button type="submit" class="rm-login-submit group relative w-full flex items-center justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition duration-150 ease-in-out">
+                            <span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#lock"></use></svg><span>Anmelden</span></span>
                         </button>
                     </div>
                 </form>
             </div>
-            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 text-center">
+            <div class="rm-login-footer px-6 py-4 bg-gray-50 border-t border-gray-200 text-center">
                 <p class="text-sm text-gray-600">
                     Bei Anmeldeproblemen hilft die Roomie-Administration.
                 </p>

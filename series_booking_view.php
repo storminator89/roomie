@@ -53,16 +53,19 @@ $latestStart = $horizon->modify('-' . (7 * (ROOMIE_SERIES_MIN - 1)) . ' days');
 <?php if (isLoggedIn()) : ?>
     <?php $roomieActivePage = 'room_details.php'; require __DIR__ . '/roomplan_shell.php'; ?>
 <?php endif; ?>
-<main id="roomie-series" class="roomplan-main rb-page" tabindex="-1">
+<main id="roomie-series" class="roomplan-main rb-page rb-series-page" tabindex="-1">
     <a class="rb-inline-link rb-back" href="<?= $seriesEscape($seriesBack) ?>">← <?= $fixedRoom ? 'Raumdetails' : 'Raumplan' ?></a>
-    <header class="rb-header"><h1>Wöchentlich buchen</h1></header>
+    <header class="rb-header"><h1 class="rb-icon-row">
+        <svg class="rb-icon rb-icon-tile" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m17 2 4 4-4 4M3 11V8a2 2 0 0 1 2-2h16M7 22l-4-4 4-4m14-1v3a2 2 0 0 1-2 2H3"/></svg>
+        <span>Wöchentlich buchen</span>
+    </h1></header>
     <?php if ($error !== null && $error !== '') : ?>
         <p class="rb-notice rb-notice-error" role="alert"><?= $seriesEscape($error) ?></p>
     <?php endif; ?>
 
     <?php if ($selectedRoom !== null && !empty($preview)) : ?>
     <section id="rb-series-results" class="roomplan-panel rb-room-panel rb-series-panel" aria-labelledby="rb-series-results-title">
-        <h2 id="rb-series-results-title"><?= count($preview) ?> Termine</h2>
+        <h2 id="rb-series-results-title" class="rb-icon-row"><svg class="rb-icon rb-icon-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg><span><?= count($preview) ?> Termine</span></h2>
         <p><?= $seriesEscape($selectedRoom['name']) ?> · <?= $seriesEscape($values['start_time']) ?>–<?= $seriesEscape($values['end_time']) ?> Uhr</p>
         <ul class="rb-room-list rb-series-results" aria-label="Verfügbarkeit der Termine">
         <?php foreach ($preview as $occurrence) :

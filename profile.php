@@ -102,11 +102,12 @@ if ($isPost) {
     <title>Profil · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/roomie-profile.css">
+    <link rel="stylesheet" href="assets/admin/area-visuals.css">
 </head>
 <body class="roomplan-page">
     <?php $roomieActivePage = 'profile.php'; require __DIR__ . '/roomplan_shell.php'; ?>
     <main class="roomplan-main rm-profile" id="main-content" tabindex="-1">
-        <header class="roomplan-heading"><h1>Profil</h1></header>
+        <header class="roomplan-heading rm-area-head"><h1>Profil</h1><img class="rm-area-art" src="assets/illustrations/admin-people.svg" width="96" height="64" alt=""></header>
         <?php if (isset($error)) : ?>
             <p class="rp-status rp-status-error" role="alert"><?= htmlspecialchars($error) ?></p>
         <?php endif; ?>
@@ -118,6 +119,8 @@ if ($isPost) {
             <div class="rm-profile-avatar">
                 <?php if (roomieIsPrivateAvatar($user['profile_image'])) : ?>
                     <img src="avatar.php?user_id=<?= $user_id ?>" alt="" width="48" height="48">
+                <?php else : ?>
+                    <span class="rm-profile-avatar-icon"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#image"></use></svg></span>
                 <?php endif; ?>
                 <label class="roomplan-field">
                     Profilbild
@@ -130,7 +133,7 @@ if ($isPost) {
             </label>
             <div class="rm-profile-email"><strong>E-Mail</strong><span><?= htmlspecialchars($user['email']) ?></span></div>
             <details<?= isset($error) && (!empty($_POST['current_password']) || !empty($_POST['new_password']) || !empty($_POST['confirm_password'])) ? ' open' : '' ?>>
-                <summary>Passwort ändern</summary>
+                <summary><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#lock"></use></svg><span>Passwort ändern</span></span></summary>
                 <div class="rm-profile-password">
                     <label class="roomplan-field">Aktuelles Passwort
                         <input type="password" name="current_password" autocomplete="current-password">

@@ -227,24 +227,24 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
 <body class="roomplan-page">
 <?php $roomieActivePage = 'room_details.php'; require __DIR__ . '/roomplan_shell.php'; ?>
 <main class="roomplan-main rb-page" tabindex="-1">
-    <a class="rb-inline-link rb-back" href="<?= detailEscape($planUrl) ?>">← Raumplan</a>
+    <a class="rb-inline-link rb-back rb-icon-row" href="<?= detailEscape($planUrl) ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg>Raumplan</a>
     <div class="rb-room-intro">
         <header class="rb-header">
-            <h1><?= detailEscape($roomName) ?></h1>
+            <h1 class="rb-icon-row"><svg class="rb-icon rb-icon-tile" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21h16M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16m-4-9h.01"/></svg><span><?= detailEscape($roomName) ?></span></h1>
             <div class="rb-tags">
                 <?php if ((string) ($room['number'] ?? '') !== '') : ?><span>Nr. <?= detailEscape((string) $room['number']) ?></span><?php endif; ?>
                 <span><?= detailEscape(getRoomTypeName($room['type'])) ?></span>
-                <span><?= $capacity === 1 ? '1 Platz' : $capacity . ' Plätze' ?></span>
-                <?php if ($requiresApproval) : ?><span class="rb-request-status rb-request-pending">Freigabe nötig</span><?php endif; ?>
+                <span class="rb-icon-row"><svg class="rb-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3"/><path d="M3 19v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2m2-14a3 3 0 0 1 0 6m4 8v-2a4 4 0 0 0-2.5-3.7"/></svg><?= $capacity === 1 ? '1 Platz' : $capacity . ' Plätze' ?></span>
+                <?php if ($requiresApproval) : ?><span class="rb-request-status rb-request-pending rb-icon-row"><svg class="rb-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s7-3.5 7-10V6l-7-3-7 3v6c0 6.5 7 10 7 10z"/><path d="m9 12 2 2 4-4"/></svg>Freigabe nötig</span><?php endif; ?>
             </div>
+        <?php if ($equipment) : ?>
+            <ul class="rb-tags" aria-label="Ausstattung">
+                <?php foreach ($equipment as $item) : ?><li><?= detailEscape($equipmentLabels[$item] ?? $item) ?></li><?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
         </header>
         <?php roomieRenderVisual($room, $equipment, $hasPhoto, true); ?>
     </div>
-    <?php if ($equipment) : ?>
-        <ul class="rb-tags" aria-label="Ausstattung">
-            <?php foreach ($equipment as $item) : ?><li><?= detailEscape($equipmentLabels[$item] ?? $item) ?></li><?php endforeach; ?>
-        </ul>
-    <?php endif; ?>
     <form method="get" action="room_details.php" class="rb-filter">
         <input type="hidden" name="id" value="<?= $room_id ?>">
         <?php foreach ($detailContext as $name => $value) : ?>
@@ -252,8 +252,8 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
         <?php endforeach; ?>
         <label>Datum<input type="date" name="date" value="<?= detailEscape($selected_date) ?>" required></label>
         <button type="submit" class="roomplan-action roomplan-action-secondary">Anzeigen</button>
-        <?php if ($prev) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $prev->format('Y-m-d'), $detailContext)) ?>" aria-label="Vorheriger Tag">←</a><?php endif; ?>
-        <?php if ($next) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $next->format('Y-m-d'), $detailContext)) ?>" aria-label="Nächster Tag">→</a><?php endif; ?>
+        <?php if ($prev) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $prev->format('Y-m-d'), $detailContext)) ?>" aria-label="Vorheriger Tag"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg></a><?php endif; ?>
+        <?php if ($next) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape(detailUrl($room_id, $next->format('Y-m-d'), $detailContext)) ?>" aria-label="Nächster Tag"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a><?php endif; ?>
         <?php if ($admin) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape($blocksAdminUrl) ?>">Sperrzeiten</a><?php endif; ?>
     </form>
     <?php if ($admin) : ?>
@@ -272,7 +272,7 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
     <?php endif; ?>
     <div class="rb-room-columns">
         <section class="roomplan-panel rb-room-panel" aria-labelledby="rb-room-booking-title">
-            <h2 id="rb-room-booking-title"><?= $requiresApproval ? 'Raum anfragen' : 'Raum buchen' ?></h2>
+            <h2 id="rb-room-booking-title" class="rb-icon-row"><svg class="rb-icon rb-icon-accent" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18m-9 3v5m-2.5-2.5h5"/></svg><span><?= $requiresApproval ? 'Raum anfragen' : 'Raum buchen' ?></span></h2>
             <?php if (!$canBookRoom) : ?><p class="rb-empty">Für diesen Raum fehlt dir die Buchungsberechtigung.</p>
             <?php elseif (!$canBookDate) : ?><p class="rb-empty">Für dieses Datum nicht buchbar.</p>
             <?php elseif ($firstPeriod === null) : ?><p class="rb-empty">Kein buchbarer Zeitraum.</p>
@@ -318,7 +318,7 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
                     <?php endif; ?>
                 </fieldset>
                 <?php if ($requiresApproval) : ?><p class="rb-empty">Der Raum ist erst nach Freigabe gebucht.</p><?php endif; ?>
-                <button type="submit" class="roomplan-action"><?= $requiresApproval ? 'Anfrage senden' : 'Buchen' ?></button>
+                <button type="submit" class="roomplan-action"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg><?= $requiresApproval ? 'Anfrage senden' : 'Buchen' ?></button>
             </form>
             <p id="rb-room-feedback" class="rb-notice" role="status" tabindex="-1" hidden></p>
             <div id="rb-room-bookings" class="rb-segments" hidden>
@@ -329,12 +329,17 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
             <noscript><a class="rb-inline-link" href="<?= detailEscape($planUrl) ?>">Im Raumplan buchen</a></noscript>
             <?php endif; ?>
             <?php if ($canBookRoom && $canBookDate && !$requiresApproval) : ?>
-                <a class="roomplan-action roomplan-action-secondary rb-series-link" href="<?= detailEscape($seriesUrl) ?>">Wöchentlich buchen</a>
+                <a class="roomplan-action roomplan-action-secondary rb-series-link" href="<?= detailEscape($seriesUrl) ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m17 2 4 4-4 4M3 11V8a2 2 0 0 1 2-2h16M7 22l-4-4 4-4m14-1v3a2 2 0 0 1-2 2H3"/></svg>Wöchentlich buchen</a>
             <?php endif; ?>
         </section>
         <section class="roomplan-panel rb-room-panel" aria-labelledby="rb-room-occupancy-title">
-            <h2 id="rb-room-occupancy-title">Belegung · <time datetime="<?= detailEscape($selected_date) ?>"><?= detailEscape($parsedDate->format('d.m.Y')) ?></time></h2>
-            <?php if (!$occupancy) : ?><p class="rb-empty">Keine Buchungen.</p><?php else : ?>
+            <h2 id="rb-room-occupancy-title" class="rb-icon-row"><svg class="rb-icon rb-icon-muted" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg><span>Belegung · <time datetime="<?= detailEscape($selected_date) ?>"><?= detailEscape($parsedDate->format('d.m.Y')) ?></time></span></h2>
+            <?php if (!$occupancy) : ?>
+            <div class="rb-empty-visual rb-empty-visual-compact">
+                <img src="assets/illustrations/booking-availability.svg" width="56" height="48" alt="" decoding="async">
+                <p class="rb-empty">Keine Buchungen.</p>
+            </div>
+            <?php else : ?>
             <ul class="rb-room-list">
                 <?php foreach ($occupancy as $entry) : ?>
                 <li><strong><?= detailEscape(substr($entry['start_time'], 0, 5) . '–' . substr($entry['end_time'], 0, 5)) ?></strong>

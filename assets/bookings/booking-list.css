@@ -1,38 +1,120 @@
-.rb-booking-list { gap:.85rem; }
+/* Booking ledger: dates are the index; room names and times are the records. */
+.rb-booking-list {
+    --rb-date-column: 10.5rem;
+    --rb-ledger-gap: 1.4rem;
+    gap: 1.25rem;
+}
+
 .rb-booking-list .rb-list-controls,
-.rb-booking-list .rb-list-context { display:flex; flex-wrap:wrap; align-items:center; }
-.rb-booking-list .rb-list-controls { justify-content:space-between; gap:.15rem 1rem; }
-.rb-booking-list .rb-list-context { gap:0 .8rem; font-size:.9rem; }
-.rb-booking-list .rb-list-context p { color:var(--roomplan-muted); }
-.rb-booking-list .rb-list-context a,
-.rb-booking-list .rb-booking-admin a { display:inline-flex; align-items:center; min-height:44px; }
-.rb-booking-list .rb-day { gap:.45rem; }
-.rb-booking-list .rb-day h2 { font-size:1rem; }
-.rb-booking-list .rb-list { gap:.35rem; }
+.rb-booking-list .rb-list-context {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.rb-booking-list .rb-list-controls { justify-content: space-between; gap: .25rem 1rem; }
+.rb-booking-list .rb-list-context { gap: 0 .8rem; font-size: .875rem; }
+.rb-booking-list .rb-list-context p { color: var(--rb-muted); }
+.rb-booking-list :is(.rb-list-context, .rb-booking-admin) a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+}
+
+.rb-booking-list .rb-day {
+    grid-template-columns: minmax(0, var(--rb-date-column)) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--rb-ledger-gap);
+    border-block-start: 1px solid var(--rb-line);
+    padding-block-start: .8rem;
+}
+.rb-booking-list .rb-day h2 {
+    padding-block: .52rem;
+    font-size: 1rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+}
+.rb-booking-list .rb-list {
+    gap: 0;
+    background: var(--rb-surface);
+    border: 1px solid var(--rb-line);
+    border-radius: var(--rb-radius);
+}
 .rb-booking-list .rb-entry {
-    position:relative; display:grid; grid-template-columns:minmax(0,1fr);
-    gap:0; min-height:calc(44px + 1rem); padding:.5rem .7rem;
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: calc(44px + 1rem);
+    gap: 0;
+    padding: .65rem .85rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
 }
-.rb-booking-list .rb-entry-with-options > .rb-entry-main { padding-inline-end:5.9rem; }
-.rb-booking-list .rb-entry-main p { margin-top:.1rem; font-size:.9rem; }
-.rb-booking-list .rb-entry-main .rb-request-status { display:inline-block; margin-block-start:.3rem; }
+.rb-booking-list .rb-entry + .rb-entry { border-block-start: 1px solid var(--rb-line); }
+.rb-booking-list .rb-entry:target { background: var(--rb-accent-soft); }
+.rb-booking-list .rb-entry-with-options > .rb-entry-main { padding-inline-end: 7rem; }
+.rb-booking-list .rb-entry-main h3 { font-size: 1rem; line-height: 1.35; }
+.rb-booking-list .rb-entry-main p {
+    margin-block-start: .18rem;
+    color: var(--rb-muted);
+    font-size: .875rem;
+    font-variant-numeric: tabular-nums;
+}
+.rb-booking-list .rb-entry-main .rb-request-status {
+    display: inline-block;
+    margin-block-start: .35rem;
+}
+
 .rb-booking-list .rb-row-options > summary {
-    position:absolute; inset-block-start:.5rem; inset-inline-end:.7rem;
-    border:1px solid var(--roomplan-border); font-size:.9rem;
+    position: absolute;
+    inset-block-start: .5rem;
+    inset-inline-end: .85rem;
+    min-height: 44px;
+    border: 1px solid var(--rb-control);
+    background: var(--rb-surface);
+    font-size: .875rem;
 }
+.rb-booking-list .rb-row-options > summary::before { content: none; }
+.rb-booking-list :is(.rb-row-options, .rb-booking-filters) > summary { list-style: none; }
+.rb-booking-list :is(.rb-row-options, .rb-booking-filters) > summary::-webkit-details-marker { display: none; }
 .rb-booking-list .rb-row-options > summary:hover,
-.rb-booking-list .rb-row-options[open] > summary { background:#fff3d1; }
+.rb-booking-list .rb-row-options[open] > summary { background: var(--rb-accent-soft); }
+.rb-booking-list .rb-row-options[open] > summary { border-color: var(--rb-accent); }
 .rb-booking-list .rb-row-menu {
-    display:grid; gap:.25rem; justify-items:start;
-    margin-block-start:.45rem; padding-block-start:.45rem; border-block-start:1px solid var(--roomplan-border);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: .5rem;
+    margin-block-start: .65rem;
+    padding-block-start: .65rem;
+    border-block-start: 1px solid var(--rb-line);
 }
-.rb-booking-list .rb-row-options:not([open]) > .rb-row-menu { display:none; }
-.rb-booking-list .rb-row-menu > .rb-move { max-width:100%; }
-.rb-booking-list .rb-row-menu form + form { margin:0; }
-.rb-booking-list .rb-booking-filters { border-block-start:1px solid var(--roomplan-border); }
+.rb-booking-list .rb-row-options:not([open]) > .rb-row-menu { display: none; }
+.rb-booking-list .rb-row-menu > * { min-width: 0; max-width: 100%; }
+.rb-booking-list .rb-row-menu > .rb-move[open] { flex-basis: 100%; }
+.rb-booking-list .rb-row-menu form + form { margin: 0; }
+.rb-booking-list .rb-row-menu .rb-danger:hover { background: var(--rb-danger-soft); }
+.rb-booking-list .rb-move-form { margin-block: .3rem 0; }
+
+.rb-booking-list .rb-booking-filters,
+.rb-booking-list .rb-booking-admin { border-block-start: 1px solid var(--rb-line); }
 .rb-booking-list .rb-booking-filters summary {
-    min-height:44px; width:fit-content; padding:.6rem .4rem .6rem 0;
-    font-size:.9rem; font-weight:650; cursor:pointer;
+    min-height: 44px;
+    width: fit-content;
+    padding: .65rem .4rem .65rem 0;
+    font-size: .875rem;
+    font-weight: 650;
+    cursor: pointer;
 }
-.rb-booking-list .rb-booking-filters .rb-filter { padding-block:.25rem .55rem; }
-.rb-booking-list .rb-booking-admin { font-size:.9rem; border-block-start:1px solid var(--roomplan-border); }
+.rb-booking-list .rb-booking-filters:not([open]) .rb-icon-chevron { transform: rotate(-90deg); }
+.rb-booking-list .rb-booking-filters .rb-filter { padding-block: .25rem .55rem; }
+.rb-booking-list .rb-booking-admin { font-size: .875rem; }
+
+@media (max-width: 42rem) {
+    .rb-booking-list { gap: 1rem; }
+    .rb-booking-list .rb-day { grid-template-columns: minmax(0, 1fr); gap: .45rem; }
+    .rb-booking-list .rb-day h2 { padding-block: 0; }
+    .rb-booking-list .rb-entry { padding-inline: .65rem; }
+    .rb-booking-list .rb-row-options > summary { inset-inline-end: .65rem; }
+}

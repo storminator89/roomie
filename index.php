@@ -50,7 +50,7 @@ $flashSuccess = $_SESSION['success'] ?? '';
 unset($_SESSION['error'], $_SESSION['success']);
 ?>
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" class="rm-dashboard-root">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -59,10 +59,10 @@ unset($_SESSION['error'], $_SESSION['success']);
     <link rel="stylesheet" href="assets/roomie-dashboard.css">
     <script src="assets/roomie-dashboard.js" defer></script>
 </head>
-<body class="roomplan-page">
+<body class="roomplan-page rm-dashboard-page">
     <?php $roomieActivePage = 'index.php'; require __DIR__ . '/roomplan_shell.php'; ?>
 
-    <main class="roomplan-main rm-dashboard" id="main-content">
+    <main class="roomplan-main rm-dashboard" id="main-content" tabindex="-1">
         <h1>Übersicht</h1>
 
         <?php if (is_string($flashError) && $flashError !== '') : ?>
@@ -73,25 +73,28 @@ unset($_SESSION['error'], $_SESSION['success']);
         <?php endif; ?>
 
         <div class="rm-dash-overview">
-            <section class="roomplan-panel rm-dash-hero">
-                <svg class="rm-dash-illustration" viewBox="0 0 96 96" fill="none" stroke="currentColor" aria-hidden="true">
-                    <rect x="13" y="13" width="70" height="70" rx="12" stroke-width="2.5"/>
-                    <path d="M45 13v34H13m32 0h13m12 0h13M56 83V61h27" stroke-width="2.5" stroke-linecap="round"/>
-                    <rect x="23" y="22" width="13" height="13" rx="4" fill="currentColor" stroke="none"/>
-                    <rect x="58" y="22" width="15" height="15" rx="5" fill="currentColor" stroke="none" opacity=".42"/>
-                </svg>
-                <h2>Raum finden</h2>
-                <a href="raumplan.php" class="roomplan-action">Raumplan öffnen <span aria-hidden="true">→</span></a>
+            <section class="rm-dash-hero" aria-labelledby="rm-dash-find-title">
+                <div class="rm-dash-find">
+                    <h2 id="rm-dash-find-title">Raum finden</h2>
+                    <a href="raumplan.php" class="roomplan-action">
+                        <svg class="rm-dash-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 11h8m0-7v16m4-5h4"/></svg>
+                        Raumplan öffnen
+                    </a>
+                </div>
+                <img class="rm-dash-illustration" src="assets/illustrations/meeting-room.webp" alt="" width="760" height="507" decoding="async">
             </section>
 
-            <section class="roomplan-panel rm-dash-next">
-                <h2 id="rm-next-title"><?= $isCurrent ? 'Laufende Buchung' : 'Nächste Buchung' ?></h2>
+            <section class="rm-dash-next" aria-labelledby="rm-next-title">
+                <h2 id="rm-next-title">
+                    <svg class="rm-dash-heading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5.5" width="17" height="15" rx="2"/><path d="M8 3.5v4m8-4v4M4 10h16m-11 5 2 2 4-4"/></svg>
+                    <span id="rm-next-title-label"><?= $isCurrent ? 'Laufende Buchung' : 'Nächste Buchung' ?></span>
+                </h2>
                 <div id="rm-next-summary">
                     <?php if ($nextBooking !== null) : ?>
                         <p class="rm-dash-room"><?= $dashboardEscape($nextBooking['room_name']) ?></p>
                         <p class="rm-dash-meta">
                             <time datetime="<?= $dashboardEscape($nextBooking['date']) ?>"><?= $dashboardEscape($bookingDateLabel) ?></time>
-                            · <?= $dashboardEscape(substr($nextBooking['start_time'], 0, 5)) ?>–<?= $dashboardEscape(substr($nextBooking['end_time'], 0, 5)) ?> Uhr
+                            <span><?= $dashboardEscape(substr($nextBooking['start_time'], 0, 5)) ?>–<?= $dashboardEscape(substr($nextBooking['end_time'], 0, 5)) ?> Uhr</span>
                         </p>
                     <?php elseif ($loadFailed) : ?>
                         <p class="rm-dash-meta">Buchungen konnten nicht geladen werden.</p>
@@ -99,13 +102,22 @@ unset($_SESSION['error'], $_SESSION['success']);
                         <p class="rm-dash-meta">Keine anstehende Buchung.</p>
                     <?php endif; ?>
                 </div>
+                <?php if (!$loadFailed) : ?>
+                    <img class="rm-dash-booking-illustration" src="assets/illustrations/<?= $nextBooking === null ? 'booking-calendar.svg' : 'booking-next.svg' ?>" alt="" width="124" height="104" decoding="async">
+                <?php endif; ?>
                 <a href="bookings.php" class="roomplan-action roomplan-action-secondary">Meine Buchungen</a>
             </section>
         </div>
 
         <?php if ($rooms !== []) : ?>
             <details class="roomplan-panel rm-dash-range">
-                <summary>Mehrere Tage buchen</summary>
+                <summary>
+                    <svg class="rm-dash-range-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3.5" y="5.5" width="17" height="15" rx="2"/><path d="M8 3.5v4m8-4v4M4 10h16m-12 5h8"/>
+                    </svg>
+                    <span>Mehrere Tage buchen</span>
+                    <svg class="rm-dash-range-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+                </summary>
                 <form id="bookingForm" action="process_booking.php" method="post">
                     <input type="hidden" name="csrf_token" value="<?= $dashboardEscape(csrfToken()) ?>">
                     <div class="rm-dash-form-fields">

@@ -6,3 +6,7 @@
 .rr-card-heading a { display:inline-block; padding:.3rem 0; }
 .rr-star { min-inline-size:44px; min-block-size:44px; font-size:1.15rem; background:#fff; }
 .rr-star[aria-pressed="true"] { color:#704300; background:#fff5d5; }
+.rr-icon { flex:none; vertical-align:middle; }
+.rr-capacity .rr-icon { margin-inline-end:.2rem; }
+.rr-empty { display:flex; align-items:center; gap:.65rem; }
+.rr-empty img { flex:none; inline-size:clamp(3rem, 16vw, 5rem); block-size:auto; }

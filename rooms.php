@@ -47,8 +47,8 @@ $date = parseBookingDate($_GET['date'] ?? null)?->format('Y-m-d') ?? '';
 $replyUrl = roomsListUrl($q, $onlyFavorites, $date);
 $userId = (int) $_SESSION['user_id'];
 $admin = isAdmin();
-$photoSet = [];
 $rooms = [];
+$photoSet = [];
 $error = $_SESSION['roomie_rooms_error'] ?? null;
 $notice = $_SESSION['roomie_rooms_notice'] ?? null;
 unset($_SESSION['roomie_rooms_error'], $_SESSION['roomie_rooms_notice']);
@@ -70,9 +70,9 @@ try {
     $db = getDatabaseConnection();
     // Restrict to visible rooms before applying viewer-controlled filters.
     $visible = roomieListRooms($db, $userId, $admin);
+    $photoSet = array_fill_keys(roomiePhotoIds($db), true);
     $favoriteSet = array_fill_keys(roomieFavoriteIds($db, $userId), true);
     $terms = roomieRoomSearchTokens($q);
-    $photoSet = array_fill_keys(roomiePhotoIds($db), true);
     foreach ($visible as $room) {
         $isFavorite = isset($favoriteSet[(int) $room['id']]);
         if ($onlyFavorites && !$isFavorite) continue;
@@ -125,16 +125,16 @@ $equipmentLabels = [
         <?php if ($onlyFavorites) : ?><input type="hidden" name="favorites" value="1"><?php endif; ?>
         <?php if ($date !== '') : ?><input type="hidden" name="date" value="<?= roomsEscape($date) ?>"><?php endif; ?>
         <label>Raum suchen<input type="search" name="q" value="<?= roomsEscape($q) ?>" placeholder="Name oder Nummer" maxlength="120"></label>
-        <button class="roomplan-action roomplan-action-secondary" type="submit">Suchen</button>
+        <button class="roomplan-action roomplan-action-secondary" type="submit"><svg class="rr-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/></svg>Suchen</button>
         <?php if ($q !== '') : ?><a class="rb-inline-link" href="<?= roomsEscape(roomsListUrl('', $onlyFavorites, $date)) ?>">Suche zurücksetzen</a><?php endif; ?>
     </form>
 
     <?php if (is_string($notice)) : ?><p class="rb-notice" role="status"><?= roomsEscape($notice) ?></p><?php endif; ?>
     <?php if (is_string($error)) : ?><p class="rb-notice rb-notice-error" role="alert"><?= roomsEscape($error) ?></p><?php endif; ?>
     <?php if (!$rooms && !is_string($error)) : ?>
-        <p class="roomplan-panel rb-empty"><?=
+        <p class="roomplan-panel rb-empty rr-empty"><img src="assets/illustrations/room-finder.svg" width="80" height="64" alt=""><span><?=
             $q !== '' ? 'Keine Räume für diese Suche.'
-            : ($onlyFavorites ? 'Du hast noch keine Favoriten.' : 'Keine Räume verfügbar.') ?></p>
+            : ($onlyFavorites ? 'Du hast noch keine Favoriten.' : 'Keine Räume verfügbar.') ?></span></p>
     <?php elseif ($rooms) : ?>
         <ul class="rr-rooms">
         <?php foreach ($rooms as $room) :
@@ -164,7 +164,7 @@ $equipmentLabels = [
                 <div class="rb-tags">
                     <?php if ($number !== '') : ?><span>Nr. <?= roomsEscape($number) ?></span><?php endif; ?>
                     <span><?= roomsEscape(roomsTypeLabel((string) $room['type'])) ?></span>
-                    <span><?= $capacity === 1 ? '1 Platz' : $capacity . ' Plätze' ?></span>
+                    <span class="rr-capacity"><svg class="rr-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="7" r="3"/><path d="M6 19v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg><?= $capacity === 1 ? '1 Platz' : $capacity . ' Plätze' ?></span>
                 </div>
                 <?php if ($equipment) : ?>
                 <p class="rb-empty rr-equipment"><?= roomsEscape(implode(' · ', array_map(

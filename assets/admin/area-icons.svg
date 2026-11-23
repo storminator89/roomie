@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+  <symbol id="person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.3"/><path d="M5.5 20v-2.3c0-2.2 1.8-4 4-4h5c2.2 0 4 1.8 4 4V20"/></symbol>
+  <symbol id="add-person" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2m2-11h6m-3-3v6"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8m-2 2 2 2m-4 0 2 2"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5m-4 4v2"/></symbol>
+  <symbol id="calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3.5v4m8-4v4M4 10h16m-11 5 2 2 4-4"/></symbol>
+  <symbol id="room" viewBox="0 0 24 24"><path d="M4 21h16M7 21V4h10v17m-4-8h.01"/></symbol>
+  <symbol id="image" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="1.25"/><path d="m4 17 4-4 3 3 4.5-4.5L20 16"/></symbol>
+</svg>

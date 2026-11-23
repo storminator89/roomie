@@ -97,16 +97,17 @@ $permissions = array_slice($permissions, 0, 25);
     <title>Berechtigungen · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/admin/admin.css">
+    <link rel="stylesheet" href="assets/admin/area-visuals.css">
 </head>
 <body class="admin-page">
 <?php $roomieActivePage = 'admin_permissions.php'; require __DIR__ . '/roomplan_shell.php'; ?>
 <main class="admin-main">
-    <div class="admin-top"><h1>Verwaltung</h1></div>
+    <div class="admin-top rm-area-head"><h1>Verwaltung</h1><img class="rm-area-art" src="assets/illustrations/admin-access.svg" width="96" height="64" alt=""></div>
     <nav aria-label="Verwaltung">
         <ul class="admin-tabs">
-            <li><a href="admin_users.php">Benutzer</a></li>
-            <li><a href="admin_permissions.php" aria-current="page">Berechtigungen</a></li>
-            <li><a href="admin_mcp.php">MCP-Zugang</a></li>
+            <li><a href="admin_users.php"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#person"></use></svg><span>Benutzer</span></span></a></li>
+            <li><a href="admin_permissions.php" aria-current="page"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#key"></use></svg><span>Berechtigungen</span></span></a></li>
+            <li><a href="admin_mcp.php"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#key"></use></svg><span>MCP-Zugang</span></span></a></li>
         </ul>
     </nav>
 
@@ -120,7 +121,7 @@ $permissions = array_slice($permissions, 0, 25);
     <?php endif; ?>
 
     <section class="admin-card" aria-labelledby="add-permission">
-        <h2 id="add-permission">Zugang vergeben</h2>
+        <h2 id="add-permission"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#key"></use></svg><span>Zugang vergeben</span></span></h2>
         <?php if ($users && $rooms) : ?>
             <form method="POST" action="<?= adminHtml(roomiePermissionsLink()) ?>">
                 <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">

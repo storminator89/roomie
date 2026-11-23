@@ -1,0 +1,203 @@
+/* Hallmark · v2.0.0 · genre: modern-minimal · Roomie app chrome · redesign: restyle
+ * One row of destinations with a visible current page; the account stays out of the task. */
+
+:root {
+    --roomie-paper: #f8f7f3;
+    --roomie-surface: #fff;
+    --roomie-ink: #182238;
+    --roomie-muted: #526078;
+    --roomie-line: #dedee5;
+    --roomie-control: #747e93;
+    --roomie-brand: #f4bb2b;
+    --roomie-accent: #453bb2;
+    --roomie-accent-hover: #372d97;
+    --roomie-accent-soft: #efedf9;
+    --roomie-focus: #453bb2;
+    --roomie-ink-deep: #202946;
+    --roomie-ink-on-dark: #f8f7ff;
+    --roomie-quiet-on-dark: #cec9f4;
+    --roomie-icon: #59637a;
+    --roomie-neutral-hover: #f0f0f4;
+    --roomie-panel-shadow: 0 12px 30px #1822381a, 0 2px 5px #1822380d;
+    --roomie-radius: 12px;
+    --roomie-control-radius: 8px;
+    --roomie-content: 80rem;
+    --roomie-gutter: clamp(.875rem, 3.3vw, 2rem);
+    --roomie-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --roomie-target: 2.75rem;
+}
+
+.roomie-shell, .roomie-shell *, .roomie-shell *::before, .roomie-shell *::after { box-sizing: border-box; }
+
+.roomie-shell {
+    position: relative;
+    background: var(--roomie-surface);
+    color: var(--roomie-ink);
+    border-block-end: 1px solid var(--roomie-line);
+    font: 500 .9rem/1.4 var(--roomie-font);
+}
+
+.roomie-shell-inner {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: clamp(1rem, 3.2vw, 2.5rem);
+    max-width: var(--roomie-content);
+    min-height: 4.2rem;
+    margin-inline: auto;
+    padding-inline: var(--roomie-gutter);
+}
+
+.roomie-shell-brand {
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    gap: .55rem;
+    min-height: var(--roomie-target);
+    border-radius: var(--roomie-control-radius);
+    color: var(--roomie-ink);
+    text-decoration: none;
+    font-size: 1.2rem;
+    font-weight: 760;
+    letter-spacing: -.04em;
+}
+.roomie-shell-brand svg { flex: none; color: var(--roomie-ink); }
+.roomie-shell-brand-plate { fill: var(--roomie-brand); }
+
+.roomie-shell-links { display: flex; align-items: stretch; align-self: stretch; gap: .2rem; padding: 0; margin: 0; list-style: none; }
+.roomie-shell-links li { min-width: 0; }
+.roomie-shell-links a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    min-height: var(--roomie-target);
+    padding: .45rem .7rem;
+    color: var(--roomie-muted);
+    text-decoration: none;
+}
+.roomie-shell-links a[aria-current="page"] { color: var(--roomie-accent); font-weight: 700; }
+.roomie-shell-links a[aria-current="page"]::after {
+    content: "";
+    position: absolute;
+    inset: auto .7rem -1px;
+    border-block-end: 3px solid currentColor;
+    border-radius: 2px 2px 0 0;
+}
+.roomie-shell-links a:active { background: var(--roomie-accent-soft); color: var(--roomie-accent-hover); }
+
+.roomie-shell-account { position: relative; justify-self: end; }
+.roomie-shell-menu summary {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-height: var(--roomie-target);
+    min-width: var(--roomie-target);
+    padding: .4rem .65rem;
+    border: 1px solid var(--roomie-line);
+    border-radius: var(--roomie-control-radius);
+    color: var(--roomie-ink);
+    cursor: pointer;
+    list-style: none;
+}
+.roomie-shell-menu summary::-webkit-details-marker { display: none; }
+.roomie-shell-menu summary svg { flex: none; color: var(--roomie-icon); }
+.roomie-shell-menu[open] summary,
+.roomie-shell-menu summary:active { background: var(--roomie-accent-soft); border-color: var(--roomie-control); }
+.roomie-shell-menu[open] .roomie-shell-menu-chevron { transform: rotate(180deg); }
+
+.roomie-shell-menu-body {
+    position: absolute;
+    z-index: 40;
+    inset-inline-end: 0;
+    inset-block-start: calc(100% + .45rem);
+    display: grid;
+    inline-size: max-content;
+    min-inline-size: 14rem;
+    max-inline-size: 18rem;
+    padding: .35rem;
+    color: var(--roomie-ink);
+    background: var(--roomie-surface);
+    border: 1px solid var(--roomie-line);
+    border-radius: var(--roomie-radius);
+    box-shadow: var(--roomie-panel-shadow);
+}
+.roomie-shell-menu:not([open]) .roomie-shell-menu-body { display: none; }
+.roomie-shell-menu-body :is(a, button) {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    width: 100%;
+    min-height: var(--roomie-target);
+    margin: 0;
+    padding: .45rem .65rem;
+    text-align: start;
+    overflow-wrap: anywhere;
+    border: 0;
+    border-radius: var(--roomie-control-radius);
+    text-decoration: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+.roomie-shell-menu-icon { flex: none; color: var(--roomie-icon); }
+.roomie-shell-menu-body a[aria-current="page"] { color: var(--roomie-accent); font-weight: 700; text-decoration: underline; text-underline-offset: .17em; }
+.roomie-shell-menu-body :is(a, button):active { background: var(--roomie-accent-soft); }
+.roomie-shell-menu-body form { margin: 0; }
+.roomie-shell-account-name { display: block; padding: .7rem .65rem .35rem; overflow-wrap: anywhere; }
+.roomie-shell-menu-separator { height: 1px; background: var(--roomie-line); margin: .25rem .45rem; }
+
+.roomie-shell :is(.roomie-shell-inner a, .roomie-shell-inner summary, .roomie-shell-inner button, .roomie-shell-skip):focus-visible {
+    outline: 3px solid var(--roomie-focus);
+    outline-offset: 2px;
+}
+.roomie-shell .roomie-shell-links a:focus-visible { outline-offset: -4px; border-radius: var(--roomie-control-radius); }
+
+.roomie-shell-skip {
+    position: absolute;
+    z-index: 45;
+    inset-block-start: .6rem;
+    inset-inline-start: var(--roomie-gutter);
+    padding: .55rem .85rem;
+    border-radius: var(--roomie-control-radius);
+    background: var(--roomie-surface);
+    color: var(--roomie-accent);
+    font-weight: 700;
+}
+.roomie-shell-skip:not(:focus) { width: 1px; height: 1px; padding: 0; clip-path: inset(50%); overflow: clip; white-space: nowrap; }
+
+@media (hover: hover) {
+    .roomie-shell-brand:hover, .roomie-shell-links a:hover { color: var(--roomie-accent); }
+    .roomie-shell-menu summary:hover, .roomie-shell-menu-body :is(a, button):hover { background: var(--roomie-neutral-hover); }
+    .roomie-shell-menu[open] summary:hover { background: var(--roomie-accent-soft); }
+}
+
+@media (max-width: 42.5rem) {
+    .roomie-shell-inner { grid-template-columns: minmax(0, 1fr) auto; gap: 0 .5rem; padding-block-start: .35rem; }
+    .roomie-shell-brand { grid-area: 1 / 1; }
+    .roomie-shell-account { position: static; grid-area: 1 / 2; }
+    .roomie-shell-links { grid-area: 2 / 1 / 3 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .roomie-shell-links a { justify-content: center; padding-inline: .1rem; text-align: center; overflow-wrap: anywhere; }
+    /* Anchor to the whole nav so the disclosure clears both rows. */
+    .roomie-shell-menu-body {
+        inset-inline-end: var(--roomie-gutter);
+        min-inline-size: min(14rem, calc(100% - 2 * var(--roomie-gutter)));
+        max-inline-size: min(18rem, calc(100% - 2 * var(--roomie-gutter)));
+    }
+}
+
+@media (max-width: 24rem) {
+    .roomie-shell-links { grid-template-columns: repeat(4, minmax(0, auto)); }
+    .roomie-shell-links a { font-size: .8rem; }
+    .roomie-shell-menu summary { gap: .4rem; }
+}
+
+.roomie-shell-nav-icon { flex: none; opacity: .85; }
+.roomie-shell-links a { gap: .4rem; }
+.roomie-shell-links a[aria-current="page"] .roomie-shell-nav-icon { opacity: 1; }
+
+@media (max-width: 42.5rem) {
+    .roomie-shell-links a { flex-direction: column; gap: .15rem; min-height: 3rem; }
+}

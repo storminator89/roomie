@@ -61,8 +61,10 @@ if (form) {
         bookingLink.href = requested ? 'bookings.php#rb-booking-requests' : 'bookings.php';
         bookingLink.hidden = false;
         if (!requested) {
-          document.getElementById('rm-next-title').textContent = 'Buchung gespeichert';
+          document.getElementById('rm-next-title-label').textContent = 'Buchung gespeichert';
           document.getElementById('rm-next-summary').hidden = true;
+          const bookingIllustration = document.querySelector('.rm-dash-booking-illustration');
+          if (bookingIllustration) bookingIllustration.hidden = true;
         }
       } else if (typeof result.error === 'string') {
         announce(result.error, true);

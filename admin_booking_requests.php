@@ -46,12 +46,13 @@ $clock = $now->format('H:i:s');
     <title>Buchungsanfragen · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/bookings/booking-pages.css">
+    <link rel="stylesheet" href="assets/admin/area-visuals.css">
 </head>
 <body class="roomplan-page">
 <?php $roomieActivePage = 'bookings.php'; require __DIR__ . '/roomplan_shell.php'; ?>
 <main id="rb-admin-booking-requests" class="roomplan-main rb-page" tabindex="-1">
     <a class="rb-inline-link rb-back" href="bookings.php">← Buchungen</a>
-    <header class="rb-header"><h1>Buchungsanfragen</h1></header>
+    <header class="rb-header rm-area-head"><h1>Buchungsanfragen</h1><img class="rm-area-art" src="assets/illustrations/admin-requests.svg" width="96" height="64" alt=""></header>
     <?php if ($error !== null) : ?><p class="rb-notice rb-notice-error" role="alert"><?= $requestEscape($error) ?></p>
     <?php elseif ($notice !== null) : ?><p class="rb-notice" role="status"><?= $requestEscape($notice) ?></p><?php endif; ?>
 

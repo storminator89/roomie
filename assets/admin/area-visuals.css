@@ -1,0 +1,53 @@
+/* Small decorative accents shared by administration and account surfaces. */
+.rm-area-art {
+  flex: none;
+  display: block;
+  inline-size: clamp(3.5rem, 12vw, 5.25rem);
+  block-size: auto;
+}
+.rm-area-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-inline-size: 0;
+}
+.rm-area-head h1 { min-inline-size: 0; overflow-wrap: anywhere; }
+.rm-area-icon {
+  display: inline-block;
+  inline-size: 1em;
+  block-size: 1em;
+  flex: none;
+  color: #434381;
+  vertical-align: -.13em;
+}
+.rm-area-label { display: inline-flex; align-items: center; gap: .4em; max-inline-size: 100%; }
+.admin-tabs .rm-area-icon { color: currentColor; }
+
+.rm-account-login {
+  color: #222840;
+  background: radial-gradient(ellipse at 50% 0%, #f0ecff 0%, #faf8f3 70%);
+  font-family: system-ui, sans-serif;
+}
+.rm-account-login .rm-login-card {
+  border: 1px solid #e7e1ed;
+  border-radius: 1.3rem;
+  box-shadow: 0 16px 44px #25234412;
+}
+.rm-login-brand { justify-content: center; gap: 1.05rem; }
+.rm-login-wordmark { display: inline-flex; align-items: center; gap: .42rem; font-size: 1.25rem; font-weight: 750; letter-spacing: -.035em; }
+.rm-login-brand .rm-area-art { inline-size: clamp(4rem, 24vw, 6.5rem); }
+.rm-account-login input, .rm-account-login button { min-block-size: 2.75rem; }
+.rm-account-login .rm-login-submit { background: #434381; color: #fff; }
+.rm-account-login .rm-login-submit:hover { background: #343464; }
+.rm-account-login :is(input,button):focus-visible { outline: 2px solid #434381; outline-offset: 2px; }
+.rm-account-login .rm-login-submit .rm-area-icon { color: inherit; inline-size: 1.15rem; block-size: 1.15rem; }
+.rm-profile .rm-profile-avatar-icon {
+  display: grid; place-items: center; flex: none; inline-size: 3rem; block-size: 3rem;
+  border-radius: .8rem; background: #efecfb; font-size: 1.25rem;
+}
+
+@media (max-width: 360px) {
+  .rm-area-head:not(.rm-login-brand) .rm-area-art { inline-size: 3.25rem; }
+}
+.rm-login-footer { border-end-start-radius: 1.3rem; border-end-end-radius: 1.3rem; }

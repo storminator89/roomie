@@ -157,16 +157,17 @@ try {
     <title>Benutzerverwaltung · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/admin/admin.css">
+    <link rel="stylesheet" href="assets/admin/area-visuals.css">
 </head>
 <body class="admin-page">
 <?php $roomieActivePage = 'admin_users.php'; require __DIR__ . '/roomplan_shell.php'; ?>
 <main class="admin-main">
-    <div class="admin-top"><h1>Verwaltung</h1></div>
+    <div class="admin-top rm-area-head"><h1>Verwaltung</h1><img class="rm-area-art" src="assets/illustrations/admin-people.svg" width="96" height="64" alt=""></div>
     <nav aria-label="Verwaltung">
         <ul class="admin-tabs">
-            <li><a href="admin_users.php" aria-current="page">Benutzer</a></li>
-            <li><a href="admin_permissions.php">Berechtigungen</a></li>
-            <li><a href="admin_mcp.php">MCP-Zugang</a></li>
+            <li><a href="admin_users.php" aria-current="page"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#person"></use></svg><span>Benutzer</span></span></a></li>
+            <li><a href="admin_permissions.php"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#key"></use></svg><span>Berechtigungen</span></span></a></li>
+            <li><a href="admin_mcp.php"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#key"></use></svg><span>MCP-Zugang</span></span></a></li>
         </ul>
     </nav>
     <?php if (isset($error)) : ?>
@@ -212,7 +213,7 @@ try {
 
     <section class="admin-card">
         <details <?= $createOpen ? 'open' : '' ?>>
-            <summary>Benutzer hinzufügen</summary>
+            <summary><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#add-person"></use></svg><span>Benutzer hinzufügen</span></span></summary>
             <form method="POST" action="<?= adminHtml(roomieUsersLink()) ?>">
                 <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
                 <input type="hidden" name="action" value="create">
@@ -228,7 +229,7 @@ try {
     </section>
 
     <section class="admin-card" aria-labelledby="users-title">
-        <h2 id="users-title">Benutzer</h2>
+        <h2 id="users-title"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#person"></use></svg><span>Benutzer</span></span></h2>
         <form method="GET" action="admin_users.php" class="admin-toolbar">
             <label class="admin-field">Name oder E-Mail
                 <input type="search" name="search" class="admin-search" maxlength="255" value="<?= adminHtml($search) ?>">
