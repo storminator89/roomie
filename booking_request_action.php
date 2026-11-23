@@ -17,6 +17,7 @@ function roomieRequestActionError(int $status, string $message, string $back): n
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Buchungsanfrage · Roomie</title>
+    <?php require __DIR__ . '/roomie_brand_head.php'; ?>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/bookings/booking-pages.css">
 </head>

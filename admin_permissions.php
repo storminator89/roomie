@@ -95,6 +95,7 @@ $permissions = array_slice($permissions, 0, 25);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Berechtigungen · Roomie</title>
+    <?php require __DIR__ . '/roomie_brand_head.php'; ?>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/admin/admin.css">
     <link rel="stylesheet" href="assets/admin/area-visuals.css">

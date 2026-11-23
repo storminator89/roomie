@@ -47,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roomie Login</title>
+    <?php require __DIR__ . '/roomie_brand_head.php'; ?>
     <link rel="stylesheet" href="assets/roomie-tailwind.css">
     <link rel="stylesheet" href="assets/admin/area-visuals.css">
 </head>
@@ -57,10 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="px-6 py-8">
                 <header class="text-center"><div class="rm-area-head rm-login-brand">
                     <span class="rm-login-wordmark">
-                        <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-                            <rect x="1.5" y="1.5" width="21" height="21" rx="5" fill="#f4c247" />
-                            <path d="M3 12h10m0-9v9m0 0h8m-8 4v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                        </svg>
+                        <img src="assets/brand/roomie-mark.svg" width="27" height="27" alt="">
                         Roomie
                     </span>
                     <img class="rm-area-art" src="assets/illustrations/account-welcome.svg" width="96" height="64" alt="">

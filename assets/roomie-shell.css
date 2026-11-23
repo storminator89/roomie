@@ -62,8 +62,7 @@
     font-weight: 760;
     letter-spacing: -.04em;
 }
-.roomie-shell-brand svg { flex: none; color: var(--roomie-ink); }
-.roomie-shell-brand-plate { fill: var(--roomie-brand); }
+.roomie-shell-brand img { display: block; flex: none; }
 
 .roomie-shell-links { display: flex; align-items: stretch; align-self: stretch; gap: .2rem; padding: 0; margin: 0; list-style: none; }
 .roomie-shell-links li { min-width: 0; }

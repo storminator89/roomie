@@ -20,6 +20,7 @@ $roomiePlanToday = roomieBookingToday();
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Raumplan · Roomie</title>
+    <?php require __DIR__ . '/roomie_brand_head.php'; ?>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/roomplan/editor.css">
     <link rel="stylesheet" href="assets/roomplan/floor-view.css">

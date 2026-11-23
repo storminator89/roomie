@@ -220,6 +220,7 @@ if ($status !== null && ($status['room_id'] ?? null) === $roomId) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Raumsperren · Roomie</title>
+    <?php require __DIR__ . '/roomie_brand_head.php'; ?>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/admin/admin.css">
     <link rel="stylesheet" href="assets/admin/area-visuals.css">

@@ -100,6 +100,7 @@ if ($isPost) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Profil · Roomie</title>
+    <?php require __DIR__ . '/roomie_brand_head.php'; ?>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/roomie-profile.css">
     <link rel="stylesheet" href="assets/admin/area-visuals.css">

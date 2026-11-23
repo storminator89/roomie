@@ -44,6 +44,7 @@ $clock = $now->format('H:i:s');
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Buchungsanfragen · Roomie</title>
+    <?php require __DIR__ . '/roomie_brand_head.php'; ?>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/bookings/booking-pages.css">
     <link rel="stylesheet" href="assets/admin/area-visuals.css">

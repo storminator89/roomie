@@ -8,7 +8,8 @@ body { margin: 0; padding: clamp(.75rem, 4vw, 2rem); }
 a { color: #453bb2; text-underline-offset: .2em; }
 :focus-visible { outline: .18rem solid #453bb2; outline-offset: .18rem; }
 .rq-sign { padding: clamp(.75rem, 4vw, 2rem); border: 1px solid #dedee5; border-radius: .75rem; text-align: center; overflow-wrap: anywhere; background: #fff; }
-.rq-brand { font-weight: 750; color: #453bb2; }
+.rq-brand { display: inline-flex; align-items: center; gap: .4rem; font-weight: 750; color: #453bb2; }
+.rq-brand img { display: block; flex: none; }
 h1 { margin: .45rem 0; font-size: clamp(1.5rem, 5vw, 2rem); }
 p { margin: .4rem 0; }
 #rq-symbol svg { display: block; inline-size: min(100%, 16rem); block-size: auto; aspect-ratio: 1; margin: .5rem auto; }

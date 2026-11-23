@@ -30,10 +30,7 @@ $roomieSkipTarget = match ($roomieActivePage) {
     <?php endif; ?>
     <nav class="roomie-shell-inner" aria-label="Hauptnavigation">
         <a class="roomie-shell-brand" href="index.php" aria-label="Roomie – Übersicht">
-            <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect class="roomie-shell-brand-plate" x="1.5" y="1.5" width="21" height="21" rx="5" />
-                <path d="M3 12h10m0-9v9m0 0h8m-8 4v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-            </svg>
+            <img src="assets/brand/roomie-mark.svg" width="27" height="27" alt="">
             <span>Roomie</span>
         </a>
         <ul class="roomie-shell-links">

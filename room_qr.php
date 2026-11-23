@@ -80,13 +80,14 @@ $title = $room !== null ? (string) $room['name'] :
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= $escape($title) ?> · Roomie</title>
+    <?php require __DIR__ . '/roomie_brand_head.php'; ?>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/rooms/room-qr.css">
     <script type="module" src="assets/rooms/room-qr.js"></script>
 </head>
 <body class="roomplan-page roomie-qr-page">
 <main class="roomplan-panel roomie-qr-card">
-    <a class="roomie-qr-brand" href="index.php">Roomie</a>
+    <a class="roomie-qr-brand" href="index.php"><img src="assets/brand/roomie-mark.svg" width="27" height="27" alt="">Roomie</a>
     <h1><?= $escape($title) ?></h1>
 <?php if ($room !== null) : ?>
     <section id="roomie-qr-status" class="roomie-qr-status" data-status="<?= $escape($state['status'] ?? 'unknown') ?>" aria-label="Verfügbarkeit">

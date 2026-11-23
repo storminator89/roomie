@@ -8,7 +8,7 @@ header('Cache-Control: private, no-store');
 header('Referrer-Policy: no-referrer');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
-header("Content-Security-Policy: default-src 'none'; style-src 'self'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
+header("Content-Security-Policy: default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
 header('Content-Type: text/html; charset=utf-8');
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
     header('Allow: GET');
@@ -56,6 +56,7 @@ $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTE
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Raum-QR · Roomie</title>
+    <?php require __DIR__ . '/roomie_brand_head.php'; ?>
     <link rel="stylesheet" href="assets/rooms/room-qr-print.css">
     <?php if ($scanUrl !== null) : ?>
         <script src="assets/rooms/vendor/qrcodegen-1.8.0.js" defer></script>
@@ -69,7 +70,7 @@ $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTE
         <?php if ($scanUrl !== null) : ?><button type="button" id="rq-print-button" hidden>Drucken</button><?php endif; ?>
     </nav>
     <article class="rq-sign">
-        <span class="rq-brand">Roomie</span>
+        <span class="rq-brand"><img src="assets/brand/roomie-mark.svg" width="23" height="23" alt="">Roomie</span>
         <h1><?= $escape((string) $room['name']) ?></h1>
         <?php if ($scanUrl === null) : ?>
             <p>QR-Druck noch nicht eingerichtet.</p>

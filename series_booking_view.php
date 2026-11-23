@@ -46,6 +46,7 @@ $latestStart = $horizon->modify('-' . (7 * (ROOMIE_SERIES_MIN - 1)) . ' days');
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Wöchentlich buchen · Roomie</title>
+    <?php require __DIR__ . '/roomie_brand_head.php'; ?>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/bookings/booking-pages.css">
 </head>
