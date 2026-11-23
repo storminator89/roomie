@@ -108,26 +108,33 @@ $equipmentLabels = [
 </head>
 <body class="roomplan-page">
 <?php $roomieActivePage = 'rooms.php'; require __DIR__ . '/roomplan_shell.php'; ?>
-<main class="roomplan-main rb-page" tabindex="-1">
-    <header class="rb-header">
+<main class="roomplan-main rb-page rr-room-page" tabindex="-1">
+    <header class="rb-header rr-header">
         <h1>Räume</h1>
         <div class="rp-floor-actions">
             <?php if (isAdmin()) : ?>
-                <a class="roomplan-action roomplan-action-secondary" href="<?= roomsEscape($planUrl . (str_contains($planUrl, '?') ? '&' : '?') . 'manage=1') ?>">Räume verwalten</a>
+                <a class="roomplan-action roomplan-action-secondary rr-manage"
+                   href="<?= roomsEscape($planUrl . (str_contains($planUrl, '?') ? '&' : '?') . 'manage=1') ?>"
+                   aria-label="Räume verwalten" title="Räume verwalten">
+                    <svg class="rr-icon rr-mobile-icon" viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M10 3h4l.6 2.8a7 7 0 0 1 1.7 1l2.7-.9 2 3.5-2.1 1.9a7 7 0 0 1 0 2l2.1 1.9-2 3.5-2.7-.9a7 7 0 0 1-1.7 1L14 21h-4l-.6-2.8a7 7 0 0 1-1.7-1l-2.7.9-2-3.5 2.1-1.9a7 7 0 0 1 0-2L3 9.4l2-3.5 2.7.9a7 7 0 0 1 1.7-1L10 3z"/></svg>
+                    <span class="rr-control-text">Räume verwalten</span>
+                </a>
             <?php endif; ?>
-            <a class="roomplan-action roomplan-action-secondary" href="<?= roomsEscape($planUrl) ?>">Raumplan</a>
+            <a class="roomplan-action roomplan-action-secondary rr-plan-link" href="<?= roomsEscape($planUrl) ?>">Raumplan</a>
         </div>
     </header>
-    <nav class="rb-segments" aria-label="Raumauswahl">
+    <nav class="rb-segments rr-filter-tabs" aria-label="Raumauswahl">
         <a href="<?= roomsEscape(roomsListUrl($q, false, $date)) ?>"<?= !$onlyFavorites ? ' aria-current="page"' : '' ?>>Alle Räume</a>
         <a href="<?= roomsEscape(roomsListUrl($q, true, $date)) ?>"<?= $onlyFavorites ? ' aria-current="page"' : '' ?>>Favoriten</a>
     </nav>
-    <form action="rooms.php" method="get" class="rb-filter">
+    <form action="rooms.php" method="get" class="rb-filter rr-search" role="search">
         <?php if ($onlyFavorites) : ?><input type="hidden" name="favorites" value="1"><?php endif; ?>
         <?php if ($date !== '') : ?><input type="hidden" name="date" value="<?= roomsEscape($date) ?>"><?php endif; ?>
-        <label>Raum suchen<input type="search" name="q" value="<?= roomsEscape($q) ?>" placeholder="Name oder Nummer" maxlength="120"></label>
-        <button class="roomplan-action roomplan-action-secondary" type="submit"><svg class="rr-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/></svg>Suchen</button>
-        <?php if ($q !== '') : ?><a class="rb-inline-link" href="<?= roomsEscape(roomsListUrl('', $onlyFavorites, $date)) ?>">Suche zurücksetzen</a><?php endif; ?>
+        <label class="rr-search-field"><span class="rr-search-label">Raum suchen</span><input type="search" name="q" value="<?= roomsEscape($q) ?>" placeholder="Name oder Nummer" maxlength="120"></label>
+        <button class="roomplan-action roomplan-action-secondary rr-search-submit" type="submit" aria-label="Suchen" title="Suchen"><svg class="rr-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/></svg><span class="rr-control-text">Suchen</span></button>
+        <?php if ($q !== '') : ?>
+            <a class="rb-inline-link rr-search-clear" href="<?= roomsEscape(roomsListUrl('', $onlyFavorites, $date)) ?>" aria-label="Suche zurücksetzen" title="Suche zurücksetzen"><svg class="rr-icon rr-mobile-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg><span class="rr-control-text">Suche zurücksetzen</span></a>
+        <?php endif; ?>
     </form>
 
     <?php if (is_string($notice)) : ?><p class="rb-notice" role="status"><?= roomsEscape($notice) ?></p><?php endif; ?>
