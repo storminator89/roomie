@@ -1,8 +1,18 @@
 <?php
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/booking_helpers.php';
+
+// Only a numeric room ID is carried across login, never a supplied redirect URL.
+$qrRoom = roomiePositiveId($_GET['qr_room'] ?? null);
+$loginAction = $qrRoom === null ? 'login.php' : 'login.php?qr_room=' . $qrRoom;
+$home = $qrRoom === null ? 'index.php' : 'room_qr.php?id=' . $qrRoom;
+if ($qrRoom !== null) {
+    header('Cache-Control: private, no-store');
+    header('Referrer-Policy: no-referrer');
+}
 
 if (isLoggedIn()) {
-    header("Location: index.php");
+    header('Location: ' . $home, true, 303);
     exit;
 }
 
@@ -15,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $result = loginUser($email, $password);
     if ($result === 'authenticated') {
-        header("Location: index.php");
+        header('Location: ' . $home, true, 303);
         exit;
     }
     if ($result === 'throttled') {
@@ -63,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 <?php endif; ?>
 
-                <form class="mt-8 space-y-6" action="" method="POST">
+                <form class="mt-8 space-y-6" action="<?= htmlspecialchars($loginAction, ENT_QUOTES, 'UTF-8') ?>" method="POST">
                     <input type="hidden" name="csrf_token" value="<?= csrfToken() ?>">
                     <div class="rounded-md shadow-sm -space-y-px">
                         <div>

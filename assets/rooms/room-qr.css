@@ -1,0 +1,16 @@
+.roomie-qr-page { min-block-size: 100vh; display: grid; place-items: start center; padding: clamp(1rem, 9vh, 5rem) 1rem; }
+.roomie-qr-card { box-sizing: border-box; inline-size: min(100%, 27rem); padding: clamp(1.25rem, 6vw, 2rem); }
+.roomie-qr-card a { color: var(--roomie-accent, #453bb2); text-underline-offset: .18em; }
+.roomie-qr-brand { display: inline-grid; align-content: center; min-block-size: 44px; font-weight: 800; }
+.roomie-qr-card h1 { margin: .5rem 0 1rem; font-size: clamp(1.5rem, 6vw, 2rem); overflow-wrap: anywhere; }
+.roomie-qr-status { padding: .8rem 1rem; border-radius: .75rem; background: #f0f0f4; display: flex; flex-wrap: wrap; gap: .25rem .5rem; }
+.roomie-qr-status[data-status=free] { background: #e9f8f0; color: #145039; }
+.roomie-qr-status[data-status=busy], .roomie-qr-status[data-status=blocked] { background: #fff1eb; color: #7a3315; }
+.roomie-qr-card button { inline-size: 100%; min-block-size: 48px; }
+.roomie-qr-time { margin: 1rem 0 .45rem; font-variant-numeric: tabular-nums; }
+.roomie-qr-details, .roomie-qr-after a { display: inline-grid; align-content: center; min-block-size: 44px; }
+.roomie-qr-details { margin-block-start: .5rem; }
+.roomie-qr-after { display: flex; gap: .25rem 1rem; flex-wrap: wrap; }
+.roomie-qr-card [hidden] { display: none !important; }
+.roomie-qr-feedback:empty { display: none; }
+.roomie-qr-feedback { padding: .4rem 0; font-weight: 650; overflow-wrap: anywhere; }

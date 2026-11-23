@@ -1,0 +1,24 @@
+:root { color-scheme: light; font-family: system-ui, sans-serif; color: #182238; background: #f8f7f3; }
+body { margin: 0; padding: clamp(.75rem, 4vw, 2rem); }
+.rq-print { max-inline-size: 30rem; margin-inline: auto; }
+.rq-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: .5rem; margin-block-end: 1rem; }
+.rq-actions :is(a, button) { min-block-size: 2.75rem; display: inline-grid; align-content: center; font: inherit; font-weight: 650; }
+.rq-actions button { padding-inline: 1rem; border: 0; border-radius: .5rem; background: #453bb2; color: #fff; cursor: pointer; }
+.rq-actions button[hidden] { display: none; }
+a { color: #453bb2; text-underline-offset: .2em; }
+:focus-visible { outline: .18rem solid #453bb2; outline-offset: .18rem; }
+.rq-sign { padding: clamp(.75rem, 4vw, 2rem); border: 1px solid #dedee5; border-radius: .75rem; text-align: center; overflow-wrap: anywhere; background: #fff; }
+.rq-brand { font-weight: 750; color: #453bb2; }
+h1 { margin: .45rem 0; font-size: clamp(1.5rem, 5vw, 2rem); }
+p { margin: .4rem 0; }
+#rq-symbol svg { display: block; inline-size: min(100%, 16rem); block-size: auto; aspect-ratio: 1; margin: .5rem auto; }
+.rq-link { font-size: .9rem; }
+.rq-status:empty { display: none; }
+@media print {
+    :root, body, .rq-sign { color: #000; background: #fff; }
+    body { padding: 0; }
+    .rq-actions, .rq-status { display: none; }
+    .rq-sign { border: 0; break-inside: avoid; }
+    #rq-symbol svg { inline-size: 64mm; max-inline-size: 100%; }
+    .rq-link a, .rq-brand { color: #000; }
+}

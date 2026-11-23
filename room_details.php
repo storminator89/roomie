@@ -257,6 +257,7 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
         <?php if ($admin) : ?><a class="roomplan-action roomplan-action-secondary" href="<?= detailEscape($blocksAdminUrl) ?>">Sperrzeiten</a><?php endif; ?>
     </form>
     <?php if ($admin) : ?>
+    <p><a class="rb-inline-link" href="room_qr_print.php?id=<?= $room_id ?>">Raum-QR drucken</a></p>
     <form id="rb-room-approval" class="rb-filter" method="post" action="booking_request_action.php">
         <input type="hidden" name="csrf_token" value="<?= detailEscape(csrfToken()) ?>">
         <input type="hidden" name="action" value="policy">

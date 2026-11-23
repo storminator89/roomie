@@ -279,3 +279,29 @@ Local regression on a disposable SQLite database:
 ```sh
 PHP_BIN=php python3 build-files/mcp-http-smoke.py
 ```
+
+### Room QR signs
+
+Set `ROOMIE_PUBLIC_BASE_URL` to Roomie's stable HTTPS base URL (for example
+`https://rooms.example.org/roomie` for a subdirectory installation). Configure
+this in the app environment, not through a request header. Use an ASCII
+hostname and ordinary path segments, without credentials, queries or fragments.
+Without a valid base URL, no QR code is generated.
+
+As an administrator, open a room and choose **Raum-QR drucken**. Test the
+printed code on a phone before putting it up. The QR embeds only the canonical
+room URL and numeric room ID. Users still sign in and need their usual room
+access. Room data is never sent to an external QR service.
+
+The mobile page shows current availability without booking names and offers
+the next 30-minute slot today, if one fits. The slot starts on the next
+eligible 15-minute boundary in Europe/Berlin. You must confirm explicitly;
+the room's approval settings and all normal booking checks still apply.
+
+Keep the base URL and room ID stable while signs are in use. If the base URL
+changes, or this feature is rolled back, existing signs do not update. Replace
+the signs, or preserve the old route to the correct HTTPS installation when
+moving it. Do not reuse a sign for a different room.
+
+The print page uses Project Nayuki's MIT-licensed [QR Code generator v1.8.0](https://github.com/nayuki/QR-Code-generator/tree/v1.8.0),
+vendored locally as `assets/rooms/vendor/qrcodegen-1.8.0.js`.
