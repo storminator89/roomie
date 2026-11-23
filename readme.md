@@ -134,7 +134,19 @@ is displayed before saving. Weekly occurrences keep the same Berlin local
 time, including across a clock change. On confirmation Roomie checks every
 date again; it saves all appointments together or none. The 90-day booking
 horizon still applies. Each saved occurrence can be moved, cancelled or
-exported separately; Roomie does not yet edit the series as a group.
+exported separately.
+
+For new series, open **Bookings → Options → Edit series** on a future
+occurrence. Set one new time for all future occurrences or cancel them
+together. The preview lists the exact dates and rooms, including dates
+changed through an individual move. Past, running and individually cancelled
+occurrences are not changed. Room access and conflicts are checked again at
+confirmation; a stale preview or blocked occurrence applies no changes.
+An edit changes times only, not the number of bookings. A changed occurrence
+loses its previous check-in, if any. Older weekly bookings had no group
+identity and remain individually manageable. No manual schema update is
+needed. Run `php build-files/series-manage-test.php` to check these rules
+with synthetic data.
 
 The [read-only Exchange pilot](docs/exchange-pilot.md) has an offline-tested
 availability parser. It is not connected to Roomie, and no Exchange account,

@@ -3,6 +3,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_calendar.php';
 require_once __DIR__ . '/booking_approvals.php';
 require_once __DIR__ . '/room_checkin.php';
+require_once __DIR__ . '/booking_series_store.php';
 
 header('Cache-Control: private, no-store');
 if (!isLoggedIn()) {
@@ -104,6 +105,7 @@ $bookings = [];
 $ownRequests = [];
 $approvalRooms = [];
 $checkinFlags = [];
+$bookingSeriesIds = [];
 $hasNext = false;
 
 try {
@@ -162,11 +164,17 @@ try {
 }
 // Read attendance flags only for rows owned by the current viewer.
 if ($bookings) {
+    $ownBookings = array_values(array_filter($bookings, static fn (array $entry): bool => (int) $entry['user_id'] === $user_id));
     try {
-        $ownBookings = array_filter($bookings, static fn (array $entry): bool => (int) $entry['user_id'] === $user_id);
-        $checkinFlags = roomieCheckinFlags($db, array_values($ownBookings), roomieCheckinNow());
+        $checkinFlags = roomieCheckinFlags($db, $ownBookings, roomieCheckinNow());
     } catch (PDOException | UnexpectedValueException) {
         error_log('Roomie booking check-in status unavailable');
+    }
+    try {
+        $ownedBookingIds = array_map(static fn (array $entry): int => (int) $entry['id'], $ownBookings);
+        $bookingSeriesIds = roomieBookingSeriesIds($db, $user_id, $ownedBookingIds);
+    } catch (PDOException | UnexpectedValueException) {
+        error_log('Roomie booking series links unavailable');
     }
 }
 function bookingPageUrl(string $scope, string $date = '', string $search = '', int $page = 1): string
@@ -263,8 +271,9 @@ $requestLabels = [
                 $owner = (int) $booking['user_id'] === $user_id;
                 $checkin = $owner ? ($checkinFlags[$bookingId] ?? null) : null;
                 $startClock = roomieBookingClock($booking['start_time']);
-                $canMove = $owner && !isset($approvalRooms[(int) $booking['room_id']]) && $startClock !== null
-                    && ($date > $todayKey || ($date === $todayKey && $startClock > $now->format('H:i:s')));
+                $future = $startClock !== null && ($date > $todayKey || ($date === $todayKey && $startClock > $now->format('H:i:s')));
+                $canMove = $owner && $future && !isset($approvalRooms[(int) $booking['room_id']]);
+                $seriesId = $owner && $future ? ($bookingSeriesIds[$bookingId] ?? null) : null;
                 $reopenMove = $canMove && $bookingId === $editBookingId;
                 $clockLabel = substr((string) $booking['start_time'], 0, 5) . '–' . substr((string) $booking['end_time'], 0, 5);
                 $optionLabel = 'Optionen für ' . $booking['room_name'] . ', ' . roomieDateLabel($date) . ', ' . $clockLabel . ' Uhr';
@@ -291,6 +300,9 @@ $requestLabels = [
                     <details class="rb-more rb-row-options" name="rb-booking-row"<?= $reopenMove ? ' open' : '' ?>>
                         <summary class="rb-icon-row" aria-label="<?= bookingEscape($optionLabel) ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Optionen</summary>
                         <div class="rb-row-menu">
+                            <?php if ($seriesId !== null) : ?>
+                            <a class="roomplan-action roomplan-action-secondary" href="series_manage.php?id=<?= (int) $seriesId ?>">Serie bearbeiten</a>
+                            <?php endif; ?>
                             <a class="roomplan-action roomplan-action-secondary" href="bookings.php?download=calendar&amp;booking_id=<?= $bookingId ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v11m-4-4 4 4 4-4M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3"/></svg>Kalenderdatei (.ics)</a>
                             <?php if ($canMove) :
                                 $moveDate = $date <= $lastDate ? $date : '';

@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/room_access.php';
 require_once __DIR__ . '/room_blocks.php';
 require_once __DIR__ . '/booking_approvals.php';
+require_once __DIR__ . '/booking_series_store.php';
 
 const ROOMIE_SERIES_MIN = 2;
 const ROOMIE_SERIES_MAX = 12;
@@ -196,8 +197,11 @@ try {
             }
             $insert = $db->prepare('INSERT INTO bookings (user_id, room_id, seat_id, date, start_time, end_time)
                 VALUES (?, ?, NULL, ?, ?, ?)');
+            $seriesId = roomieBookingSeriesCreate($db, $userId);
+            $link = $db->prepare('INSERT INTO main.booking_series_members (booking_id, series_id) VALUES (?, ?)');
             foreach ($plan['dates'] as $date) {
                 $insert->execute([$userId, $plan['roomId'], $date, $plan['start'], $plan['end']]);
+                $link->execute([(int) $db->lastInsertId(), $seriesId]);
             }
         }
         $db->exec('COMMIT');
