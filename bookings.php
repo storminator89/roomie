@@ -206,6 +206,22 @@ foreach ($bookings as $booking) {
 }
 $planUrl = 'raumplan.php' . ($filterDate !== '' ? '?date=' . rawurlencode($filterDate) : '');
 $hasFilters = $filterDate !== '' || $searchName !== '';
+$filtersOpen = $hasFilters || ($_GET['filters'] ?? '') === '1';
+$filterPage = bookingPageUrl($scope, $filterDate, $searchName, $page);
+$filterUrl = $filterPage . (str_contains($filterPage, '?') ? '&' : '?') . 'filters=1'
+    . ($editBookingId !== null ? '&edit=' . $editBookingId : '') . '#rb-booking-filter-fields';
+// Highlight the first upcoming entry in the default personal view without changing ledger order.
+$nextBookingId = null;
+if ($scope === 'mine' && !$hasFilters && $page === 1 && $editBookingId === null) {
+    $nowClock = $now->format('H:i:s');
+    foreach ($bookings as $entry) {
+        $clock = roomieBookingClock($entry['start_time']);
+        if ($clock !== null && ($entry['date'] > $todayKey || ($entry['date'] === $todayKey && $clock > $nowClock))) {
+            $nextBookingId = (int) $entry['id'];
+            break;
+        }
+    }
+}
 $hasMail = roomieMailFrom() !== null;
 $moveTimes = [];
 $moveStep = new DateInterval('PT' . ROOMIE_BOOKING_STEP_MINUTES . 'M');
@@ -235,19 +251,19 @@ $requestLabels = [
 <main id="roomplan" class="roomplan-main rb-page rb-booking-list" tabindex="-1">
     <header class="rb-header">
         <h1 class="rb-icon-row"><svg class="rb-icon rb-icon-tile" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18m-12 5 2 2 4-4"/></svg><span>Buchungen</span></h1>
-        <a class="roomplan-action" href="<?= bookingEscape($planUrl) ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Raum buchen</a>
+        <a class="roomplan-action rb-book-now" href="<?= bookingEscape($planUrl) ?>" aria-label="Raum buchen" title="Raum buchen"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg><span class="rb-wide-label">Raum buchen</span></a>
     </header>
     <div class="rb-list-controls">
         <nav class="rb-segments" aria-label="Buchungsansicht">
-            <a href="<?= bookingEscape(bookingPageUrl('mine', $filterDate)) ?>"<?= $scope === 'mine' ? ' aria-current="page"' : '' ?>>Meine Buchungen</a>
-            <a href="<?= bookingEscape(bookingPageUrl('all', $filterDate)) ?>"<?= $scope === 'all' ? ' aria-current="page"' : '' ?>>Alle Buchungen</a>
+            <a href="<?= bookingEscape(bookingPageUrl('mine', $filterDate)) ?>"<?= $scope === 'mine' ? ' aria-current="page"' : '' ?> aria-label="Meine Buchungen"><span>Meine</span><span class="rb-wide-label">&nbsp;Buchungen</span></a>
+            <a href="<?= bookingEscape(bookingPageUrl('all', $filterDate)) ?>"<?= $scope === 'all' ? ' aria-current="page"' : '' ?> aria-label="Alle Buchungen"><span>Alle</span><span class="rb-wide-label">&nbsp;Buchungen</span></a>
         </nav>
         <div class="rb-list-context">
-            <p><?php if ($filterDate !== '') : ?>
+            <p <?= $filterDate === '' ? 'class="rb-wide-label"' : '' ?>><?php if ($filterDate !== '') : ?>
                 <time datetime="<?= bookingEscape($filterDate) ?>"><?= bookingEscape(bookingListDateLabel($filterDate, $today)) ?></time>
             <?php else : ?>Ab heute<?php endif; ?></p>
-            <a class="rb-inline-link rb-icon-row" href="#rb-booking-filter-fields"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5z"/></svg><?= $hasFilters ? 'Filter aktiv' : 'Filter' ?></a>
-            <?php if ($ownRequests) : ?><a class="rb-inline-link" href="#rb-booking-requests">Meine Anfragen</a><?php endif; ?>
+            <a class="rb-inline-link rb-icon-row rb-filter-link<?= $hasFilters ? ' rb-filter-active' : '' ?>" href="<?= bookingEscape($filtersOpen ? '#rb-booking-filter-fields' : $filterUrl) ?>" aria-label="<?= $hasFilters ? 'Filter aktiv' : 'Filter' ?>" title="<?= $hasFilters ? 'Filter aktiv' : 'Filter' ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5z"/></svg><span class="rb-wide-label"><?= $hasFilters ? 'Filter aktiv' : 'Filter' ?></span></a>
+            <?php if ($ownRequests) : ?><a class="rb-inline-link" href="#rb-booking-requests" aria-label="Meine Anfragen"><span class="rb-wide-label">Meine </span>Anfragen</a><?php endif; ?>
         </div>
     </div>
 
@@ -279,8 +295,9 @@ $requestLabels = [
                 $clockLabel = substr((string) $booking['start_time'], 0, 5) . '–' . substr((string) $booking['end_time'], 0, 5);
                 $optionLabel = 'Optionen für ' . $booking['room_name'] . ', ' . roomieDateLabel($date) . ', ' . $clockLabel . ' Uhr';
             ?>
-                <li class="rb-entry<?= $owner ? ' rb-entry-with-options' : '' ?>"<?= $owner ? ' id="booking-' . $bookingId . '" tabindex="-1"' : '' ?>>
+                <li class="rb-entry<?= $owner ? ' rb-entry-with-options' : '' ?><?= $bookingId === $nextBookingId ? ' rb-entry-next' : '' ?>"<?= $owner ? ' id="booking-' . $bookingId . '" tabindex="-1"' : '' ?>>
                     <div class="rb-entry-main">
+                        <?php if ($bookingId === $nextBookingId) : ?><span class="rb-next-label">Als Nächstes</span><?php endif; ?>
                         <h3><?= bookingEscape((string) $booking['room_name']) ?></h3>
                         <p><svg class="rb-icon rb-icon-inline rb-icon-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg><?= bookingEscape($clockLabel) ?> Uhr
                         <?php if ($scope === 'all') : ?> · <?= $owner ? 'Eigene Buchung' : bookingEscape((string) $booking['user_name']) ?><?php endif; ?></p>
@@ -299,7 +316,7 @@ $requestLabels = [
                     <?php endif; ?>
                     <?php if ($owner) : ?>
                     <details class="rb-more rb-row-options" name="rb-booking-row"<?= $reopenMove ? ' open' : '' ?>>
-                        <summary class="rb-icon-row" aria-label="<?= bookingEscape($optionLabel) ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Optionen</summary>
+                        <summary class="rb-icon-row" aria-label="<?= bookingEscape($optionLabel) ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><span class="rb-wide-label">Optionen</span></summary>
                         <div class="rb-row-menu">
                             <?php if ($seriesId !== null) : ?>
                             <a class="roomplan-action roomplan-action-secondary" href="series_manage.php?id=<?= (int) $seriesId ?>">Serie bearbeiten</a>
@@ -370,7 +387,7 @@ $requestLabels = [
     </nav>
     <?php endif; ?>
 
-    <details class="rb-booking-filters"<?= $hasFilters ? ' open' : '' ?>>
+    <details class="rb-booking-filters"<?= $filtersOpen ? ' open' : '' ?>>
         <summary class="rb-icon-row"><svg class="rb-icon rb-icon-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>Weitere Filter</summary>
         <form class="rb-filter" id="rb-booking-filter-fields" method="get" action="bookings.php" tabindex="-1">
             <?php if ($scope === 'all') : ?><input type="hidden" name="scope" value="all"><?php endif; ?>
@@ -403,7 +420,7 @@ $requestLabels = [
                 </div>
                 <?php if ($pendingRequest) : ?>
                 <details class="rb-more rb-row-options" name="rb-booking-row">
-                    <summary class="rb-icon-row" aria-label="Optionen für Anfrage: <?= bookingEscape($request['room_name'] . ', ' . roomieDateLabel($request['date']) . ', ' . $requestClockLabel . ' Uhr') ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Optionen</summary>
+                    <summary class="rb-icon-row" aria-label="Optionen für Anfrage: <?= bookingEscape($request['room_name'] . ', ' . roomieDateLabel($request['date']) . ', ' . $requestClockLabel . ' Uhr') ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><span class="rb-wide-label">Optionen</span></summary>
                     <div class="rb-row-menu">
                         <form method="post" action="booking_request_action.php">
                             <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">

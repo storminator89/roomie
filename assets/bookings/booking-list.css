@@ -111,17 +111,65 @@
 .rb-booking-list .rb-booking-filters .rb-filter { padding-block: .25rem .55rem; }
 .rb-booking-list .rb-booking-admin { font-size: .875rem; }
 
+.rb-booking-list .rb-next-label { display: none; }
+
 @media (max-width: 42rem) {
-    .rb-booking-list { gap: 1rem; }
+    .rb-page.rb-booking-list { gap: .75rem; }
     .rb-booking-list .rb-day { grid-template-columns: minmax(0, 1fr); gap: .45rem; }
     .rb-booking-list .rb-day h2 { padding-block: 0; }
     .rb-booking-list .rb-entry { padding-inline: .65rem; }
     .rb-booking-list .rb-row-options > summary { inset-inline-end: .65rem; }
-}
-
-@media (max-width: 23.5rem) {
-    /* Let room names use the row rather than squeezing them behind Options. */
-    .rb-booking-list .rb-entry-with-options > .rb-entry-main { padding-inline-end: 0; }
-    .rb-booking-list .rb-row-options > summary { position: static; margin-block-start: .4rem; }
-    .rb-booking-list .rb-entry > .rb-entry-actions { margin-block-start: .45rem; }
+    .rb-page.rb-booking-list .rb-wide-label { display: none; }
+    .rb-page.rb-booking-list .rb-header { gap: .5rem; }
+    .rb-page.rb-booking-list .rb-book-now,
+    .rb-page.rb-booking-list .rb-filter-link,
+    .rb-page.rb-booking-list .rb-row-options > summary {
+        box-sizing: border-box;
+        inline-size: 44px;
+        block-size: 44px;
+        padding: 0;
+        align-items: center;
+        justify-content: center;
+    }
+    .rb-page.rb-booking-list .rb-book-now > .rb-icon { inline-size: 20px; block-size: 20px; }
+    .rb-page.rb-booking-list .rb-list-controls { gap: 0 .5rem; }
+    .rb-page.rb-booking-list .rb-list-context { gap: 0 .25rem; }
+    .rb-page.rb-booking-list .rb-filter-link {
+        border-radius: var(--rb-control-radius);
+    }
+    .rb-page.rb-booking-list .rb-filter-link:is(.rb-filter-active, :hover) {
+        color: var(--rb-accent);
+        background: var(--rb-accent-soft);
+    }
+    .rb-page.rb-booking-list .rb-segments { gap: 0 .3rem; }
+    .rb-page.rb-booking-list .rb-segments a {
+        justify-content: center;
+        min-inline-size: 44px;
+        padding-inline: .5rem;
+        border: 0;
+        border-block-end: 2px solid transparent;
+        border-radius: 0;
+        background: transparent;
+    }
+    .rb-page.rb-booking-list .rb-segments a[aria-current="page"] {
+        border-block-end-color: var(--rb-accent);
+        background: transparent;
+    }
+    .rb-page.rb-booking-list .rb-entry-with-options > .rb-entry-main { padding-inline-end: 3.25rem; }
+    .rb-page.rb-booking-list .rb-row-options > summary { border-color: transparent; }
+    .rb-page.rb-booking-list .rb-row-options[open] > summary { border-color: var(--rb-accent); }
+    .rb-page.rb-booking-list .rb-entry-next {
+        background: var(--rb-accent-soft);
+        box-shadow: inset 3px 0 var(--rb-accent);
+        border-radius: inherit;
+    }
+    .rb-page.rb-booking-list .rb-next-label {
+        display: block;
+        margin-block-end: .12rem;
+        font-size: .75rem;
+        line-height: 1.25;
+        font-weight: 700;
+        color: var(--rb-accent);
+    }
+    .rb-page.rb-booking-list .rb-entry > .rb-entry-actions { margin-block-start: .45rem; }
 }
