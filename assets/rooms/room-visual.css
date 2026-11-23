@@ -1,0 +1,30 @@
+.room-visual {
+    min-inline-size:0;
+    position:relative;
+    isolation:isolate;
+    overflow:hidden;
+    border-radius:.8rem;
+    background:#f3effa center / cover no-repeat;
+    background-size:cover;
+    block-size:clamp(5.5rem,12vw,8.5rem);
+}
+.room-visual--meeting { background-image:url('../illustrations/room-meeting.svg'); }
+.room-visual--video { background-image:url('../illustrations/room-video.svg'); }
+.room-visual--work { background-image:url('../illustrations/room-work.svg'); }
+.room-visual--lounge { background-image:url('../illustrations/room-lounge.svg'); }
+.room-visual img {
+    position:absolute;
+    inset:0;
+    display:block;
+    inline-size:100%;
+    block-size:100%;
+    object-fit:cover;
+}
+.room-visual--detail { block-size:clamp(6.25rem,18vw,12rem); }
+.rb-room-intro { display:grid; gap:.75rem; align-items:center; }
+.rb-room-intro .rb-header { min-inline-size:0; margin:0; }
+.rb-room-intro h1 { overflow-wrap:anywhere; }
+.rb-room-intro .rb-tags { margin-block: .45rem 0; }
+@media (min-width:650px) {
+    .rb-room-intro { grid-template-columns:minmax(0,1fr) minmax(12rem,37%); gap:clamp(1rem,4vw,2.5rem); }
+}

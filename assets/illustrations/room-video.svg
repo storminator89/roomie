@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <path fill="#f1edf5" d="M0 0h640v360H0z"/>
+  <path fill="#f9f4ec" d="M108 248v-14c0-104 95-185 212-185s212 81 212 185v14z"/>
+  <path fill="#ebe2d5" d="M0 248h640v112H0z"/>
+  <path fill="#ddd1c4" d="M118 248h404v2H118z"/>
+  <ellipse cx="320" cy="289" rx="188" ry="35" fill="#e3d7cd"/>
+  <ellipse cx="320" cy="287" rx="158" ry="30" fill="#efe6dc" stroke="#d9c9bb" stroke-width="2"/>
+  <path fill="#f0e7df" d="M160 142h30v75h-30zm290 0h30v75h-30z"/>
+  <path fill="none" stroke="#ded0c8" stroke-width="2" d="M170 149v61m10-61v61m280-61v61m10-61v61"/>
+  <rect x="296" y="87" width="48" height="18" rx="8" fill="#303953"/>
+  <circle cx="320" cy="96" r="5.5" fill="#9690bc"/>
+  <circle cx="320" cy="96" r="2.5" fill="#e0daf2"/>
+  <rect x="202" y="101" width="236" height="128" rx="10" fill="#303953"/>
+  <rect x="210" y="109" width="220" height="107" rx="4" fill="#ded8ee"/>
+  <rect x="219" y="118" width="117" height="89" rx="5" fill="#b5abc9"/>
+  <rect x="342" y="118" width="79" height="42" rx="4" fill="#e5c991"/>
+  <rect x="342" y="166" width="79" height="41" rx="4" fill="#b9c3c0"/>
+  <circle cx="276" cy="149" r="18" fill="#f2e0cd"/>
+  <path fill="#73709e" d="M235 201c3-21 16-32 41-32 23 0 36 11 41 32z"/>
+  <circle cx="381" cy="134" r="8" fill="#faead7"/>
+  <path fill="#a47866" d="M362 157c2-10 10-15 19-15s17 5 19 15z"/>
+  <circle cx="381" cy="181" r="8" fill="#f3e0cb"/>
+  <path fill="#687c75" d="M362 204c2-10 9-15 19-15 9 0 17 5 19 15z"/>
+  <rect x="309" y="220" width="22" height="3" rx="1.5" fill="#bfb9d6"/>
+  <path fill="#f2d7ae" d="M216 251h208v26H216z"/>
+  <path fill="#d9bb95" d="M210 247h220v9H210zm123 9h91v21h-91z"/>
+  <g fill="none" stroke="#35405d" stroke-linecap="round" stroke-width="5">
+    <path d="M226 275v16m188-16v16"/>
+  </g>
+  <path fill="#494361" d="M289 241h62c5 0 8 3 8 7h-78c0-4 3-7 8-7z"/>
+  <ellipse cx="320" cy="294" rx="61" ry="11" fill="#b8a7a7" opacity=".24"/>
+  <path fill="#7771a6" d="M269 279c0-10 8-16 18-13 8 2 16 8 33 8s25-6 33-8c10-3 18 3 18 13 0 19-21 29-51 29s-51-10-51-29z"/>
+  <path fill="none" stroke="#35405d" stroke-linecap="round" stroke-width="5" d="m286 301-7 18m75-18 7 18"/>
+</svg>

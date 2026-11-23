@@ -5,6 +5,8 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_helpers.php';
 require_once __DIR__ . '/room_blocks.php';
 require_once __DIR__ . '/booking_approvals.php';
+require_once __DIR__ . '/room_visual.php';
+require_once __DIR__ . '/room_photo_store.php';
 
 if (!isLoggedIn()) {
     header("Location: login.php");
@@ -33,6 +35,7 @@ try {
         http_response_code(404);
         exit('Raum nicht gefunden.');
     }
+    $hasPhoto = roomieHasPhoto($db, $room_id);
     $requiresApproval = roomieRoomRequiresApproval($db, $room_id);
     // An administrator may inspect a restricted room, but booking still needs its grant.
     $canBookRoom = true;
@@ -218,21 +221,25 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
     <title><?= detailEscape($roomName) ?> · Roomie</title>
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/bookings/booking-pages.css">
+    <link rel="stylesheet" href="assets/rooms/room-visual.css">
     <script src="assets/bookings/room-book.js" type="module"></script>
 </head>
 <body class="roomplan-page">
 <?php $roomieActivePage = 'room_details.php'; require __DIR__ . '/roomplan_shell.php'; ?>
 <main class="roomplan-main rb-page" tabindex="-1">
     <a class="rb-inline-link rb-back" href="<?= detailEscape($planUrl) ?>">← Raumplan</a>
-    <header class="rb-header">
-        <h1><?= detailEscape($roomName) ?></h1>
-        <div class="rb-tags">
-            <?php if ((string) ($room['number'] ?? '') !== '') : ?><span>Nr. <?= detailEscape((string) $room['number']) ?></span><?php endif; ?>
-            <span><?= detailEscape(getRoomTypeName($room['type'])) ?></span>
-            <span><?= $capacity === 1 ? '1 Platz' : $capacity . ' Plätze' ?></span>
-            <?php if ($requiresApproval) : ?><span class="rb-request-status rb-request-pending">Freigabe nötig</span><?php endif; ?>
-        </div>
-    </header>
+    <div class="rb-room-intro">
+        <header class="rb-header">
+            <h1><?= detailEscape($roomName) ?></h1>
+            <div class="rb-tags">
+                <?php if ((string) ($room['number'] ?? '') !== '') : ?><span>Nr. <?= detailEscape((string) $room['number']) ?></span><?php endif; ?>
+                <span><?= detailEscape(getRoomTypeName($room['type'])) ?></span>
+                <span><?= $capacity === 1 ? '1 Platz' : $capacity . ' Plätze' ?></span>
+                <?php if ($requiresApproval) : ?><span class="rb-request-status rb-request-pending">Freigabe nötig</span><?php endif; ?>
+            </div>
+        </header>
+        <?php roomieRenderVisual($room, $equipment, $hasPhoto, true); ?>
+    </div>
     <?php if ($equipment) : ?>
         <ul class="rb-tags" aria-label="Ausstattung">
             <?php foreach ($equipment as $item) : ?><li><?= detailEscape($equipmentLabels[$item] ?? $item) ?></li><?php endforeach; ?>

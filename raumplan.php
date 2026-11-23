@@ -27,6 +27,7 @@ $roomiePlanToday = roomieBookingToday();
         <link rel="stylesheet" href="assets/roomplan/floor-editor.css">
         <link rel="stylesheet" href="assets/roomplan/floor-upload.css">
         <link rel="stylesheet" href="assets/roomplan/floor-rooms.css">
+        <link rel="stylesheet" href="assets/roomplan/room-photo-editor.css">
     <?php endif; ?>
     <script type="module" src="assets/roomplan/view.js"></script>
 </head>

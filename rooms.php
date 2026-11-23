@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/room_access.php';
+require_once __DIR__ . '/room_visual.php';
+require_once __DIR__ . '/room_photo_store.php';
 
 if (!isLoggedIn()) {
     header('Location: login.php');
@@ -45,6 +47,7 @@ $date = parseBookingDate($_GET['date'] ?? null)?->format('Y-m-d') ?? '';
 $replyUrl = roomsListUrl($q, $onlyFavorites, $date);
 $userId = (int) $_SESSION['user_id'];
 $admin = isAdmin();
+$photoSet = [];
 $rooms = [];
 $error = $_SESSION['roomie_rooms_error'] ?? null;
 $notice = $_SESSION['roomie_rooms_notice'] ?? null;
@@ -69,6 +72,7 @@ try {
     $visible = roomieListRooms($db, $userId, $admin);
     $favoriteSet = array_fill_keys(roomieFavoriteIds($db, $userId), true);
     $terms = roomieRoomSearchTokens($q);
+    $photoSet = array_fill_keys(roomiePhotoIds($db), true);
     foreach ($visible as $room) {
         $isFavorite = isset($favoriteSet[(int) $room['id']]);
         if ($onlyFavorites && !$isFavorite) continue;
@@ -99,6 +103,7 @@ $equipmentLabels = [
     <link rel="stylesheet" href="assets/roomplan/roomplan.css">
     <link rel="stylesheet" href="assets/bookings/booking-pages.css">
     <link rel="stylesheet" href="assets/rooms/rooms.css">
+    <link rel="stylesheet" href="assets/rooms/room-visual.css">
 </head>
 <body class="roomplan-page">
 <?php $roomieActivePage = 'rooms.php'; require __DIR__ . '/roomplan_shell.php'; ?>
@@ -143,6 +148,7 @@ $equipmentLabels = [
             $equipment = is_array($equipment) ? array_slice(array_unique(array_filter($equipment, 'is_string')), 0, 8) : [];
         ?>
             <li class="roomplan-panel rr-card">
+                <?php roomieRenderVisual($room, $equipment, isset($photoSet[(int) $room['id']])); ?>
                 <div class="rr-card-heading">
                     <h2><a class="rb-inline-link" href="<?= roomsEscape($detailsUrl) ?>"><?= roomsEscape($name) ?></a></h2>
                     <form action="<?= roomsEscape($replyUrl) ?>" method="post">

@@ -43,6 +43,7 @@ export function normalizeRoomplan(response, availableFavorites = []) {
             capacity: Math.max(0, Math.min(500, Number.parseInt(raw.capacity, 10) || 0)),
             canBook: raw.can_book !== false,
             requiresApproval: raw.requires_approval === true,
+            hasPhoto: raw.has_photo === true,
             amenities: decodeList(raw.equipment).filter(v => typeof v === 'string').slice(0, 32),
             position
         });
@@ -123,6 +124,25 @@ export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
             const id = positiveId(payload.id);
             if (!id) throw new Error('Upload konnte nicht bestätigt werden. Bitte neu laden.');
             return id;
+        },
+        roomPhotoUrl(id, version) {
+            if (!positiveId(id)) throw new Error('Raum nicht gefunden.');
+            const query = new URLSearchParams({id});
+            if (version !== undefined) query.set('v', String(version));
+            return 'room_photo.php?' + query;
+        },
+        async changeRoomPhoto({id, action, photo}) {
+            if (!positiveId(id) || !['upload', 'remove'].includes(action) || (action === 'upload' && !photo)) {
+                throw new Error('Bitte Raum und Foto prüfen.');
+            }
+            const body = new FormData();
+            body.append('action', action);
+            if (action === 'upload') body.append('photo', photo);
+            const payload = await request('room_photo.php?' + new URLSearchParams({id}), {body});
+            if (payload.success !== true || payload.hasPhoto !== (action === 'upload')) {
+                throw new Error('Die Änderung konnte nicht bestätigt werden. Bitte neu laden.');
+            }
+            return payload.hasPhoto;
         },
         async renameFloorplan({id, title, revision}) {
             if (!positiveId(id) || !isRevision(revision)) throw new Error('Bitte den Grundriss neu laden.');

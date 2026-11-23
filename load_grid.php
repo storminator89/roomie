@@ -4,6 +4,7 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/room_access.php';
 require_once __DIR__ . '/booking_approvals.php';
+require_once __DIR__ . '/room_photo_store.php';
 header('Cache-Control: private, no-store');
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -22,6 +23,7 @@ try {
     $admin = isAdmin();
     $rooms = roomieListRooms($db, $userId, $admin);
     $approvalRooms = array_fill_keys(roomieApprovalRoomIds($db), true);
+    $photoRooms = array_fill_keys(roomiePhotoIds($db), true);
     $granted = [];
     if ($admin) {
         // Admins may see restricted rooms without being permitted to book them.
@@ -31,6 +33,7 @@ try {
     }
     foreach ($rooms as &$room) {
         $room['requires_approval'] = isset($approvalRooms[(int) $room['id']]);
+        $room['has_photo'] = isset($photoRooms[(int) $room['id']]);
         $room['can_book'] = !$admin
             || !in_array($room['type'], ROOMIE_RESTRICTED_ROOM_TYPES, true)
             || isset($granted[(int) $room['id']]);

@@ -104,10 +104,16 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     const zoneTools = el('div', null, 'rp-fe-tools');
     zoneTools.append(label('Raum', zoneRoom), cancelDraw, undo, deleteZone);
     const roomManager = createFloorRoomManager({
-        rooms,
+        rooms, api,
         getSelectedRoom: () => selectedRoom,
         onSave: saveRoom,
         onSaved: () => { if (alive) zoneRoom.focus(); },
+        onPhotoChanged: async (id, hasPhoto) => {
+            if (!alive || !roomData.has(id)) return;
+            roomData.set(id, {...roomData.get(id), hasPhoto});
+            roomManager.setRooms([...roomData.values()]);
+            await onRoomsChanged?.();
+        },
     });
     const imageWrap = el('div', null, 'rp-fe-image');
     const overlay = el('div', null, 'rp-fe-overlay');
@@ -285,7 +291,7 @@ export function mountFloorEditor({root, api, plans, initialId, rooms, onChange, 
     }
 
     function canClose() {
-        return !pending && (!dirty() || window.confirm('Ungespeicherte Zonen verwerfen?'));
+        return !roomManager.isBusy() && (!dirty() || window.confirm('Ungespeicherte Zonen verwerfen?'));
     }
 
     async function perform(action, applyResult) {

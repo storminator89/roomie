@@ -7,7 +7,7 @@ Roomie is a web application for managing and booking rooms in an office building
 - **Dashboard:** See your current or next booking, jump to the floor plan, or book several days.
 - **Floor plans:** Upload PNG/JPEG plans, draw room zones and find available rooms directly on the plan. The room list and the legacy grid remain available.
 - **Bookings:** See upcoming bookings, download an ICS file and cancel when eligible. Book a free time window, plan a weekly series or request approval for rooms that require it.
-- **Rooms:** Find rooms by name or number and keep frequently used rooms in Favorites.
+- **Rooms:** Find rooms by name or number and keep frequently used rooms in Favorites. Room cards and details show an illustration matched to the room type and equipment, or the room’s own photo.
 - **Administration:** Manage room closures, booking requests, accounts and room permissions. Account deletion has a separate confirmation.
 
 ## Technologies
@@ -86,6 +86,11 @@ Older screenshots, for reference:
   configure PHP to mark the session cookie Secure.
 - Avatar uploads use PHP GD and private storage next to the configured database.
   Old public uploads are not reused.
+- Administrators can add, replace, or remove a room photo in the room editor.
+  Photos use private SQLite storage (included in private backups), respect room
+  visibility, and are resized and stripped of metadata with PHP GD. Uploads
+  accept JPEG, PNG and WebP where those formats are enabled in GD. Allow at least
+  5 MiB for a file and a slightly larger multipart request in PHP/web server limits.
 
 ## Room plan
 

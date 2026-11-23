@@ -1,3 +1,5 @@
+import { createRoomPhotoEditor } from './room-photo-editor.js';
+
 const types = Object.freeze({
     office:'Büro', meeting:'Besprechungsraum', 'open-office':'Großraumbüro',
     mediaroom:'Mediaraum', 'shared-desk':'Shared Desk', 'spez-abt-buero':'Abteilungsbüro',
@@ -32,7 +34,7 @@ function input(name, type, options = {}) {
     return Object.assign(el('input'), { name, type }, options);
 }
 
-export function createFloorRoomManager({ rooms = [], getSelectedRoom, onSave, onSaved }) {
+export function createFloorRoomManager({ rooms = [], getSelectedRoom, onSave, onSaved, api, onPhotoChanged }) {
     let records = new Map();
     let pending = false;
     let submitting = false;
@@ -86,22 +88,27 @@ export function createFloorRoomManager({ rooms = [], getSelectedRoom, onSave, on
     const submit = button('Raum speichern', 'rp-fe-primary');
     submit.type = 'submit';
     actions.append(cancel, submit);
-    form.append(inputs, equipment, caution, error, actions);
+    const photoEditor = api && createRoomPhotoEditor({api, onBusy: refresh, onChanged: onPhotoChanged});
+    form.append(inputs, equipment, caution, error);
+    if (photoEditor) form.append(photoEditor.element);
+    form.append(actions);
     dialog.append(heading, form);
     element.append(add, edit, dialog);
 
     const selected = () => records.get(getSelectedRoom()) ?? null;
+    const isBusy = () => Boolean(pending || submitting || photoEditor?.isBusy());
     function refresh() {
-        const busy = pending || submitting;
+        const busy = isBusy();
         const room = selected();
         add.disabled = busy;
         edit.disabled = busy || !room;
         edit.setAttribute('aria-label', room ? `Raum bearbeiten: ${room.name}` : 'Raum bearbeiten');
         for (const field of [name, number, type, capacity, ...checkboxes.values()]) field.disabled = busy || hasUnsupported;
         submit.disabled = busy || hasUnsupported;
-        submit.textContent = busy ? 'Wird gespeichert …' : 'Raum speichern';
+        submit.textContent = submitting ? 'Wird gespeichert …' : 'Raum speichern';
         cancel.disabled = busy;
-        if (busy) form.setAttribute('aria-busy', 'true');
+        photoEditor?.setLocked(pending || submitting);
+        if (submitting) form.setAttribute('aria-busy', 'true');
         else form.removeAttribute('aria-busy');
     }
 
@@ -116,7 +123,7 @@ export function createFloorRoomManager({ rooms = [], getSelectedRoom, onSave, on
     }
 
     function open(room, trigger) {
-        if (pending || submitting || dialog.open) return;
+        if (isBusy() || dialog.open) return;
         editing = room?.id ?? null;
         opener = trigger;
         equipment.open = false;
@@ -133,6 +140,7 @@ export function createFloorRoomManager({ rooms = [], getSelectedRoom, onSave, on
         caution.textContent = hasUnsupported ? 'Dieser Raum enthält alte Typ- oder Ausstattungsdaten. Bearbeiten ist hier gesperrt, damit sie erhalten bleiben.' : '';
         caution.hidden = !hasUnsupported;
         for (const [key, field] of checkboxes) field.checked = known.includes(key);
+        photoEditor?.setRoom(room);
         refresh();
         dialog.showModal();
         (hasUnsupported ? cancel : name).focus();
@@ -140,10 +148,11 @@ export function createFloorRoomManager({ rooms = [], getSelectedRoom, onSave, on
 
     listen(add, 'click', () => open(null, add));
     listen(edit, 'click', () => { const room = selected(); if (room) open(room, edit); });
-    listen(cancel, 'click', () => dialog.close());
-    listen(dialog, 'cancel', event => { if (pending || submitting) event.preventDefault(); });
+    listen(cancel, 'click', () => { if (!isBusy()) dialog.close(); });
+    listen(dialog, 'cancel', event => { if (isBusy()) event.preventDefault(); });
     listen(dialog, 'close', () => {
         if (!alive) return;
+        photoEditor?.setRoom(null);
         hasUnsupported = false;
         refresh();
         (opener?.isConnected && !opener.disabled ? opener : add).focus();
@@ -152,7 +161,7 @@ export function createFloorRoomManager({ rooms = [], getSelectedRoom, onSave, on
     });
     listen(form, 'submit', async event => {
         event.preventDefault();
-        if (pending || submitting || hasUnsupported || !dialog.open) return;
+        if (isBusy() || hasUnsupported || !dialog.open) return;
         showError('');
         const title = name.value.trim(), idNumber = number.value.trim();
         for (const [value, field, max, message] of [
@@ -191,9 +200,10 @@ export function createFloorRoomManager({ rooms = [], getSelectedRoom, onSave, on
         }
     });
     setRooms(rooms);
-    return { element, setRooms, refresh, setPending(value) { pending = Boolean(value); refresh(); }, destroy() {
+    return { element, setRooms, refresh, isBusy, setPending(value) { pending = Boolean(value); refresh(); }, destroy() {
         alive = false;
         controller.abort();
+        photoEditor?.destroy();
         if (dialog.open) dialog.close();
         element.remove();
     } };
