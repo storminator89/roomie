@@ -144,6 +144,31 @@ Run `node --test build-files/*.test.mjs` to check the frontend data
 contract without a running PHP server. Run `php build-files/room-search.php`
 for the room-directory search fixtures.
 
+### Optional room check-in
+
+Check-in is off by default. A Roomie administrator can turn it on for an
+individual room in **Room details → Check-in**. Under **Bookings**, the owner
+with current room access can confirm a valid reservation from ten minutes
+before its start until ten minutes after it starts, ending earlier if the
+reservation ends. Times use Europe/Berlin; previously created future bookings
+qualify if their start is not before activation.
+
+The administrator sees today's aggregate of eligible reservations already
+started and how many were self-confirmed. This is not measured presence, and
+a missing confirmation never cancels or releases a booking. Check-in stores
+only a marker for the booking and its room in private SQLite, without identity
+duplication, check-in time, device, IP address or location. Cancelling, moving
+the reservation, changing its owner or disabling the room policy removes
+the corresponding markers. While enabled, markers remain with their bookings
+until a change, deletion or opt-out; private backup retention still applies.
+
+No manual schema step is needed: the private tables are created at the first
+explicit opt-in. Behind an HTTPS reverse proxy, configure the trusted web
+server to provide PHP with the original Host and HTTPS scheme; the endpoint
+does not trust arbitrary forwarded headers. Run
+`php build-files/room-checkin-test.php` for the offline policy and time-window
+checks.
+
 ### Room closures
 
 Admins can choose **Sperrzeiten** on a room's details page and block a future

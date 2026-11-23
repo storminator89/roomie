@@ -2,6 +2,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_calendar.php';
 require_once __DIR__ . '/booking_approvals.php';
+require_once __DIR__ . '/room_checkin.php';
 
 header('Cache-Control: private, no-store');
 if (!isLoggedIn()) {
@@ -102,6 +103,7 @@ $lastDate = $today->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days')->format(
 $bookings = [];
 $ownRequests = [];
 $approvalRooms = [];
+$checkinFlags = [];
 $hasNext = false;
 
 try {
@@ -115,7 +117,7 @@ try {
     }
     [$rule, $params] = roomieBookingAccessSql('r', $user_id, $isAdmin);
     $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
-    $query = "SELECT b.id, r.id AS room_id, r.name AS room_name, b.date, b.start_time, b.end_time, b.user_id,
+    $query = "SELECT b.id, r.id AS room_id, r.name AS room_name, b.date, b.start_time, b.end_time, b.user_id, b.seat_id,
                 CASE WHEN b.user_id = :viewer_id OR :show_details = 1 THEN u.name ELSE 'Belegt' END AS user_name
               FROM bookings b JOIN rooms r ON r.id = $effectiveRoom JOIN users u ON b.user_id = u.id
               WHERE b.date >= :current_date AND ((b.date <= :last_date AND $rule) OR b.user_id = :owner_id)";
@@ -157,6 +159,15 @@ try {
 } catch (PDOException $exception) {
     error_log('Roomie bookings list read failed');
     $error = 'Buchungen nicht verfügbar.';
+}
+// Read attendance flags only for rows owned by the current viewer.
+if ($bookings) {
+    try {
+        $ownBookings = array_filter($bookings, static fn (array $entry): bool => (int) $entry['user_id'] === $user_id);
+        $checkinFlags = roomieCheckinFlags($db, array_values($ownBookings), roomieCheckinNow());
+    } catch (PDOException | UnexpectedValueException) {
+        error_log('Roomie booking check-in status unavailable');
+    }
 }
 function bookingPageUrl(string $scope, string $date = '', string $search = '', int $page = 1): string
 {
@@ -250,6 +261,7 @@ $requestLabels = [
             <?php foreach ($entries as $booking) :
                 $bookingId = (int) $booking['id'];
                 $owner = (int) $booking['user_id'] === $user_id;
+                $checkin = $owner ? ($checkinFlags[$bookingId] ?? null) : null;
                 $startClock = roomieBookingClock($booking['start_time']);
                 $canMove = $owner && !isset($approvalRooms[(int) $booking['room_id']]) && $startClock !== null
                     && ($date > $todayKey || ($date === $todayKey && $startClock > $now->format('H:i:s')));
@@ -262,7 +274,19 @@ $requestLabels = [
                         <h3><?= bookingEscape((string) $booking['room_name']) ?></h3>
                         <p><svg class="rb-icon rb-icon-inline rb-icon-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg><?= bookingEscape($clockLabel) ?> Uhr
                         <?php if ($scope === 'all') : ?> · <?= $owner ? 'Eigene Buchung' : bookingEscape((string) $booking['user_name']) ?><?php endif; ?></p>
+                        <?php if (($checkin['state'] ?? null) === 'checked') : ?>
+                            <span class="rb-request-status">Eingecheckt</span>
+                        <?php endif; ?>
                     </div>
+                    <?php if (($checkin['state'] ?? null) === 'eligible') : ?>
+                        <form class="rb-entry-actions" method="post" action="room_checkin_action.php">
+                            <input type="hidden" name="csrf_token" value="<?= bookingEscape(csrfToken()) ?>">
+                            <input type="hidden" name="action" value="checkin">
+                            <input type="hidden" name="booking_id" value="<?= $bookingId ?>">
+                            <input type="hidden" name="booking_snapshot" value="<?= bookingEscape($checkin['snapshot']) ?>">
+                            <button type="submit" class="roomplan-action" aria-label="<?= bookingEscape('Einchecken: ' . $booking['room_name'] . ', ' . $clockLabel . ' Uhr') ?>">Einchecken</button>
+                        </form>
+                    <?php endif; ?>
                     <?php if ($owner) : ?>
                     <details class="rb-more rb-row-options" name="rb-booking-row"<?= $reopenMove ? ' open' : '' ?>>
                         <summary class="rb-icon-row" aria-label="<?= bookingEscape($optionLabel) ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Optionen</summary>

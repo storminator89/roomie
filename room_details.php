@@ -7,6 +7,7 @@ require_once __DIR__ . '/room_blocks.php';
 require_once __DIR__ . '/booking_approvals.php';
 require_once __DIR__ . '/room_visual.php';
 require_once __DIR__ . '/room_photo_store.php';
+require_once __DIR__ . '/room_checkin.php';
 
 if (!isLoggedIn()) {
     header("Location: login.php");
@@ -212,6 +213,21 @@ usort($occupancy, static fn (array $a, array $b): int =>
     [$a['start_time'], $a['end_time']] <=> [$b['start_time'], $b['end_time']]);
 $prev = parseBookingDate($parsedDate->modify('-1 day')->format('Y-m-d'));
 $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
+$checkinEnabled = null;
+$checkinReport = null;
+$checkinPolicyUpdated = false;
+if ($admin) {
+    try {
+        $checkinEnabled = roomieCheckinRoomPolicy($db, $room_id);
+        if ($checkinEnabled) {
+            $checkinReport = roomieCheckinRoomReport($db, $room_id, roomieCheckinNow());
+        }
+        $checkinPolicyUpdated = ($_GET['checkin_policy'] ?? null) === ($checkinEnabled ? '1' : '0');
+    } catch (PDOException | UnexpectedValueException) {
+        $checkinEnabled = null;
+        error_log('Roomie room check-in policy or report unavailable');
+    }
+}
 ?>
 <!doctype html>
 <html lang="de">
@@ -270,6 +286,25 @@ $next = parseBookingDate($parsedDate->modify('+1 day')->format('Y-m-d'));
             <p class="rb-empty" role="status">Freigabe <?= $requiresApproval ? 'aktiviert' : 'deaktiviert' ?>.</p>
         <?php endif; ?>
     </form>
+    <?php if ($checkinEnabled !== null) : ?>
+    <details class="rb-more" id="rb-room-checkin"<?= $checkinPolicyUpdated ? ' open' : '' ?>>
+        <summary>Check-in · <?= $checkinEnabled ? 'aktiv' : 'aus' ?></summary>
+        <form method="post" action="room_checkin_action.php" class="rb-filter">
+            <input type="hidden" name="csrf_token" value="<?= detailEscape(csrfToken()) ?>">
+            <input type="hidden" name="action" value="policy">
+            <input type="hidden" name="room_id" value="<?= $room_id ?>">
+            <input type="hidden" name="enabled" value="<?= $checkinEnabled ? '0' : '1' ?>">
+            <button type="submit" class="roomplan-action roomplan-action-secondary">Check-in <?= $checkinEnabled ? 'deaktivieren' : 'aktivieren' ?></button>
+        </form>
+        <?php if ($checkinReport !== null) : ?>
+            <p>Heute: <?= (int) $checkinReport['checked'] ?> / <?= (int) $checkinReport['booked'] ?> eingecheckt.</p>
+        <?php endif; ?>
+        <p class="rb-empty"><?= $checkinEnabled ? 'Deaktivieren löscht Check-ins, nicht Buchungen.' : 'Buchungen bleiben auch ohne Check-in bestehen.' ?></p>
+        <?php if ($checkinPolicyUpdated) : ?>
+            <p class="rb-empty" role="status">Check-in <?= $checkinEnabled ? 'aktiviert' : 'deaktiviert' ?>.</p>
+        <?php endif; ?>
+    </details>
+    <?php endif; ?>
     <?php endif; ?>
     <div class="rb-room-columns">
         <section class="roomplan-panel rb-room-panel" aria-labelledby="rb-room-booking-title">
