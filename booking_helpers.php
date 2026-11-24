@@ -91,12 +91,12 @@ function roomieBookingClock(mixed $time): ?string
  */
 function roomieRoomBookingRows(PDO $db, int $roomId, string $date, ?int $excludeBookingId = null): array
 {
-    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
-    $sql = "SELECT b.user_id, b.start_time, b.end_time FROM bookings b
-        WHERE b.date = :day AND $effectiveRoom = :room";
-    if ($excludeBookingId !== null) {
-        $sql .= ' AND b.id <> :excluded';
-    }
+    $select = 'SELECT b.user_id, b.start_time, b.end_time FROM bookings b WHERE b.date = :day';
+    $exclude = $excludeBookingId !== null ? ' AND b.id <> :excluded' : '';
+    // Each branch can use the room/date index; only legacy rows need a seat lookup.
+    $sql = $select . ' AND b.room_id = :room' . $exclude
+        . ' UNION ALL ' . $select . ' AND b.room_id IS NULL'
+        . ' AND EXISTS (SELECT 1 FROM seats s WHERE s.id = b.seat_id AND s.room_id = :room)' . $exclude;
     $stmt = $db->prepare($sql);
     $stmt->bindValue(':room', $roomId, PDO::PARAM_INT);
     $stmt->bindValue(':day', $date, PDO::PARAM_STR);
