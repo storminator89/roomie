@@ -276,3 +276,7 @@ Apache-/PHP-FPM-Setups. Browser-Prüfung mit Beispieldaten: Anmeldung,
 Raumliste und Grundriss, Buchen, Bild-Uploads bei aktivem GD und die
 Admin-Oberflächen auf Desktop und Smartphone-Breite ausprobieren. Beim
 QR-Druck zusätzlich einen echten Ausdruck mit einem Handy scannen.
+
+## Optional: Entra-Abgleich
+
+Gruppenbasierter Benutzerabgleich mit Vorschau und Zeitplan: [Einrichtung und Grenzen](entra.md).

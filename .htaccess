@@ -3,7 +3,7 @@ Options -Indexes -MultiViews
     RewriteEngine On
     RewriteRule "(^|/)(?:\.[^/]*|uploads|build-files|node_modules)(?:/|$)" - [F,END,NC]
 </IfModule>
-<FilesMatch "(?i)^(?:\..*|init_db\.php|schema_hardening\.php|roomplan_shell\.php|roomie_brand_head\.php|series_booking_view\.php|floorplan_helpers\.php|database\.php|room_access\.php|mcp_booking_data\.php|mcp_key_store\.php|room_visual\.php|room_photo_store\.php|room_qr_availability\.php|exchange[_-]availability\.php|room_checkin\.php|room_admin_input\.php|booking_calendar\.php|booking_series_store\.php|series_manage_view\.php|room_insights\.php|room_insights_view\.php|avatars\.php|booking_helpers\.php|room_blocks\.php|booking_approvals\.php|(?:package(?:-lock)?\.json|tailwind\.config\..*)|.*\.(?:db|sqlite|sqlite3)(?:[-.].*)?)$">
+<FilesMatch "(?i)^(?:\..*|init_db\.php|schema_hardening\.php|roomplan_shell\.php|roomie_brand_head\.php|series_booking_view\.php|floorplan_helpers\.php|database\.php|room_access\.php|mcp_booking_data\.php|mcp_key_store\.php|entra_(?:sync|graph)\.php|room_visual\.php|room_photo_store\.php|room_qr_availability\.php|exchange[_-]availability\.php|room_checkin\.php|room_admin_input\.php|booking_calendar\.php|booking_series_store\.php|series_manage_view\.php|room_insights\.php|room_insights_view\.php|avatars\.php|booking_helpers\.php|room_blocks\.php|booking_approvals\.php|(?:package(?:-lock)?\.json|tailwind\.config\..*)|.*\.(?:db|sqlite|sqlite3)(?:[-.].*)?)$">
     Require all denied
 </FilesMatch>
 <Files "mcp.php">
@@ -15,11 +15,11 @@ Options -Indexes -MultiViews
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Referrer-Policy "same-origin"
     Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'; object-src 'none'"
-    <Files "admin_mcp.php">
+    <FilesMatch "^(?:admin_mcp|admin_entra)\.php$">
         Header always set X-Frame-Options "DENY"
         Header always set Referrer-Policy "no-referrer"
         Header always set Content-Security-Policy "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
-    </Files>
+    </FilesMatch>
     <Files "room_qr_print.php">
         Header always set X-Frame-Options "DENY"
         Header always set Referrer-Policy "no-referrer"

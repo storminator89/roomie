@@ -72,3 +72,7 @@ lesen. [Vollständige Betriebsanleitung](docs/betrieb.md)
 - [Exchange-Pilot: Umfang und Prüfplan](docs/exchange-pilot.md)
 
 [Lizenz: GPL-3.0](LICENSE)
+
+### Optionaler Entra-Abgleich
+
+**Konto → Entra-Abgleich** importiert Benutzer aus einer Entra-Gruppe. [Einrichtung und Grenzen](docs/entra.md).

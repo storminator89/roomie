@@ -74,6 +74,10 @@ $roomieSkipTarget = match ($roomieActivePage) {
                             <svg class="roomie-shell-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="10" r="4"/><path d="m11 13 8 8m-4-4 2-2m0 4 2-2"/></svg>
                             <span>MCP-Zugang</span>
                         </a>
+                        <a href="admin_entra.php" <?= $roomieActivePage === 'admin_entra.php' ? 'aria-current="page"' : '' ?>>
+                            <svg class="roomie-shell-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5m11 0a8 8 0 0 0-14-5m-2 5a8 8 0 0 0 14 5"/></svg>
+                            <span>Entra-Abgleich</span>
+                        </a>
                     <?php endif; ?>
                     <div class="roomie-shell-menu-separator"></div>
                     <form method="post" action="logout.php">

@@ -1,0 +1,18 @@
+.entra-admin .admin-top { align-items: center; }
+.entra-badge { border: 1px solid #c8c4de; border-radius: 99px; padding: .25rem .75rem; font-size: .85rem; }
+.entra-fields, .entra-counts { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,13rem),1fr)); gap: .75rem 1rem; }
+.entra-fields input:not([type="checkbox"]), .entra-fields select { min-width: 0; width: 100%; min-height: 44px; }
+.entra-actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: .8rem; }
+.entra-actions button { min-height: 44px; }
+.entra-switch { display: flex; align-items: center; gap: .6rem; min-height: 44px; }
+.entra-admin .entra-help { margin-top: .9rem; }
+.entra-help summary { cursor: pointer; min-height: 44px; display: list-item; align-content: center; }
+.entra-counts > div { background: #f5f4fc; border-radius: .6rem; padding: .55rem .75rem; }
+.entra-counts dt { font-size: .82rem; }
+.entra-counts dd { font-weight: 700; margin: 0; font-size: 1.3rem; }
+.entra-history { padding: 0; list-style: none; margin-bottom: 0; }
+.entra-history li { display: flex; gap: .35rem .8rem; flex-wrap: wrap; padding: .55rem 0; border-top: 1px solid #dddaed; }
+@media (max-width: 42rem) {
+    .entra-fields input, .entra-fields select { font-size: 16px; }
+    .entra-counts { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
