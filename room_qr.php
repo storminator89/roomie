@@ -43,8 +43,7 @@ if ($id !== null) {
         $admin = isAdmin();
         $room = roomieVisibleRoom($db, $id, $userId, $admin);
         if ($room !== null) {
-            $bookable = !$admin || !in_array($room['type'], ROOMIE_RESTRICTED_ROOM_TYPES, true) ||
-                roomieVisibleRoom($db, $id, $userId, false) !== null;
+            $bookable = roomieCanBookRoom($db, $id, $userId) !== null;
             $approval = roomieRoomRequiresApproval($db, $id);
             $state = roomieQrAvailability($now, (int) $room['capacity'], $userId,
                 roomieRoomBookingRows($db, $id, $date), roomieRoomBlocksForDate($db, $id, $date));

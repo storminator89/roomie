@@ -187,6 +187,49 @@ function roomieVisibleRoom(PDO $db, int $roomId, int $userId, bool $isAdmin): ?a
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
+/**
+ * Group policy constrains booking, not room visibility. No configured rule means
+ * the existing room permissions continue to apply unchanged.
+ * @return array<int, true> set of room IDs not bookable by this user
+ */
+function roomieEntraGroupDeniedRoomIds(PDO $db, int $userId, ?int $roomId = null): array
+{
+    $hasRules = $db->query("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'roomie_entra_room_groups'");
+    if ($hasRules->fetchColumn() === false) {
+        return [];
+    }
+    $hasRules->closeCursor();
+    require_once __DIR__ . '/entra_groups.php';
+    $now = time();
+    $sql = "SELECT DISTINCT rule.room_id FROM roomie_entra_room_groups rule
+        WHERE NOT EXISTS (
+            SELECT 1 FROM roomie_entra_room_groups rg
+            JOIN roomie_entra_booking_groups g ON g.id = rg.group_id
+            JOIN roomie_entra_booking_group_users gu ON gu.group_id = g.id
+            JOIN roomie_entra_settings cfg ON cfg.singleton = 1 AND cfg.tenant_id = g.tenant_id
+            WHERE rg.room_id = rule.room_id AND gu.user_id = :uid AND cfg.enabled = 1
+            AND cfg.secret_box <> '' AND g.synced_at BETWEEN :cutoff AND :now
+        )";
+    if ($roomId !== null) {
+        $sql .= ' AND rule.room_id = :room';
+    }
+    $query = $db->prepare($sql);
+    $query->bindValue(':uid', $userId, PDO::PARAM_INT);
+    $query->bindValue(':cutoff', $now - ROOMIE_ENTRA_GROUP_MAX_AGE, PDO::PARAM_INT);
+    $query->bindValue(':now', $now, PDO::PARAM_INT);
+    if ($roomId !== null) {
+        $query->bindValue(':room', $roomId, PDO::PARAM_INT);
+    }
+    $query->execute();
+    return array_fill_keys(array_map('intval', $query->fetchAll(PDO::FETCH_COLUMN)), true);
+}
+
+function roomieCanBookRoom(PDO $db, int $roomId, int $userId): ?array
+{
+    $room = roomieVisibleRoom($db, $roomId, $userId, false);
+    return $room !== null && !roomieEntraGroupDeniedRoomIds($db, $userId, $roomId) ? $room : null;
+}
+
 function roomieBookingJson(array $payload, int $status = 200): void
 {
     http_response_code($status);

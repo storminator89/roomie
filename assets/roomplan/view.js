@@ -677,7 +677,8 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     box.append(header);
     const badges = el('div', 'rp-room-badges');
     badges.append(withIcon(el('span', 'rp-badge', room.capacity === 1 ? '1 Platz' : `${room.capacity} Plätze`), 'users'));
-    if (room.requiresApproval) badges.append(withIcon(el('span', 'rp-badge rp-badge-approval', 'Freigabe nötig'), 'shield'));
+    if (room.canBook === false) badges.append(withIcon(el('span', 'rp-badge', 'Keine Buchungsberechtigung'), 'lock'));
+    if (room.canBook !== false && room.requiresApproval) badges.append(withIcon(el('span', 'rp-badge rp-badge-approval', 'Freigabe nötig'), 'shield'));
     const badgesToShow = new Set([...selectedEquipment, ...normalizeAmenities(room.amenities)]);
     for (const key of [...badgesToShow].slice(0, Math.max(3, selectedEquipment.length))) {
       badges.append(el('span', 'rp-badge', amenities.get(key)));

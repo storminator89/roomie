@@ -104,7 +104,7 @@ function roomieEntraGraphNext(mixed $value, string $path): string
  * @param ?callable(string,string,list<string>,?string,int,int):array{status:int,body:string} $transport
  * @return list<array{id:string,name:string,email:string,enabled:bool}>
  */
-function roomieEntraFetch(array $config, string $secret, ?callable $transport = null): array
+function roomieEntraFetch(array $config, string $secret, ?callable $transport = null, ?int $deadlineNanos = null): array
 {
     $tenant = roomieEntraGraphUuid($config['tenant_id'] ?? null);
     $client = roomieEntraGraphUuid($config['client_id'] ?? null);
@@ -115,7 +115,7 @@ function roomieEntraFetch(array $config, string $secret, ?callable $transport = 
     }
 
     $send = $transport ?? 'roomieEntraGraphHttp';
-    $deadline = hrtime(true) + 45_000_000_000;
+    $deadline = min($deadlineNanos ?? PHP_INT_MAX, hrtime(true) + 45_000_000_000);
     $request = static function (string $method, string $url, array $headers, ?string $body, int $maxBytes) use ($send, $deadline): stdClass {
         $remaining = (int) floor(($deadline - hrtime(true)) / 1_000_000);
         if ($remaining < 1) {
@@ -223,4 +223,11 @@ function roomieEntraFetch(array $config, string $secret, ?callable $transport = 
         $url = roomieEntraGraphNext($response->{'@odata.nextLink'}, $path);
     }
     throw new RoomieEntraGraphException('Microsoft Graph hat zu viele Folgeseiten geliefert. Kein Abgleich ausgeführt.');
+}
+
+/** A shared deadline for a complete room-group refresh, independent of group count. */
+function roomieEntraGroupGraphFetcher(): callable
+{
+    $deadline = hrtime(true) + 45_000_000_000;
+    return static fn (array $config, string $secret): array => roomieEntraFetch($config, $secret, null, $deadline);
 }

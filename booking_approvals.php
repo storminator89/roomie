@@ -157,7 +157,7 @@ function roomieAssertBookingRequestSlot(
     string $start,
     string $end
 ): void {
-    $room = roomieVisibleRoom($db, $roomId, $userId, false);
+    $room = roomieCanBookRoom($db, $roomId, $userId);
     if ($room === null) {
         throw new DomainException('Für diesen Raum fehlt die Buchungsberechtigung.', 403);
     }

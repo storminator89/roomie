@@ -1,0 +1,37 @@
+.eg-main { max-width: 70rem; color: #20243c; }
+.eg-top { margin-bottom: .65rem; }
+.eg-kicker { margin: 0 0 .12rem; color: #585181; font-size: .78rem; font-weight: 750; }
+.eg-tabs { border-bottom: 1px solid #dedbec; padding-bottom: .65rem; }
+.eg-grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr); align-items: start; }
+.eg-card { border-color: #dedbec; min-width: 0; }
+.eg-card-header, .eg-room-status, .eg-item-title { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .45rem .65rem; }
+.eg-card-header h2 { margin: 0; }
+.eg-card-header form, .eg-group-details form { margin: 0; }
+.eg-counter, .eg-pill { display: inline-flex; align-items: center; width: fit-content; padding: .24rem .55rem; border-radius: 99rem; font-size: .75rem; line-height: 1.25; font-weight: 700; }
+.eg-counter { background: #efedf9; color: #4d4775; vertical-align: middle; margin-left: .3rem; }
+.eg-pill-ready { background: #eaf5ee; color: #24603c; }
+.eg-pill-muted { background: #f0edf7; color: #554c77; }
+.eg-pill-rule { background: #fff0c8; color: #664806; }
+.eg-groups { list-style: none; padding: 0; margin: .6rem 0 0; }
+.eg-groups li { border-top: 1px solid #e4e2ed; padding: .65rem 0 .2rem; }
+.eg-item-title strong, .eg-room-status strong, .eg-choice span { min-width: 0; overflow-wrap: anywhere; }
+.eg-meta, .eg-help { color: #515872; font-size: .88rem; margin: .5rem 0 .65rem; overflow-wrap: anywhere; }
+.eg-meta { margin: .12rem 0; }
+.eg-warning { background: #fff5db; color: #624604; border-radius: .6rem; padding: .55rem .7rem; }
+.eg-group-details summary, .eg-add summary, .eg-reset summary { min-height: 44px; align-content: center; color: #554c77; }
+.eg-group-details summary { font-size: .84rem; }
+.eg-add, .eg-reset { margin-top: .55rem; border-top: 1px solid #dedbec; }
+.eg-fields { display: grid; gap: .65rem; margin: 0 0 .65rem; }
+.eg-room-picker { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: .6rem; margin: .65rem 0; }
+.eg-room-status { padding: .64rem .75rem; border-radius: .58rem; background: #f5f3fa; }
+.eg-choice-list { border: 0; min-width: 0; margin: .75rem 0 0; padding: 0; }
+.eg-choice-list legend { font-size: .88rem; font-weight: 750; }
+.eg-choice { min-height: 44px; box-sizing: border-box; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .5rem; border-bottom: 1px solid #e4e2ed; padding: .28rem .15rem; }
+.eg-choice input { width: 1.15rem; height: 1.15rem; accent-color: #5c477b; }
+.eg-choice small { color: #594c74; font-size: .76rem; }
+.eg-reset form { margin-bottom: .45rem; }
+@media (max-width: 48rem) {
+    .eg-grid { grid-template-columns: minmax(0, 1fr); }
+    .eg-grid .eg-card { margin: 0; }
+    .eg-room-picker { grid-template-columns: minmax(0, 1fr) auto; }
+}

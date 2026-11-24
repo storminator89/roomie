@@ -115,6 +115,11 @@ try {
         $checkPermission->closeCursor();
     }
 
+    if ($rejection === null && roomieEntraGroupDeniedRoomIds($db, $userId, $roomId)) {
+        $rejection = 'Für diesen Raum fehlt dir die Entra-Gruppenfreigabe.';
+        $rejectionStatus = 403;
+    }
+
     if ($rejection === null) {
         $approvalRequired = roomieRoomRequiresApproval($db, $roomId);
         if ($approvalIntent === '1' && !$approvalRequired) {

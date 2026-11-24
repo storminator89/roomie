@@ -31,12 +31,13 @@ try {
         $grants->execute([$userId]);
         $granted = array_fill_keys($grants->fetchAll(PDO::FETCH_COLUMN), true);
     }
+    $groupDenied = roomieEntraGroupDeniedRoomIds($db, $userId);
     foreach ($rooms as &$room) {
         $room['requires_approval'] = isset($approvalRooms[(int) $room['id']]);
         $room['has_photo'] = isset($photoRooms[(int) $room['id']]);
-        $room['can_book'] = !$admin
+        $room['can_book'] = !isset($groupDenied[(int) $room['id']]) && (!$admin
             || !in_array($room['type'], ROOMIE_RESTRICTED_ROOM_TYPES, true)
-            || isset($granted[(int) $room['id']]);
+            || isset($granted[(int) $room['id']]));
     }
     unset($room);
     if ($gridConfig && !$admin) {

@@ -111,6 +111,7 @@ $hasNext = false;
 try {
     $db = getDatabaseConnection();
     $approvalRooms = array_fill_keys(roomieApprovalRoomIds($db), true);
+    $groupDenied = roomieEntraGroupDeniedRoomIds($db, $user_id);
     if ($scope === 'mine') {
         $ownRequests = roomieListOwnBookingRequests($db, $user_id);
         if ($filterDate !== '') {
@@ -289,7 +290,8 @@ $requestLabels = [
                 $checkin = $owner ? ($checkinFlags[$bookingId] ?? null) : null;
                 $startClock = roomieBookingClock($booking['start_time']);
                 $future = $startClock !== null && ($date > $todayKey || ($date === $todayKey && $startClock > $now->format('H:i:s')));
-                $canMove = $owner && $future && !isset($approvalRooms[(int) $booking['room_id']]);
+                $deniedForGroup = isset($groupDenied[(int) $booking['room_id']]);
+                $canMove = $owner && $future && !$deniedForGroup && !isset($approvalRooms[(int) $booking['room_id']]);
                 $seriesId = $owner && $future ? ($bookingSeriesIds[$bookingId] ?? null) : null;
                 $reopenMove = $canMove && $bookingId === $editBookingId;
                 $clockLabel = substr((string) $booking['start_time'], 0, 5) . '–' . substr((string) $booking['end_time'], 0, 5);

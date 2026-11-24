@@ -145,6 +145,7 @@ $enabled = $settings['enabled'] ?? false;
     <nav aria-label="Verwaltung"><ul class="admin-tabs">
         <li><a href="admin_users.php">Benutzer</a></li><li><a href="admin_permissions.php">Berechtigungen</a></li>
         <li><a href="admin_mcp.php">MCP-Zugang</a></li><li><a href="admin_entra.php" aria-current="page">Entra</a></li>
+        <li><a href="admin_entra_groups.php">Gruppen &amp; Räume</a></li>
     </ul></nav>
     <?php if ($notice !== null) : ?><p class="admin-ok" role="status"><?= entraEscape($notice) ?></p><?php endif; ?>
     <?php if ($error !== null) : ?><p class="admin-error" role="alert"><?= entraEscape($error) ?></p><?php endif; ?>

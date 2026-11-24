@@ -188,6 +188,11 @@ function roomieEntraSave(PDO $db, array $fields, ?string $newSecret, bool $clear
             interval_minutes = excluded.interval_minutes, revision = excluded.revision, secret_box = excluded.secret_box,
             last_success_epoch = excluded.last_success_epoch';
         $db->prepare($sql)->execute([$config['tenant_id'], $config['client_id'], $config['group_id'], (int) $enabled, $interval, $revision + 1, $box, $lastSuccess]);
+        if ($old !== null && ($newIdentity || $newSecret !== null || $clearSecret || ($old['enabled'] && !$enabled)
+            || $config['group_id'] !== $old['group_id'])) {
+            require_once __DIR__ . '/entra_groups.php';
+            roomieEntraGroupInvalidate($db);
+        }
         return roomieEntraSettings($db);
     });
 }

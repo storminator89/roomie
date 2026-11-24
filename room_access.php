@@ -76,6 +76,13 @@ function roomieListRooms(PDO $db, int $userId, bool $admin): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+function roomieListBookableRooms(PDO $db, int $userId): array
+{
+    $denied = roomieEntraGroupDeniedRoomIds($db, $userId);
+    return array_values(array_filter(roomieListRooms($db, $userId, false),
+        static fn(array $room): bool => !isset($denied[(int) $room['id']])));
+}
+
 function roomieFavoriteIds(PDO $db, int $userId): array
 {
     $stmt = $db->prepare('SELECT room_id FROM user_favorites WHERE user_id = ?');

@@ -57,7 +57,7 @@ function roomieSeriesFormValues(array $raw): array
 /** Read each slot and quota from the transaction's snapshot; disclose no member information. */
 function roomieSeriesInspect(PDO $db, int $userId, array $plan, DateTimeImmutable $today): array
 {
-    $room = roomieVisibleRoom($db, $plan['roomId'], $userId, false);
+    $room = roomieCanBookRoom($db, $plan['roomId'], $userId);
     if ($room === null) {
         throw new RoomieSeriesRejected('Dieser Raum steht dir nicht zur Buchung zur Verfügung.', 403);
     }
@@ -245,7 +245,7 @@ try {
 try {
     // Bookability, not administrator visibility, defines which rooms the form may show.
     if (currentRoomieUser() && (int) $_SESSION['user_id'] === $userId) {
-        $rooms = roomieListRooms($db, $userId, false);
+        $rooms = roomieListBookableRooms($db, $userId);
     }
     if ($method === 'GET' && array_key_exists('room_id', $_GET)) {
         $roomId = roomiePositiveId($_GET['room_id']);

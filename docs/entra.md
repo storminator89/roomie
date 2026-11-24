@@ -15,3 +15,11 @@
 - Bricht eine Graph-Seite ab oder ist die Vorschau nicht mehr gültig, werden keine Benutzeränderungen angewendet. Der Import ist begrenzt (maximal 5.000 Benutzer). Keine Graph-Schreibzugriffe. Kein Tenantzugriff ohne echte App-Daten und Tenant-Freigabe.
 
 **Pause:** „Abgleich aktiv“ ausschalten. **Trennen:** „Zugang entfernen“ löscht das in Roomie gespeicherte Secret und stoppt geplante Läufe; lokale Konten bleiben erhalten. Das Microsoft-Secret und seine Tenant-Freigabe können nur in Entra widerrufen werden.
+
+## Räume nur für bestimmte Gruppen
+
+1. Benutzer aus der Entra-Basisgruppe zunächst unter **Entra-Abgleich** importieren.
+2. Unter **Konto → Berechtigungen → Entra-Raumrechte** die gewünschten Gruppen-IDs und eigene Anzeigenamen hinterlegen. **Gruppen abgleichen** übernimmt ihre direkten, aktiven Mitglieder, sofern diese bereits als Roomie-Konto mit der Entra-Objekt-ID verknüpft sind. Keine Zuordnung allein per E-Mail. Gäste und verschachtelte Gruppen sind nicht enthalten.
+3. Raum wählen und entweder **Wie bisher** oder **Nur gewählte Gruppen** speichern. Mitgliedschaft in mindestens einer gewählten Gruppe reicht; bestehende Raumrechte gelten zusätzlich. Das gilt auch für Administratoren beim Buchen, Verschieben und bei Serien. Administratoren verwalten den Raum weiterhin. Bestehende Buchungen werden nicht gelöscht und können weiter storniert werden.
+
+Nicht geteilte Listen und Rollen werden nicht nach Entra zurückgeschrieben. Der Zeitplan des Entra-Abgleichs aktualisiert auch bereits manuell synchronisierte Raumgruppen. Änderungen in Entra werden beim nächsten erfolgreichen Abgleich wirksam, nicht sofort. Bei fehlendem, deaktiviertem oder älter als 48 Stunden bestätigtem Gruppenstand ist eine gruppenbeschränkte Buchung gesperrt, bis wieder ein aktueller Stand vorliegt. Vor dem Trennen beachten: Raumregeln bleiben bestehen und können vom Roomie-Admin explizit auf **Wie bisher** gestellt werden. Neue Gruppenkonfigurationen zuerst manuell synchronisieren; schlägt ein Gruppenabruf fehl, wird kein Teilstand gespeichert.

@@ -131,6 +131,7 @@ function roomieSeriesChangePreview(PDO $db, int $userId, array $rows, DateTimeIm
     $seats = $db->prepare('SELECT 1 FROM seats WHERE id = ? AND room_id = ?');
     $otherSeat = $db->prepare("SELECT start_time, end_time FROM bookings
         WHERE date = ? AND seat_id = ? AND id NOT IN ($markers)");
+    $groupDenied = $action === 'edit' ? roomieEntraGroupDeniedRoomIds($db, $userId) : [];
     foreach ($rows as $row) {
         $room = roomieVisibleRoom($db, (int) $row['room_id'], $userId, false);
         if ($room === null) {
@@ -138,6 +139,9 @@ function roomieSeriesChangePreview(PDO $db, int $userId, array $rows, DateTimeIm
         }
         $message = null;
         if ($action === 'edit') {
+            if (isset($groupDenied[(int) $row['room_id']])) {
+                throw new RoomieSeriesChangeRejected('Für mindestens einen Raum fehlt dir die Gruppenfreigabe.', 403);
+            }
             $oldStart = roomieBookingClock($row['start_time']);
             $oldEnd = roomieBookingClock($row['end_time']);
             $changed = $changed || roomieBookingClock($start) !== $oldStart || roomieBookingClock($end) !== $oldEnd;

@@ -38,14 +38,8 @@ try {
     }
     $hasPhoto = roomieHasPhoto($db, $room_id);
     $requiresApproval = roomieRoomRequiresApproval($db, $room_id);
-    // An administrator may inspect a restricted room, but booking still needs its grant.
-    $canBookRoom = true;
-    if ($admin && in_array($room['type'], ROOMIE_RESTRICTED_ROOM_TYPES, true)) {
-        $grant = $db->prepare('SELECT 1 FROM permissions WHERE user_id = ? AND room_id = ? LIMIT 1');
-        $grant->execute([$userId, $room_id]);
-        $canBookRoom = (bool) $grant->fetchColumn();
-        $grant->closeCursor();
-    }
+    // A visible room is not necessarily bookable, including for administrators.
+    $canBookRoom = roomieCanBookRoom($db, $room_id, $userId) !== null;
     [$acl, $aclParams] = roomieBookingAccessSql('r', $userId, $admin);
     $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
     $stmt = $db->prepare("SELECT b.start_time, b.end_time, b.user_id, b.user_id = :owner AS own,

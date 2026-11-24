@@ -109,6 +109,7 @@ $permissions = array_slice($permissions, 0, 25);
             <li><a href="admin_users.php"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#person"></use></svg><span>Benutzer</span></span></a></li>
             <li><a href="admin_permissions.php" aria-current="page"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#key"></use></svg><span>Berechtigungen</span></span></a></li>
             <li><a href="admin_mcp.php"><span class="rm-area-label"><svg class="rm-area-icon" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><use href="assets/admin/area-icons.svg#key"></use></svg><span>MCP-Zugang</span></span></a></li>
+            <li><a href="admin_entra_groups.php"><span class="rm-area-label">Entra-Raumrechte</span></a></li>
         </ul>
     </nav>
 

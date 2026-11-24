@@ -22,7 +22,7 @@ $loadFailed = false;
 try {
     $db = getDatabaseConnection();
     // The list reflects the write endpoint's room grants, including for administrators.
-    $rooms = roomieListRooms($db, $userId, false);
+    $rooms = roomieListBookableRooms($db, $userId);
     $approvalRooms = array_fill_keys(roomieApprovalRoomIds($db), true);
     $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
     $query = $db->prepare(

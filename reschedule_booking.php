@@ -79,7 +79,7 @@ try {
     }
 
     $roomId = roomiePositiveId($booking['room_id']);
-    if ($roomId === null || !($room = roomieVisibleRoom($db, $roomId, $userId, false))) {
+    if ($roomId === null || !($room = roomieCanBookRoom($db, $roomId, $userId))) {
         throw new RoomieRescheduleRejected('Für diesen Raum fehlt dir die Buchungsberechtigung.', 403);
     }
     if (roomieRoomRequiresApproval($db, $roomId)) {
