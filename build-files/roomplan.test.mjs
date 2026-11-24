@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const source = await readFile(new URL('../assets/roomplan/api.js', import.meta.url));
-const { normalizeRoomplan, createRoomplanApi } = await import(
+const { normalizeRoomplan, createRoomplanApi, startRoomplanReads } = await import(
     'data:text/javascript;base64,' + source.toString('base64')
 );
 
@@ -119,4 +119,47 @@ test('planner preserves request-only policy, explicit intent, and pending receip
     assert.deepEqual(await api.book({roomId: 2, date: '2026-11-23', period: 'vormittags', approvalRequest: true}), {
         message: 'Anfrage gesendet.', pending: true,
     });
+});
+
+test('initial availability request starts while both plan reads remain pending', async () => {
+    const requests = new Map();
+    const api = createRoomplanApi({fetcher: (url, {signal}) => new Promise(resolve => {
+        requests.set(url, {
+            signal, finish: body => resolve({ok: true, status: 200, json: async () => body}),
+        });
+    })});
+    const signal = new AbortController().signal;
+    const date = '2026-11-24';
+    const {plan, bookings} = startRoomplanReads(api, {signal, bookingDate: date});
+    const url = 'get_bookings.php?start_date=2026-11-24&end_date=2026-11-24&include_blocks=1';
+    assert.deepEqual([...requests.keys()], ['load_grid.php', 'get_user_favorites.php', url]);
+    assert.equal(requests.get(url).signal, bookings.controller.signal);
+    requests.get(url).finish([{room_id: 2, date, blocked: true}]);
+    assert.deepEqual(await bookings.result, {ok: true, value: [{room_id: 2, date, blocked: true}]});
+    requests.get('load_grid.php').finish({data: {rooms: [{id: 2}]}});
+    requests.get('get_user_favorites.php').finish({favorites: [2]});
+    assert.deepEqual((await plan).favorites, [2]);
+});
+
+test('failed speculative availability stays isolated and can be aborted', async () => {
+    const controller = new AbortController();
+    let finishPlan;
+    const api = {
+        loadPlan: () => new Promise(resolve => { finishPlan = resolve; }),
+        loadBookings: (_date, {signal}) => new Promise((resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), {once: true});
+        }),
+    };
+    const {plan, bookings} = startRoomplanReads(api, {signal: controller.signal, bookingDate: '2026-11-24'});
+    bookings.controller.abort();
+    const result = await bookings.result;
+    assert.equal(result.ok, false);
+    assert.equal(result.error.name, 'AbortError');
+    assert.equal(controller.signal.aborted, false);
+    finishPlan({rooms: []});
+    assert.deepEqual(await plan, {rooms: []});
+
+    const reload = startRoomplanReads({loadPlan: async () => ({rooms: []})});
+    assert.equal(reload.bookings, null);
+    assert.deepEqual(await reload.plan, {rooms: []});
 });

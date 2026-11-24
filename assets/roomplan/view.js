@@ -1,4 +1,4 @@
-import { createRoomplanApi } from './api.js';
+import { createRoomplanApi, startRoomplanReads } from './api.js';
 import { matchesRoomSearch, normalizeRoomSearch, renderFloorPosition } from './floor-view.js';
 import { bookingWindowInFuture, firstFreeBookingWindow, periodCanBeBooked, presetBookingWindowOpen, validBookingWindow } from './booking-window.js';
 
@@ -934,12 +934,16 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     }
   }
 
-  async function loadBookings({ announce = true, focusRoom = null } = {}) {
+  async function loadBookings({ announce = true, focusRoom = null, preload = null } = {}) {
     const date = dateInput.value;
+    const usePreload = preload?.date === date && !preload.controller.signal.aborted;
+    if (!usePreload) preload?.controller.abort();
     if (!plan || !dateValue(date)) return;
     const invocation = ++bookingRun;
-    bookingController?.abort();
-    bookingController = new AbortController();
+    if (!usePreload) {
+      bookingController?.abort();
+      bookingController = new AbortController();
+    }
     bookingStatus = 'loading';
     bookingsByRoom = null;
     retry.hidden = true;
@@ -949,7 +953,14 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       render();
     }
     try {
-      const bookings = await api.loadBookings(date, { signal: bookingController.signal });
+      let bookings;
+      if (usePreload) {
+        const result = await preload.result;
+        if (!result.ok) throw result.error;
+        bookings = result.value;
+      } else {
+        bookings = await api.loadBookings(date, { signal: bookingController.signal });
+      }
       if (invocation !== bookingRun) return;
       const next = new Map();
       const ids = new Set(plan.rooms.map(room => room.id));
@@ -988,13 +999,21 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     retry.hidden = true;
     status('Raumplan wird geladen …');
     content.setAttribute('aria-busy', 'true');
+    let preload = null;
     try {
-      const nextPlan = await api.loadPlan({ signal: planController.signal });
+      const reads = startRoomplanReads(api, {
+        signal: planController.signal,
+        bookingDate: !plan && dateValue(dateInput.value) ? dateInput.value : null,
+      });
+      preload = reads.bookings;
+      if (preload) bookingController = preload.controller;
+      const nextPlan = await reads.plan;
       if (invocation !== planRun) return;
       plan = nextPlan;
       if (edit && isAdmin) edit.disabled = false;
-      await loadBookings();
+      await loadBookings({preload});
     } catch (error) {
+      preload?.controller.abort();
       if (invocation !== planRun || error.name === 'AbortError') return;
       loadPlanError = true;
       retry.hidden = false;

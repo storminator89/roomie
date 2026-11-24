@@ -78,6 +78,20 @@ export function normalizeRoomplan(response, availableFavorites = []) {
     return { rooms, rows, cols, layout, favorites, revision };
 }
 
+// Start independent authenticated reads together so the initial date is not
+// queued behind the grid and favorites. Settle early failures even if the view
+// cannot consume them yet (or discards them because the date changed).
+export function startRoomplanReads(api, {signal, bookingDate} = {}) {
+    const plan = api.loadPlan({signal});
+    if (!DAYS.test(bookingDate ?? '')) return {plan, bookings: null};
+    const controller = new AbortController();
+    const result = api.loadBookings(bookingDate, {signal: controller.signal}).then(
+        value => ({ok: true, value}),
+        error => ({ok: false, error}),
+    );
+    return {plan, bookings: {date: bookingDate, controller, result}};
+}
+
 export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
     async function request(path, {body, asJson = false, signal} = {}) {
         const headers = { Accept: 'application/json' };
