@@ -75,4 +75,4 @@ lesen. [Vollständige Betriebsanleitung](docs/betrieb.md)
 
 ### Optionaler Entra-Abgleich
 
-**Konto → Entra-Abgleich** importiert Benutzer aus einer Entra-Gruppe. [Einrichtung und Grenzen](docs/entra.md).
+**Konto → Entra-Abgleich** importiert Benutzer aus einer Entra-Gruppe. Unter **Konto → Berechtigungen → Entra-Raumrechte** legst du fest, welche synchronisierten Gruppen einen Raum buchen dürfen. [Einrichtung und Grenzen](docs/entra.md).

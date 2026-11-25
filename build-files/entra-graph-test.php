@@ -63,10 +63,12 @@ foreach (array_slice($requests, 1) as $request) {
 entraGraphAssert(str_starts_with($requests[1][1], $base . '?$count=true&') && $requests[2][1] === $next,
     'Wrong group selection or continuation');
 
-$snapshot = static function (array $responses) use ($config): array {
-    return roomieEntraFetch($config, 'synthetic', static function () use (&$responses): array {
+$snapshot = static function (array $responses, bool $bookingGroup = false) use ($config): array {
+    $transport = static function () use (&$responses): array {
         return array_shift($responses) ?? throw new LogicException('Unexpected transport call');
-    });
+    };
+    return $bookingGroup ? roomieEntraGroupGraphFetcher($transport)($config, 'synthetic')
+        : roomieEntraFetch($config, 'synthetic', $transport);
 };
 entraGraphAssert($snapshot([$token, $json(['value'=>[]])]) === [], 'Empty valid group should be distinguished from failure');
 entraGraphFailure(fn() => $snapshot([$token, $json(['value'=>(object)[]])]), 'Mitgliederliste');
@@ -82,6 +84,32 @@ entraGraphFailure(fn() => $snapshot([$token, $json(['value'=>[]], 302)]), 'Abfra
 entraGraphFailure(fn() => $snapshot([$token, ['status'=>200,'body'=>str_repeat(' ', 1_048_577)]]), 'vollständige Antwort');
 entraGraphFailure(fn() => roomieEntraFetch(['client_id' => 'bad'] + $config, 'synthetic',
     static fn() => throw new LogicException('Must reject before I/O')), 'ungültig');
+
+$profileFree = ['id' => strtoupper($alice['id']), 'accountEnabled' => true, 'userType' => 'Member'];
+$requestUrls = [];
+$responses = [$token, $json(['value' => [$profileFree, ['userType' => 'Guest']], '@odata.nextLink' => $next]),
+    $json(['value' => [$bob]])];
+$groupRows = roomieEntraGroupGraphFetcher(static function (string $method, string $url) use (&$responses, &$requestUrls): array {
+    $requestUrls[] = $url;
+    return array_shift($responses) ?? throw new LogicException('Unexpected transport call');
+})($config, 'synthetic');
+entraGraphAssert($groupRows === [
+    ['id' => $alice['id'], 'enabled' => true],
+    ['id' => $bob['id'], 'enabled' => false],
+], 'Room groups should accept complete identities without requesting or returning profiles');
+entraGraphAssert($requestUrls[1] === $base . '?$count=true&$top=250&$select=id,accountEnabled,userType'
+    && $requestUrls[2] === $next, 'Room groups must request minimal fields and follow pagination');
+entraGraphFailure(fn() => $snapshot([$token, $json(['value' => [$profileFree]])]), 'unvollständige Benutzerprofile');
+foreach ([
+    array_replace($profileFree, ['accountEnabled' => 'true']),
+    array_replace($profileFree, ['userType' => null]),
+    array_replace($profileFree, ['id' => null]),
+] as $incomplete) {
+    entraGraphFailure(fn() => $snapshot([$token, $json(['value' => [$profileFree], '@odata.nextLink' => $next]),
+        $json(['value' => [$incomplete]])], true), 'unvollständige');
+}
+entraGraphFailure(fn() => $snapshot([$token, $json(['value' => [$profileFree], '@odata.nextLink' => $next]),
+    $json(['value' => [array_replace($profileFree, ['id' => $alice['id']])]])], true), 'doppelte');
 
 foreach ([
     str_replace('graph.microsoft.com', 'untrusted.example.test', $next),
@@ -105,4 +133,4 @@ for ($n = 0; $n < 25; ++$n) {
 }
 entraGraphFailure(fn() => $snapshot($manyPages), 'zu viele Folgeseiten');
 
-echo "Entra Graph: token, direct membership, 2 pages, filtering, bounds and fail-closed validation passed.\n";
+echo "Entra Graph: token, paging, provisioning profiles and profile-independent room membership passed.\n";

@@ -166,30 +166,60 @@ function roomieEntraGroupInvalidate(PDO $db): void
     }
 }
 
-function roomieEntraGroupState(PDO $db, string $tenant): array
+function roomieEntraGroupState(PDO $db, string $tenant, ?int $dueBefore = null): array
 {
     if (!roomieEntraGroupSchemaExists($db)) {
         return [];
     }
-    $stmt = $db->prepare('SELECT id, object_id, sync_version FROM roomie_entra_booking_groups WHERE tenant_id = ? ORDER BY id');
-    $stmt->execute([$tenant]);
+    $sql = 'SELECT id, object_id, sync_version FROM roomie_entra_booking_groups WHERE tenant_id = ?';
+    if ($dueBefore !== null) {
+        $sql .= ' AND synced_at <= ?';
+    }
+    $stmt = $db->prepare($sql . ' ORDER BY id');
+    $stmt->bindValue(1, $tenant, PDO::PARAM_STR);
+    if ($dueBefore !== null) {
+        $stmt->bindValue(2, $dueBefore, PDO::PARAM_INT);
+    }
+    $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/** Fetch complete snapshots outside SQLite's write lock, then replace all current-tenant memberships atomically. */
-function roomieEntraGroupRefresh(PDO $db, array $settings, callable $fetch, ?callable $authorize = null): array
+/** Return the active object IDs from a complete, canonical room-group snapshot. */
+function roomieEntraActiveGroupObjects(array $members): array
+{
+    if (!array_is_list($members) || count($members) > ROOMIE_ENTRA_SYNC_LIMIT) {
+        throw new RoomieEntraSyncException('Die Gruppenmitglieder konnten nicht vollständig geprüft werden.');
+    }
+    $seen = [];
+    foreach ($members as $member) {
+        $id = is_array($member) ? roomieEntraUuid($member['id'] ?? null) : null;
+        if ($id === null || isset($seen[$id]) || !is_bool($member['enabled'] ?? null)) {
+            throw new RoomieEntraSyncException('Die Gruppenmitglieder konnten nicht vollständig geprüft werden.');
+        }
+        $seen[$id] = $member['enabled'];
+    }
+    return array_keys(array_filter($seen));
+}
+
+/** Fetch complete snapshots outside the write lock, then replace the selected memberships atomically. */
+function roomieEntraGroupRefresh(PDO $db, array $settings, callable $fetch, ?callable $authorize = null, bool $scheduled = false): array
 {
     roomieEntraAuthorize($authorize);
     $config = roomieEntraCurrent($db, $settings);
     if (!$config['enabled'] || !$config['has_secret']) {
         throw new RoomieEntraSyncException('Aktiviere zuerst den Entra-Abgleich.');
     }
-    $groups = roomieEntraGroupState($db, $config['tenant_id']);
+    $started = time();
+    if ($scheduled && $config['interval_minutes'] === 0) {
+        return [];
+    }
+    // A new group needs its own manual first sync, without blocking existing groups.
+    $dueBefore = $scheduled ? $started - $config['interval_minutes'] * 60 : null;
+    $groups = roomieEntraGroupState($db, $config['tenant_id'], $dueBefore);
     if ($groups === []) {
         return [];
     }
     $secret = roomieEntraCredential($db, $settings);
-    $started = time();
     $deadline = hrtime(true) + 55_000_000_000;
     $snapshots = [];
     foreach ($groups as $group) {
@@ -197,17 +227,16 @@ function roomieEntraGroupRefresh(PDO $db, array $settings, callable $fetch, ?cal
             throw new RoomieEntraSyncException('Der Gruppenabgleich hat das Zeitlimit erreicht.');
         }
         $groupConfig = array_replace($settings, ['group_id' => $group['object_id']]);
-        $members = roomieEntraCanonicalMembers($fetch($groupConfig, $secret));
-        $snapshots[(int) $group['id']] = array_keys(array_filter($members, static fn(array $m): bool => $m['enabled']));
+        $snapshots[(int) $group['id']] = roomieEntraActiveGroupObjects($fetch($groupConfig, $secret));
     }
     unset($secret);
     if (hrtime(true) >= $deadline) {
         throw new RoomieEntraSyncException('Der Gruppenabgleich hat das Zeitlimit erreicht.');
     }
-    return roomieEntraTransaction($db, static function () use ($db, $settings, $groups, $snapshots, $started, $authorize): array {
+    return roomieEntraTransaction($db, static function () use ($db, $settings, $groups, $snapshots, $started, $authorize, $dueBefore): array {
         roomieEntraAuthorize($authorize);
         $config = roomieEntraCurrent($db, $settings);
-        if (roomieEntraGroupState($db, $config['tenant_id']) !== $groups) {
+        if (roomieEntraGroupState($db, $config['tenant_id'], $dueBefore) !== $groups) {
             throw new RoomieEntraSyncException('Die Gruppen wurden zwischenzeitlich geändert oder erneut abgeglichen.');
         }
         $remove = $db->prepare('DELETE FROM roomie_entra_booking_group_users WHERE group_id = ?');

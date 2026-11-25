@@ -102,9 +102,9 @@ function roomieEntraGraphNext(mixed $value, string $path): string
  * and User.Read.All. Never returns a partial snapshot.
  *
  * @param ?callable(string,string,list<string>,?string,int,int):array{status:int,body:string} $transport
- * @return list<array{id:string,name:string,email:string,enabled:bool}>
+ * @return list<array{id:string,enabled:bool,name?:string,email?:string}>
  */
-function roomieEntraFetch(array $config, string $secret, ?callable $transport = null, ?int $deadlineNanos = null): array
+function roomieEntraFetchMembers(array $config, string $secret, bool $includeProfile, ?callable $transport, ?int $deadlineNanos): array
 {
     $tenant = roomieEntraGraphUuid($config['tenant_id'] ?? null);
     $client = roomieEntraGraphUuid($config['client_id'] ?? null);
@@ -168,8 +168,8 @@ function roomieEntraFetch(array $config, string $secret, ?callable $transport = 
     }
 
     $path = "/v1.0/groups/$group/members/microsoft.graph.user";
-    $url = 'https://graph.microsoft.com' . $path
-        . '?$count=true&$top=250&$select=id,displayName,mail,userPrincipalName,accountEnabled,userType';
+    $fields = $includeProfile ? 'id,displayName,mail,userPrincipalName,accountEnabled,userType' : 'id,accountEnabled,userType';
+    $url = 'https://graph.microsoft.com' . $path . '?$count=true&$top=250&$select=' . $fields;
     $headers = ['Accept: application/json', 'ConsistencyLevel: eventual', 'Authorization: Bearer ' . $token];
     $visited = [];
     $seen = [];
@@ -201,6 +201,15 @@ function roomieEntraFetch(array $config, string $secret, ?callable $transport = 
                 continue;
             }
             $id = roomieEntraGraphUuid($record->id ?? null);
+            if (($record->userType ?? null) !== 'Member' || $id === null || !is_bool($record->accountEnabled ?? null)
+                || isset($seen[$id]) || count($users) >= 5000) {
+                throw new RoomieEntraGraphException('Microsoft Graph hat unvollständige, doppelte oder zu viele Benutzer geliefert. Kein Abgleich ausgeführt.');
+            }
+            $seen[$id] = true;
+            if (!$includeProfile) {
+                $users[] = ['id' => $id, 'enabled' => $record->accountEnabled];
+                continue;
+            }
             $name = is_string($record->displayName ?? null) ? trim($record->displayName) : '';
             $email = '';
             foreach ([$record->mail ?? null, $record->userPrincipalName ?? null] as $candidate) {
@@ -209,12 +218,9 @@ function roomieEntraFetch(array $config, string $secret, ?callable $transport = 
                     break;
                 }
             }
-            if (($record->userType ?? null) !== 'Member' || $id === null || $name === '' || strlen($name) > 255
-                || preg_match('/\p{C}/u', $name) !== 0 || $email === '' || !is_bool($record->accountEnabled ?? null)
-                || isset($seen[$id]) || count($users) >= 5000) {
-                throw new RoomieEntraGraphException('Microsoft Graph hat unvollständige, doppelte oder zu viele Benutzer geliefert. Kein Abgleich ausgeführt.');
+            if ($name === '' || strlen($name) > 255 || preg_match('/\p{C}/u', $name) !== 0 || $email === '') {
+                throw new RoomieEntraGraphException('Microsoft Graph hat unvollständige Benutzerprofile geliefert. Kein Abgleich ausgeführt.');
             }
-            $seen[$id] = true;
             $users[] = ['id' => $id, 'name' => $name, 'email' => $email, 'enabled' => $record->accountEnabled];
         }
         if (!property_exists($response, '@odata.nextLink')) {
@@ -225,9 +231,16 @@ function roomieEntraFetch(array $config, string $secret, ?callable $transport = 
     throw new RoomieEntraGraphException('Microsoft Graph hat zu viele Folgeseiten geliefert. Kein Abgleich ausgeführt.');
 }
 
+/** Provisioning needs a usable profile for every returned member. */
+function roomieEntraFetch(array $config, string $secret, ?callable $transport = null, ?int $deadlineNanos = null): array
+{
+    return roomieEntraFetchMembers($config, $secret, true, $transport, $deadlineNanos);
+}
+
 /** A shared deadline for a complete room-group refresh, independent of group count. */
-function roomieEntraGroupGraphFetcher(): callable
+function roomieEntraGroupGraphFetcher(?callable $transport = null): callable
 {
     $deadline = hrtime(true) + 45_000_000_000;
-    return static fn (array $config, string $secret): array => roomieEntraFetch($config, $secret, null, $deadline);
+    // Room authorization is tied to immutable IDs, not mutable profile fields.
+    return static fn (array $config, string $secret): array => roomieEntraFetchMembers($config, $secret, false, $transport, $deadline);
 }

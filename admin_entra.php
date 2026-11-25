@@ -82,6 +82,14 @@ if ($method === 'POST') {
             }
             unset($_SESSION['roomie_entra_preview']);
             $_SESSION['roomie_entra_notice'] = $action === 'disconnect' ? 'Zugang entfernt.' : 'Gespeichert.';
+            if ($action === 'save' && $fields['enabled']) {
+                require_once __DIR__ . '/entra_groups.php';
+                $needsRefresh = array_filter(roomieEntraGroupList($db),
+                    static fn (array $group): bool => $group['tenant_id'] === strtolower($fields['tenant_id']) && $group['synced_at'] === null);
+                if ($needsRefresh !== []) {
+                    $_SESSION['roomie_entra_notice'] = 'Gruppenstand aktualisieren';
+                }
+            }
             entraRedirect();
         }
         if (($action !== 'preview' && $action !== 'apply') || $settings === null || !$settings['has_secret']) {
@@ -147,7 +155,13 @@ $enabled = $settings['enabled'] ?? false;
         <li><a href="admin_mcp.php">MCP-Zugang</a></li><li><a href="admin_entra.php" aria-current="page">Entra</a></li>
         <li><a href="admin_entra_groups.php">Gruppen &amp; Räume</a></li>
     </ul></nav>
-    <?php if ($notice !== null) : ?><p class="admin-ok" role="status"><?= entraEscape($notice) ?></p><?php endif; ?>
+    <?php if ($notice !== null) : ?>
+        <p class="admin-ok" role="status">
+            <?php if ($notice === 'Gruppenstand aktualisieren') : ?>
+                Gespeichert. <a class="admin-link" href="admin_entra_groups.php">Gruppen jetzt abgleichen</a>
+            <?php else : ?><?= entraEscape($notice) ?><?php endif; ?>
+        </p>
+    <?php endif; ?>
     <?php if ($error !== null) : ?><p class="admin-error" role="alert"><?= entraEscape($error) ?></p><?php endif; ?>
 
     <?php if ($settings && $settings['has_secret']) : ?>

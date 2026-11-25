@@ -5,7 +5,7 @@ if (PHP_SAPI !== 'cli') {
     http_response_code(404);
     exit;
 }
-require_once dirname(__DIR__) . '/entra_groups.php';
+require_once __DIR__ . '/entra-worker.php';
 
 $checks = 0;
 function groupCheck(bool $condition, string $message): void
@@ -138,5 +138,32 @@ groupCheck($group['synced_at'] === null && $group['members'] === 0, 'Rotating th
 $paused = roomieEntraSave($db, array_replace($settings, ['enabled'=>false]), null, false, $allow);
 groupReject(fn() => roomieEntraGroupRefresh($db, $paused, static fn(): array => [groupMember(202)], $allow),
     'Paused integration cannot refresh memberships.');
+
+$settings = roomieEntraSave($db, array_replace($paused, ['enabled'=>true, 'interval_minutes'=>60]), null, false, $allow);
+$minimal = static fn (): array => [['id'=>groupUuid(202), 'enabled'=>true]];
+roomieEntraGroupRefresh($db, $settings, $minimal, $allow);
+$new = roomieEntraGroupAdd($db, $settings, groupUuid(104), 'Noch nicht abgeglichen', $allow);
+$db->prepare('UPDATE roomie_entra_booking_groups SET synced_at = ? WHERE id = ?')->execute([time()-3700, $g3]);
+$db->exec('UPDATE roomie_entra_settings SET last_success_epoch = ' . (time()-3700));
+$failures = roomieEntraWorkerRun($db, static function (): never {
+    throw new RuntimeException('simulated provider error');
+}, static fn (): callable => static function(array $config) use ($minimal): array {
+    if ($config['group_id'] !== groupUuid(100)) {
+        throw new RuntimeException('Only the due initialized group may be read.');
+    }
+    return $minimal();
+});
+groupCheck(count($failures) === 1 && str_contains($failures[0], 'Benutzerabgleich'), 'Base failure reports only the base stage.');
+$indexed = array_column(roomieEntraGroupList($db), null, 'id');
+groupCheck($indexed[$g3]['members'] === 1 && $indexed[$g3]['synced_at'] > time()-60
+    && $indexed[$new]['synced_at'] === null, 'Healthy due group refreshes without user import or first-time group.');
+groupCheck(roomieEntraGroupRefresh($db, $settings, static function(): never {
+    throw new RuntimeException('No provider call expected.');
+}, scheduled: true) === [], 'Fresh and uninitialized groups do not make scheduled Graph calls.');
+groupReject(fn() => roomieEntraGroupRefresh($db, $settings,
+    static fn(): array => [['id'=>groupUuid(202), 'enabled'=>'true']], $allow), 'Non-boolean account state refused.');
+groupReject(fn() => roomieEntraGroupRefresh($db, $settings,
+    static fn(): array => [['id'=>groupUuid(202), 'enabled'=>false], ['id'=>groupUuid(202), 'enabled'=>true]], $allow),
+    'Duplicate identity with conflicting state refused.');
 
 echo "$checks Entra booking-group checks passed.\n";

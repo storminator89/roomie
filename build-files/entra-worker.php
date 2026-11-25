@@ -10,30 +10,42 @@ require_once __DIR__ . '/../entra_sync.php';
 require_once __DIR__ . '/../entra_graph.php';
 require_once __DIR__ . '/../entra_groups.php';
 
-try {
-    $db = getDatabaseConnection();
-    $settings = roomieEntraSettings($db);
-    if (!$settings || !$settings['enabled'] || !$settings['has_secret'] || $settings['interval_minutes'] === 0) {
-        exit(0);
-    }
-    if (roomieEntraIsDue($db, $settings)) {
-        $members = roomieEntraFetch($settings, roomieEntraCredential($db, $settings));
-        roomieEntraApply($db, $settings, $members, true);
+/** @return list<string> Fixed diagnostics only. Keep the two scheduled jobs independent. */
+function roomieEntraWorkerRun(PDO $db, callable $fetchUsers, callable $makeGroupFetcher): array
+{
+    $active = static fn (?array $config): bool => $config && $config['enabled']
+        && $config['has_secret'] && $config['interval_minutes'] > 0;
+    $failures = [];
+    try {
         $settings = roomieEntraSettings($db);
-        if (!$settings || !$settings['enabled'] || !$settings['has_secret'] || $settings['interval_minutes'] === 0) {
-            exit(0);
+        if ($active($settings) && roomieEntraIsDue($db, $settings)) {
+            $members = $fetchUsers($settings, roomieEntraCredential($db, $settings));
+            roomieEntraApply($db, $settings, $members, true);
         }
+    } catch (Throwable) {
+        $failures[] = 'Roomie: Geplanter Entra-Benutzerabgleich fehlgeschlagen.';
     }
-    $groups = array_values(array_filter(roomieEntraGroupList($db),
-        static fn (array $group): bool => $group['tenant_id'] === $settings['tenant_id']));
-    // Newly configured scopes require a successful manual refresh before the worker will read them.
-    if ($groups && !in_array(null, array_column($groups, 'synced_at'), true)
-        && min(array_column($groups, 'synced_at')) <= time() - $settings['interval_minutes'] * 60) {
-        roomieEntraGroupRefresh($db, $settings, roomieEntraGroupGraphFetcher());
+    try {
+        $settings = roomieEntraSettings($db);
+        if ($active($settings)) {
+            roomieEntraGroupRefresh($db, $settings, $makeGroupFetcher(), scheduled: true);
+        }
+    } catch (Throwable) {
+        $failures[] = 'Roomie: Geplanter Entra-Raumgruppenabgleich fehlgeschlagen.';
     }
-    exit(0);
+    return $failures;
+}
+
+if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') !== __FILE__) {
+    return;
+}
+try {
+    $failures = roomieEntraWorkerRun(getDatabaseConnection(), 'roomieEntraFetch', 'roomieEntraGroupGraphFetcher');
+    foreach ($failures as $failure) {
+        fwrite(STDERR, $failure . "\n");
+    }
+    exit($failures === [] ? 0 : 1);
 } catch (Throwable) {
-    // Cron output contains no account attributes, token, secret or provider response.
     fwrite(STDERR, "Roomie: Geplanter Entra-Abgleich nicht abgeschlossen.\n");
     exit(1);
 }
