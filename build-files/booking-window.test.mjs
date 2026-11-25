@@ -65,7 +65,7 @@ test('planner defaults to all rooms and keeps a selected availability range in h
   for (const file of ['view.js', 'api.js', 'floor-view.js', 'booking-window.js']) {
     await copyFile(new URL(`../assets/roomplan/${file}`, import.meta.url), join(root, file));
   }
-  const { readViewLocation, writeViewLocation } = await import(pathToFileURL(join(root, 'view.js')).href);
+  const { readViewLocation, writeViewLocation, sameTimeBookingAlternatives } = await import(pathToFileURL(join(root, 'view.js')).href);
   const today = '2026-11-22';
   const base = 'https://roomie.example.test/raumplan.php';
   const initial = readViewLocation(base, today);
@@ -79,6 +79,26 @@ test('planner defaults to all rooms and keeps a selected availability range in h
   const cleared = writeViewLocation(url, initial, today);
   assert.equal(cleared.href, base);
   assert.equal(readViewLocation(`${base}?start_time=11:16&end_time=11:45`, today).range, null);
+
+  const date = '2026-11-23';
+  const rooms = Array.from({length: 8}, (_, i) => ({
+    id: i + 1, capacity: 1, canBook: i !== 2, requiresApproval: i === 4,
+  }));
+  const rows = [
+    {room_id: 2, date, ...slot('10:15', '10:30')},
+    {room_id: 4, date, ...slot('09:45', '10:00:00')},
+    {room_id: 5, date, ...slot('08:00', '08:30')},
+    {room_id: 6, date, ...slot('10:29:59', '10:31'), blocked: true},
+    {room_id: 7, date, ...slot('invalid', '10:30')},
+    {room_id: 8, date, ...slot('10:00', '10:30', true)},
+    {room_id: 4, date: today, ...slot('10:00', '10:30')},
+  ];
+  const range = {period: 'individuell', start: '10:00', end: '10:30'};
+  const result = sameTimeBookingAlternatives(rooms, rows, {room: rooms[0], date}, range, new Date('2026-11-22T12:00:00Z'));
+  assert.deepEqual(result, [{room: rooms[3], date, booked: [rows[1]]}]);
+  assert.deepEqual(sameTimeBookingAlternatives(rooms, rows, {room: rooms[0], date}, range,
+    new Date('2026-11-23T09:00:00Z')), []);
+
 });
 
 test('first free booking skips all slots inside room maintenance', () => {

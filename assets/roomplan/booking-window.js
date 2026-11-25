@@ -56,7 +56,8 @@ function available(capacity, bookings, a, b) {
       if (start === null || end === null || start >= end || (start < b && end > a)) return false;
       continue;
     }
-    if (start === null || end === null || start >= end || start >= b || end <= a) continue;
+    if (start === null || end === null || start >= end) return false;
+    if (start >= b || end <= a) continue;
     if (row.own === true) return false;
     const from = Math.max(a, start);
     const to = Math.min(b, end);

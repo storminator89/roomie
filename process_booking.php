@@ -74,6 +74,7 @@ $bookings = [];
 $requestId = null;
 $rejection = null;
 $rejectionStatus = 200;
+$rejectionCode = null;
 
 try {
     $db->exec('PRAGMA busy_timeout = 5000');
@@ -179,6 +180,7 @@ try {
                 break;
             }
             if ($conflict === 'capacity') {
+                $rejectionCode = 'ROOM_CAPACITY';
                 $rejection = 'Die Kapazität des Raums am ' . $day->format('d.m.Y') . ' ist bereits erreicht.';
                 break;
             }
@@ -213,8 +215,9 @@ try {
     exit;
 }
 if ($rejection !== null) {
-    http_response_code($rejectionStatus);
-    bookingError($rejection);
+    $payload = ['success' => false, 'error' => $rejection];
+    if ($rejectionCode !== null) $payload['code'] = $rejectionCode;
+    roomieBookingJson($payload, $rejectionStatus);
     exit;
 }
 if ($requestId !== null) {
@@ -227,6 +230,7 @@ if ($requestId !== null) {
 $mailSent = roomieSendBookingMail($bookings, (string) $user['email']);
 echo json_encode([
     'success' => true,
+    'booking_id' => count($bookings) === 1 ? (int) $bookings[0]['id'] : null,
     'message' => $mailSent
         ? 'Buchung erfolgreich erstellt. Bestätigungs-E-Mail wurde zum Versand angenommen.'
         : (roomieMailFrom() === null ? 'Buchung erfolgreich erstellt.'

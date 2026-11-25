@@ -320,6 +320,8 @@ html:has(body.roomplan-page > #roomplan), body.roomplan-page:has(> #roomplan) { 
     border-inline-start: 2px solid var(--roomplan-accent); background: var(--roomplan-accent-surface);
     font-size: .875rem;
 }
+.rp-book-alternatives:not([hidden]) { display: grid; gap: .35rem; margin-block-start: .45rem; }
+.rp-book-alternatives button { justify-content: flex-start; text-align: start; white-space: normal; overflow-wrap: anywhere; }
 .rp-dialog-actions { justify-content: flex-end; margin-block-start: .9rem; }
 
 .rp-floor-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; min-width: 0; max-width: 100%; }

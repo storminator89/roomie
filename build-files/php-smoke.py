@@ -433,7 +433,8 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
            description="A double-linked reservation counts once and adjacent reservations do not accumulate")
     _, capacity_conflict = submit(fields("Capacity", "10:15", "10:30"), actor=admin, token=admin_token, expected=False,
                                   description="A third overlapping booking must fail when one place is seat-only")
-    expect("Kapazität" in capacity_conflict.get("error", ""), "Expect capacity, not an own-booking rejection")
+    expect("Kapazität" in capacity_conflict.get("error", "") and capacity_conflict.get("code") == "ROOM_CAPACITY",
+           "Expect typed capacity, not an own-booking rejection")
     code, _, raw = user.request('get_bookings.php?' + urlencode({"room_id": rooms["Capacity"], "start_date": date}))
     capacity_rows = json.loads(raw)
     expect(code == 200 and len(capacity_rows) == 3 and all(row["room_id"] == rooms["Capacity"] for row in capacity_rows),
@@ -1512,6 +1513,12 @@ def smoke(php, root, scratch, expected_minor):
                     if (count($rows) !== 1) { fwrite(STDERR, 'Expected exactly one booking'); exit(1); }
                     echo $rows[0];
                 """], root, env)
+                expect(json.loads(body).get("booking_id") == int(booking_id),
+                       "Confirmed single booking must include the calendar link ID")
+                status, _, dashboard = user.request("index.php")
+                expect(status == 200 and 'raumplan.php?view=list&amp;free=1&amp;' in dashboard
+                       and 'Freien Raum finden' in dashboard and 'start_time=' in dashboard,
+                       "Dashboard must open the list filtered to a suggested free interval")
                 for actor, can_manage in ((admin, True), (user, False)):
                     status, _, html = actor.request("rooms.php")
                     expect(status == 200 and ('raumplan.php?manage=1' in html) == can_manage,

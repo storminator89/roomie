@@ -184,6 +184,24 @@ export function preferredBookingPeriod(range, date, room, availability, now = ne
     && periodCanBeBooked(room.capacity, availability.booked, start, end) ? customPeriod : null;
 }
 
+export function sameTimeBookingAlternatives(rooms, bookings, attempted, {period, start, end}, now = new Date()) {
+  if (!validBookingWindow(start, end)) return [];
+  const byRoom = new Map();
+  for (const row of bookings) {
+    if (row.date !== attempted.date) continue;
+    const id = Number(row.room_id);
+    if (!byRoom.has(id)) byRoom.set(id, []);
+    byRoom.get(id).push(row);
+  }
+  return rooms.flatMap(room => {
+    if (room.id === attempted.room.id || room.canBook !== true || room.requiresApproval !== attempted.room.requiresApproval) return [];
+    const timeOpen = period === customPeriod ? bookingWindowInFuture(attempted.date, start, now)
+      : presetBookingWindowOpen(attempted.date, start, end, room.requiresApproval, now);
+    const booked = byRoom.get(room.id) ?? [];
+    return timeOpen && periodCanBeBooked(room.capacity, booked, start, end) ? [{room, date: attempted.date, booked}] : [];
+  });
+}
+
 function dateValue(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000-')) return false;
   const dt = new Date(`${value}T00:00:00Z`);
@@ -522,23 +540,88 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   const feedback = el('div', 'rp-dialog-feedback');
   feedback.setAttribute('role', 'status');
   feedback.setAttribute('aria-live', 'polite');
+  const alternatives = el('div', 'rp-book-alternatives');
+  alternatives.hidden = true;
   const actions = el('div', 'rp-dialog-actions');
   const close = button('Abbrechen', secondaryButton);
   const submit = withIcon(button('Buchen', 'roomplan-action rp-button rp-button-primary'), 'calendarPlus');
   submit.type = 'submit';
   actions.append(close, submit);
-  roomForm.append(choices, feedback, actions);
+  roomForm.append(choices, feedback, alternatives, actions);
   dialog.append(dialogTitle, dialogDate, approvalNote, roomForm);
   view.append(dialog);
   let selectedBooking = null;
   let bookPending = false;
+  let bookingOutcomeUnknown = false;
 
   function syncCustomControls() {
     const isCustom = choices.querySelector('input:checked')?.value === customPeriod;
     customControls.root.hidden = !isCustom;
     customControls.start.disabled = customControls.end.disabled = !isCustom;
   }
-  choices.addEventListener('change', syncCustomControls);
+  function clearAlternatives() {
+    alternatives.replaceChildren();
+    alternatives.hidden = true;
+  }
+
+  choices.addEventListener('change', () => {
+    syncCustomControls();
+    if (bookingOutcomeUnknown) return;
+    clearAlternatives();
+    feedback.textContent = '';
+  });
+
+  function labelBookingRoom(room) {
+    dialogTitle.textContent = room.name + (room.requiresApproval ? ' anfragen' : ' buchen');
+    submit.replaceChildren(icon(room.requiresApproval ? 'send' : 'calendarPlus'), room.requiresApproval ? 'Anfrage senden' : 'Buchen');
+    approvalNote.hidden = !room.requiresApproval;
+  }
+
+  async function offerSameTimeAlternatives(attempted, period, start, end) {
+    feedback.textContent = 'Raum nicht verfügbar. Alternativen werden geprüft …';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    let freshPlan, freshBookings;
+    try {
+      const options = {signal: controller.signal};
+      [freshPlan, freshBookings] = await Promise.all([api.loadPlan(options), api.loadBookings(attempted.date, options)]);
+    } finally {
+      clearTimeout(timeout);
+      controller.abort();
+    }
+    if (!dialog.open || selectedBooking !== attempted || dateInput.value !== attempted.date) return;
+    const favorite = room => freshPlan.favorites.includes(room.id);
+    const candidates = freshPlan.rooms.filter(room => (!onlyFavorites || favorite(room))
+      && matchesRoomSearch(`${room.number ?? ''} ${room.name ?? ''}`, floorFilters.query)
+      && matchesRoomAmenities(room, selectedEquipment))
+      .sort((a, b) => Number(favorite(b)) - Number(favorite(a)));
+    const matches = sameTimeBookingAlternatives(candidates, freshBookings, attempted, {period, start, end}).slice(0, 3);
+    feedback.textContent = matches.length ? `Raum nicht verfügbar. Frei von ${start}–${end} Uhr:`
+      : 'Kein anderer passender Raum für diese Zeit frei.';
+    for (const match of matches) {
+      const option = button(match.room.name, secondaryButton);
+      option.addEventListener('click', () => {
+        if (bookPending || selectedBooking !== attempted || dateInput.value !== attempted.date) return;
+        selectedBooking = match;
+        labelBookingRoom(match.room);
+        for (const radio of choices.querySelectorAll('input[type=radio]')) {
+          const preset = periods.find(([id]) => id === radio.value);
+          const now = new Date();
+          radio.disabled = preset ? (!presetBookingWindowOpen(match.date, preset[2], preset[3], match.room.requiresApproval, now)
+            || !periodCanBeBooked(match.room.capacity, match.booked, preset[2], preset[3]))
+            : !firstFreeBookingWindow(match.room.capacity, match.booked, match.date, now);
+        }
+        const chosen = choices.querySelector('input:checked');
+        submit.disabled = !chosen || chosen.disabled;
+        syncCustomControls();
+        clearAlternatives();
+        feedback.textContent = `${match.room.name} ausgewählt · ${start}–${end} Uhr`;
+        (submit.disabled ? close : submit).focus();
+      });
+      alternatives.append(option);
+    }
+    alternatives.hidden = matches.length === 0;
+  }
 
   function openBooking(room, opener) {
     const now = new Date();
@@ -546,9 +629,9 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     const { booked, presets, custom } = availability;
     trigger = opener;
     selectedBooking = { room, date: dateInput.value, booked };
-    dialogTitle.textContent = room.name + (room.requiresApproval ? ' anfragen' : ' buchen');
-    submit.replaceChildren(icon(room.requiresApproval ? 'send' : 'calendarPlus'), room.requiresApproval ? 'Anfrage senden' : 'Buchen');
-    approvalNote.hidden = !room.requiresApproval;
+    bookingOutcomeUnknown = false;
+    clearAlternatives();
+    labelBookingRoom(room);
     dialogDate.textContent = dateLabel(selectedBooking.date);
     feedback.textContent = '';
     choices.replaceChildren(periodLegend);
@@ -591,7 +674,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   });
   roomForm.addEventListener('submit', async event => {
     event.preventDefault();
-    if (!selectedBooking || bookPending) return;
+    if (!selectedBooking || bookPending || bookingOutcomeUnknown) return;
     const period = new FormData(roomForm).get('period');
     const custom = period === customPeriod;
     const preset = periods.find(item => item[0] === period);
@@ -613,6 +696,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       return;
     }
     bookPending = true;
+    clearAlternatives();
     submit.disabled = true;
     close.disabled = true;
     choices.disabled = true;
@@ -630,16 +714,35 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
         requests.href = 'bookings.php#rb-booking-requests';
         notice.append(document.createTextNode(' '), requests);
       } else {
-        status(result.message || 'Buchung gespeichert.');
+        status(`${attempted.room.name} gebucht · ${custom ? startTime : preset[2]}–${custom ? endTime : preset[3]} Uhr.`);
+        const bookedLink = el('a', 'rp-request-link', result.bookingId ? 'Zum Kalender (.ics)' : 'Meine Buchungen');
+        bookedLink.href = result.bookingId ? 'bookings.php?' + new URLSearchParams({
+          download: 'calendar', booking_id: String(result.bookingId),
+        }) : 'bookings.php?' + new URLSearchParams({date: attempted.date});
+        notice.append(document.createTextNode(' '), bookedLink);
         await loadBookings({ announce: false, focusRoom: attempted.room.id });
       }
     } catch (error) {
       feedback.textContent = error.message || 'Buchung war nicht möglich.';
+      if (error.code === 'ROOM_CAPACITY') {
+        try {
+          await offerSameTimeAlternatives(attempted, period, custom ? startTime : preset[2], custom ? endTime : preset[3]);
+        } catch {
+          feedback.textContent = 'Raum nicht verfügbar. Alternativen konnten nicht geprüft werden.';
+        }
+      } else if (error.code === 'BOOKING_OUTCOME_UNKNOWN') {
+        bookingOutcomeUnknown = true;
+        const check = el('a', 'rp-request-link', attempted.room.requiresApproval ? 'Meine Anfragen' : 'Meine Buchungen');
+        check.href = attempted.room.requiresApproval ? 'bookings.php#rb-booking-requests' : 'bookings.php?' + new URLSearchParams({date: attempted.date});
+        feedback.append(document.createTextNode(' '), check);
+      }
     } finally {
       bookPending = false;
-      submit.disabled = false;
+      submit.disabled = bookingOutcomeUnknown;
       close.disabled = false;
-      choices.disabled = false;
+      choices.disabled = bookingOutcomeUnknown;
+      if (!alternatives.hidden) alternatives.querySelector('button')?.focus();
+      else if (bookingOutcomeUnknown) feedback.querySelector('a')?.focus();
     }
   });
 
@@ -896,6 +999,10 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     const visibleSlots = slots.map(room => room && visibleIds.has(room.id) ? room : null);
     if (onlyFavorites || listMode || !visibleSlots.some(Boolean)) {
       const list = el('div', 'rp-list');
+      if (onlyFree) {
+        const favorites = new Set(plan.favorites);
+        visible.sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)));
+      }
       list.append(...visible.map(drawCard));
       content.replaceChildren(list);
     } else {
@@ -978,7 +1085,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       if (invocation !== bookingRun || error.name === 'AbortError') return;
       bookingStatus = 'error';
       retry.hidden = false;
-      status(error.message || 'Belegung konnte nicht geladen werden.', true);
+      if (announce) status(error.message || 'Belegung konnte nicht geladen werden.', true);
     } finally {
       if (invocation === bookingRun) {
         content.setAttribute('aria-busy', 'false');

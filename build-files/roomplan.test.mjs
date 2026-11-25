@@ -163,3 +163,20 @@ test('failed speculative availability stays isolated and can be aborted', async 
     assert.equal(reload.bookings, null);
     assert.deepEqual(await reload.plan, {rooms: []});
 });
+
+
+test('booking recovery requires a typed capacity result, not 409 or an unknown outcome', async () => {
+    const selection = {roomId: 7, date: '2026-11-22', period: 'vormittags'};
+    const fixture = (status, json) => createRoomplanApi({fetcher: async () => ({
+        ok: status < 400, status, json: async () => json,
+    })});
+    await assert.rejects(fixture(200, {success: false, error: 'Belegt', code: 'ROOM_CAPACITY'}).book(selection),
+        {code: 'ROOM_CAPACITY'});
+    await assert.rejects(fixture(409, {success: false, error: 'Freigabe geändert'}).book(selection),
+        error => error.code === undefined && error.message === 'Freigabe geändert');
+    await assert.rejects(fixture(502, null).book(selection), {code: 'BOOKING_OUTCOME_UNKNOWN'});
+    await assert.rejects(createRoomplanApi({fetcher: async () => {throw new Error('Offline');}}).book(selection),
+        {code: 'BOOKING_OUTCOME_UNKNOWN'});
+    assert.deepEqual(await fixture(200, {success: true, booking_id: 42, message: 'Gebucht'}).book(selection),
+        {message: 'Gebucht', bookingId: 42});
+});

@@ -93,10 +93,12 @@ export function startRoomplanReads(api, {signal, bookingDate} = {}) {
 }
 
 export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
-    async function request(path, {body, asJson = false, signal} = {}) {
+    async function request(path, {body, asJson = false, signal, booking = false} = {}) {
         const headers = { Accept: 'application/json' };
         if (body !== undefined) headers['X-CSRF-Token'] = csrf ?? '';
         if (asJson) headers['Content-Type'] = 'application/json';
+        const unknownBooking = () => Object.assign(
+            new Error('Buchung nicht bestätigt. Prüfe zuerst deine Buchungen.'), {code: 'BOOKING_OUTCOME_UNKNOWN'});
         let response;
         try {
             response = await fetcher(path, {
@@ -109,12 +111,17 @@ export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
             });
         } catch (error) {
             if (error?.name === 'AbortError') throw error;
+            if (booking) throw unknownBooking();
             throw new Error('Verbindung unterbrochen. Bitte erneut versuchen.');
         }
         if (response.status === 401) throw new Error('Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.');
         const payload = await response.json().catch(() => null);
+        if (booking && (!payload || response.status >= 500
+            || (response.ok && payload.success !== true && payload.success !== false))) throw unknownBooking();
         if (!response.ok || !payload || payload.success === false || (typeof payload.error === 'string' && !Array.isArray(payload))) {
-            throw new Error(payload?.error || payload?.message || 'Die Aktion war nicht möglich. Bitte erneut versuchen.');
+            const error = new Error(payload?.error || payload?.message || 'Die Aktion war nicht möglich. Bitte erneut versuchen.');
+            if (booking && payload?.success === false && payload.code === 'ROOM_CAPACITY') error.code = payload.code;
+            throw error;
         }
         return payload;
     }
@@ -205,8 +212,10 @@ export function createRoomplanApi({csrf, fetcher = globalThis.fetch} = {}) {
                 body.set('end_time', endTime);
             }
             if (approvalRequest) body.set('approval_request', '1');
-            const payload = await request('process_booking.php', {body});
-            return {message: payload.message, ...(payload.pending === true ? {pending: true} : {})};
+            const payload = await request('process_booking.php', {body, booking: true});
+            const bookingId = positiveId(payload.booking_id);
+            return {message: payload.message, ...(payload.pending === true ? {pending: true} : {}),
+                ...(bookingId && payload.pending !== true ? {bookingId} : {})};
         },
         async saveLayout(layout) {
             // Never downgrade a new editor session to an unlocked legacy write.
