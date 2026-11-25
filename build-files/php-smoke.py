@@ -284,7 +284,7 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
             seat = None
             if links in ("seat", "both"):
                 seat = db.execute("INSERT INTO seats (room_id, top, left_pos) VALUES (?, '0', '0')",
-                                  (rooms[room],)).lastrowid
+                                  (rooms["Race" if links == "both" else room],)).lastrowid
             fixture_bookings[room] = db.execute(
                 "INSERT INTO bookings (user_id, room_id, seat_id, date, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?)",
                 (who, rooms[room] if links != "seat" else None, seat, on, start, end)).lastrowid
@@ -394,6 +394,15 @@ def smoke_flexible_bookings(command, root, env, date, guest, admin, admin_status
         "room_id": rooms["Own overlap"], "year": date[:4], "month": int(date[5:7]),
     }))
     expect(code == 200 and json.loads(raw) == [date], "A seat-only reservation must appear in monthly occupancy")
+    for room, status, days in (("Capacity", 200, [date]), ("Race", 200, []), ("Restricted", 404, None)):
+        code, _, raw = user.request('get_monthly_bookings.php?' + urlencode({
+            "room_id": rooms[room], "year": date[:4], "month": int(date[5:7]),
+        }))
+        expect(code == status and (days is None or json.loads(raw) == days),
+               f"Monthly occupancy must preserve scope and distinct dates: {room}")
+    code, _, raw = user.request('get_bookings.php?' + urlencode({"room_id": rooms["Race"], "start_date": date}))
+    expect(code == 200 and json.loads(raw) == [],
+           "An explicit room must take precedence over a seat in a different room")
     code, _, html = user.request('bookings.php?' + urlencode({"date": date}))
     expect(code == 200 and 'QA Flex Own overlap' in html
            and f'download=calendar&amp;booking_id={fixture_bookings["Own overlap"]}' in html,

@@ -108,6 +108,20 @@ function roomieRoomBookingRows(PDO $db, int $roomId, string $date, ?int $exclude
 }
 
 /**
+ * Source relation for room-scoped calendar reads. Bind :room_id, :start_date
+ * and :end_date. Split modern and legacy rows so SQLite can seek by room and
+ * date instead of scanning all bookings in the date range.
+ */
+function roomieCalendarBookingsForRoomSql(): string
+{
+    $range = 'b.date BETWEEN :start_date AND :end_date';
+    return "(SELECT b.* FROM bookings b WHERE b.room_id = :room_id AND $range
+        UNION ALL
+        SELECT b.* FROM bookings b WHERE b.room_id IS NULL AND $range
+        AND EXISTS (SELECT 1 FROM seats s WHERE s.id = b.seat_id AND s.room_id = :room_id))";
+}
+
+/**
  * Bookings are half-open intervals; count peak simultaneous occupancy rather than all overlaps.
  * A viewer cannot hold two overlapping places in the same room.
  * @return 'own'|'capacity'|null
