@@ -123,7 +123,11 @@ function roomieBookingConflict(iterable $bookings, int $capacity, int $userId, s
     foreach ($bookings as $booking) {
         $from = roomieBookingClock($booking['start_time'] ?? null);
         $to = roomieBookingClock($booking['end_time'] ?? null);
-        if ($from === null || $to === null || $from >= $to || $from >= $end || $to <= $start) {
+        if ($from === null || $to === null || $from >= $to) {
+            // A stored interval that cannot be interpreted cannot prove availability.
+            return 'capacity';
+        }
+        if ($from >= $end || $to <= $start) {
             continue;
         }
         if ((int) ($booking['user_id'] ?? 0) === $userId) {

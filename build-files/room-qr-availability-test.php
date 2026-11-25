@@ -1,5 +1,10 @@
 <?php
 declare(strict_types=1);
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
 require_once __DIR__ . '/../room_qr_availability.php';
 
 $tz = new DateTimeZone('Europe/Berlin');
@@ -63,6 +68,12 @@ try {
     roomieQrAvailability($at('10:00'), 1, 1, [row('10:00', 'bad')], []);
     throw new RuntimeException('Malformed schedule must fail closed');
 } catch (UnexpectedValueException) {
+    ++$assertions;
+}
+foreach ([row('10:00','bad'), row('10:30','10:00')] as $invalid) {
+    if (roomieBookingConflict([$invalid], 3, 1, '10:00', '11:00') !== 'capacity') {
+        throw new RuntimeException('Booking engine cannot prove free capacity with an invalid stored interval');
+    }
     ++$assertions;
 }
 echo "Room QR: $assertions checks passed.\n";

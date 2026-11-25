@@ -1,5 +1,6 @@
 <?php
 require_once 'auth.php';
+require_once __DIR__ . '/mcp_key_store.php';
 
 if (!isLoggedIn() || !isAdmin()) {
     header("Location: login.php");
@@ -77,7 +78,13 @@ function manageRoomieUser(PDO $db, string $action, array $input): void
                 throw new DomainException('Das letzte Administratorkonto muss erhalten bleiben.');
             }
             if ($action === 'edit') {
-                $revoke = $email !== $target['email'] || $isAdmin !== (int) $target['is_admin'] || $hash !== null;
+                $roleChanged = $isAdmin !== (int) $target['is_admin'];
+                $revoke = $email !== $target['email'] || $roleChanged || $hash !== null;
+                if ($roleChanged) {
+                    // Also discard a stale managed binding on demotion if the
+                    // account was promoted before this safeguard existed.
+                    roomieMcpInvalidateAccountKey($db, $id);
+                }
                 $stmt = $db->prepare(
                     'UPDATE users SET name = ?, email = ?, is_admin = ?, password = COALESCE(?, password),
                      session_version = session_version + ? WHERE id = ?'

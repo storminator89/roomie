@@ -16,6 +16,21 @@ function roomieMcpEligibleUser(PDO $db, int $userId): bool
 }
 
 /**
+ * Called under the same write lock as an account role change. Keep the
+ * managed row as a tombstone so the old environment key never takes over.
+ */
+function roomieMcpInvalidateAccountKey(PDO $db, int $userId): void
+{
+    $exists = $db->query("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'roomie_mcp_credentials'");
+    $managed = $exists->fetchColumn() !== false;
+    $exists->closeCursor();
+    if ($managed) {
+        $db->prepare('UPDATE roomie_mcp_credentials SET user_id = NULL, key_hash = NULL
+            WHERE singleton = 1 AND user_id = ?')->execute([$userId]);
+    }
+}
+
+/**
  * Use the caller's read snapshot when this state participates in a data query.
  * A null managed credential is a tombstone, not a reason to try the old environment key.
  * The hash is only for internal comparison. Do not serialize this state in UI or API output.

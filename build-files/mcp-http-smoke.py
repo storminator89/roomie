@@ -127,6 +127,16 @@ def smoke_admin(url, database, password, starts):
         assert match, "Expected a one-time issued key in the form response"
         return match.group(1)
 
+    def edit_role(user_id, name, email, admin):
+        route = f"admin_users.php?edit={user_id}"
+        status, _, html = page(route)
+        assert status == 200
+        fields = {"csrf_token": field(html, "csrf_token"), "action": "edit",
+                  "id": str(user_id), "name": name, "email": email}
+        if admin:
+            fields["is_admin"] = "on"
+        return page(route, fields)[0]
+
     def visible(key):
         status, _, response = request(url, rpc("tools/call", {
             "name": "list_room_bookings", "arguments": starts,
@@ -161,11 +171,34 @@ def smoke_admin(url, database, password, starts):
     assert first != second
     denied(first)
     assert visible(second) == {1}
+
+    # An unrelated role change does not touch the active connector key.
+    assert edit_role(2, "Connector account", "mcp@example.test", True) == 200
+    assert visible(second) == {1}
+
+    # If updating the account fails, rollback preserves both its role and its key.
+    assert edit_role(4, "Second connector", "admin@example.test", True) == 409
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT is_admin FROM users WHERE id=4").fetchone() == (0,)
+    assert visible(second) == {1}
+
+    # A completed promotion clears credentials in the same transaction. A later
+    # return to non-admin does not undo revocation or enable legacy fallback.
+    assert edit_role(4, "Second connector", "other-mcp@example.test", True) == 200
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT user_id, key_hash FROM roomie_mcp_credentials WHERE singleton=1").fetchone() == (None, None)
+    assert request(url, rpc("tools/list"), key=second, protocol=VERSION)[0] == 401
+    assert edit_role(2, "Connector account", "mcp@example.test", False) == 200
+    assert edit_role(4, "Second connector", "other-mcp@example.test", False) == 200
+    for key in (TOKEN, second):
+        assert request(url, rpc("tools/list"), key=key, protocol=VERSION)[0] == 401
+    third = generated(dict(form(), action="rotate", user_id="4"))
+    assert third != second and visible(third) == {1}
     page("admin_mcp.php", dict(form(), action="revoke", confirm_revoke="1"))
-    for key in (TOKEN, first, second):
+    for key in (TOKEN, first, second, third):
         denied(key)
-    assert second not in page("admin_mcp.php")[2]
-    print("MCP admin: role separation, CSRF, one-time key, ACL switch, rotation and revocation passed.")
+    assert third not in page("admin_mcp.php")[2]
+    print("MCP admin: role separation, CSRF, key lifecycle, promotion/demotion and rollback passed.")
 
 
 def main():

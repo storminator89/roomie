@@ -17,11 +17,15 @@
   Sitzungsverzeichnis für diese Daten.
 
 Die ausgelieferte [`.htaccess`](../.htaccess) ist die Referenz für Apache.
+Für die Pfadsperren und Sicherheitsheader müssen `mod_rewrite` und
+`mod_headers` aktiv sein und die Verzeichniskonfiguration angewendet werden.
 Auf anderen Webservern müssen gleichwertige Sperren und Sicherheitsheader
 gesetzt sein: kein Verzeichnislisting, kein direkter Zugriff auf interne
 PHP-Helfer, Initialisierung/Schemaupdate, Punktdateien, Build-Verzeichnis,
 alte Uploads oder SQLite-Dateien einschließlich Begleitdateien. Nur die
 Anwendung bereitstellen, nicht `.git`, Build-Tools oder private Daten.
+Ausnahme für geplanten Entra-Abgleich: `build-files/entra-worker.php` am
+relativen Pfad beibehalten, nur für die CLI; per HTTP weiterhin sperren.
 Insbesondere die eingeschränkten Header von MCP-Admin und QR-Druck und die
 Weitergabe von `Authorization` an `mcp.php` beibehalten. Am HTTPS-Proxy den
 echten Host und die TLS-Information vertrauenswürdig an PHP weitergeben,
@@ -90,7 +94,8 @@ Admin-Variablen nach der Einrichtung. Es gibt keinen Setup-Aufruf im Browser.
   Für Freigabeanfragen und deren Bearbeitung werden keine E-Mails gesendet.
 - Avatare werden neben der Datenbank privat gespeichert; sie sind nicht im
   SQLite-Backup enthalten. Alte öffentliche Uploads werden nicht
-  wiederverwendet. Backup und Restore separat testen.
+  wiederverwendet. Backup und Restore separat testen. Bei Entra-Raumrechten
+  zusätzlich den [Restore-Ablauf für Entra](entra.md#nach-einem-sqlite-restore) prüfen.
 
 ## Grundrisse und Raumfotos
 
@@ -222,7 +227,8 @@ Er kann keine Buchung anlegen, verändern oder stornieren.
 2. Unter **Konto → MCP-Zugang** das Konto auswählen und **API-Key erstellen**
    nutzen. Der Schlüssel erscheint einmalig; privat gespeichert wird sein
    Hash. **API-Key erneuern** und **Zugang sperren** machen den alten
-   Schlüssel für neue Anfragen ungültig.
+   Schlüssel für neue Anfragen ungültig. Bei einem Rollenwechsel des
+   zugeordneten Kontos wird sein verwalteter Schlüssel ebenfalls gesperrt.
 3. Im Client **Streamable HTTP**, `https://<roomie-host>/mcp.php` und
    `Authorization: Bearer <API-Key>` konfigurieren; Installationsunterpfad
    gegebenenfalls ergänzen. Client muss eigene Header unterstützen.
@@ -244,7 +250,9 @@ Alte Umgebungsvariablen `ROOMIE_MCP_API_KEY` und `ROOMIE_MCP_USER_ID` gelten
 nur, bis ein Admin den Schlüssel im Web anlegt oder sperrt. Danach hat die
 SQLite-Konfiguration Vorrang; ein Sperren aktiviert keinen alten
 Umgebungsschlüssel. Für die Verwaltung per Web ist kein manueller
-Schemaschritt erforderlich.
+Schemaschritt erforderlich. Nach Wiederherstellung eines älteren Backups
+vor Freigabe den MCP-Zugang im Web sperren oder mit neuem Schlüssel
+einrichten; alte Umgebungswerte auf dem Server ebenfalls prüfen.
 
 ## Exchange-Pilot
 
