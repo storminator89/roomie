@@ -1,5 +1,5 @@
 import { createRoomplanApi, startRoomplanReads } from './api.js';
-import { matchesRoomSearch, normalizeRoomSearch, renderFloorPosition } from './floor-view.js';
+import { eligibleFloorMarkers, matchesRoomSearch, normalizeRoomSearch, renderFloorPosition } from './floor-view.js';
 import { bookingWindowInFuture, firstFreeBookingWindow, periodCanBeBooked, presetBookingWindowOpen, validBookingWindow } from './booking-window.js';
 
 const types = new Map([
@@ -200,6 +200,58 @@ export function sameTimeBookingAlternatives(rooms, bookings, attempted, {period,
     const booked = byRoom.get(room.id) ?? [];
     return timeOpen && periodCanBeBooked(room.capacity, booked, start, end) ? [{room, date: attempted.date, booked}] : [];
   });
+}
+
+// Change only one part of the request. Keep explicit favorites/equipment and
+// require a replacement to be at least as large as the named room(s).
+export function searchBookingAlternatives(plan, bookingsByRoom, {
+  date, range, query = '', equipment = [], onlyFavorites = false,
+  scopeRoomIds = null, allowInProgressPreset = false,
+}, now = new Date()) {
+  if (!(bookingsByRoom instanceof Map) || !range || !validBookingWindow(...range)) return [];
+  const [from, to] = range;
+  const favoriteIds = new Set(plan.favorites);
+  const isFavorite = room => favoriteIds.has(room.id);
+  const pool = plan.rooms.filter(room => room.bookingPolicyKnown === true && room.canBook === true
+    && Number.isInteger(room.capacity) && room.capacity > 0 && (!onlyFavorites || isFavorite(room))
+    && matchesRoomAmenities(room, equipment))
+    .sort((a, b) => Number(isFavorite(b)) - Number(isFavorite(a)));
+  const hasQuery = normalizeRoomSearch(query).length > 0;
+  const named = pool.filter(room => matchesRoomSearch(`${room.number ?? ''} ${room.name ?? ''}`, query));
+  const exact = named.filter(room => !scopeRoomIds || scopeRoomIds.has(room.id));
+  const fits = (room, start, end, canUsePreset = false) => (
+    bookingWindowInFuture(date, start, now)
+    || (canUsePreset && allowInProgressPreset && !room.requiresApproval
+      && periods.some(([, , a, b]) => a === start && b === end)
+      && presetBookingWindowOpen(date, start, end, false, now))
+  ) && periodCanBeBooked(room.capacity, bookingsByRoom.get(room.id) ?? [], start, end);
+  if (exact.some(room => fits(room, from, to, true))) return [];
+  // Don't silently reinterpret an unknown or inaccessible room name.
+  if (hasQuery && named.length === 0) return [];
+  const minimumCapacity = hasQuery ? named.reduce((max, room) => Math.max(max, room.capacity), 0) : 1;
+  const inScope = room => !scopeRoomIds || scopeRoomIds.has(room.id);
+  const sameTime = pool.filter(room => !room.requiresApproval && room.capacity >= minimumCapacity
+    && fits(room, from, to, true))
+    .sort((a, b) => Number(inScope(b)) - Number(inScope(a)))
+    .slice(0, 3)
+    .map(room => ({room, range: [from, to], kind: 'room'}));
+
+  const fromIndex = timeOptions.indexOf(from);
+  const toIndex = timeOptions.indexOf(to);
+  const nearby = exact.filter(room => !room.requiresApproval);
+  let later, shorter;
+  for (let step = 1; step <= 4 && toIndex + step < timeOptions.length && !later; step++) {
+    const range = [timeOptions[fromIndex + step], timeOptions[toIndex + step]];
+    const room = nearby.find(room => fits(room, ...range));
+    if (room) later = {room, range, kind: 'later', minutes: step * 15};
+  }
+  // Keep at least half the selected duration and never shorten by more than an hour.
+  for (let step = 1; step <= Math.min(4, Math.floor((toIndex - fromIndex) / 2)) && !shorter; step++) {
+    const range = [from, timeOptions[toIndex - step]];
+    const room = nearby.find(room => fits(room, ...range));
+    if (room) shorter = {room, range, kind: 'shorter', minutes: step * 15};
+  }
+  return [sameTime[0], later, shorter, ...sameTime.slice(1)].filter(Boolean).slice(0, 3);
 }
 
 function dateValue(value) {
@@ -407,6 +459,13 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   const filterResult = el('p', 'rp-filter-result');
   filterResult.setAttribute('role', 'status');
   filterResult.setAttribute('aria-atomic', 'true');
+  const searchSuggestions = el('section', 'rp-search-alternatives');
+  searchSuggestions.hidden = true;
+  searchSuggestions.setAttribute('aria-labelledby', 'rp-search-alternatives-title');
+  const suggestionTitle = el('h2', '', 'Passt auch …');
+  suggestionTitle.id = 'rp-search-alternatives-title';
+  const suggestionList = el('ul', 'rp-search-alternative-list');
+  searchSuggestions.append(suggestionTitle, suggestionList);
   const content = el('div', 'rp-view-content');
   content.id = 'rp-view-content';
   content.tabIndex = -1;
@@ -416,7 +475,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   retry.hidden = true;
   toolbar.setAttribute('role', 'group');
   toolbar.setAttribute('aria-label', 'Raumplan filtern');
-  view.replaceChildren(toolbar, notice, retry, filterResult, content);
+  view.replaceChildren(toolbar, notice, retry, filterResult, searchSuggestions, content);
 
   function preferredRange() {
     return onlyFree || rangeIsExplicit ? dateRange.value : null;
@@ -623,7 +682,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     alternatives.hidden = matches.length === 0;
   }
 
-  function openBooking(room, opener) {
+  function openBooking(room, opener, preferred = preferredRange()) {
     const now = new Date();
     const availability = roomAvailability(room, now);
     const { booked, presets, custom } = availability;
@@ -646,7 +705,6 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       option.append(radio, el('span', '', from ? `${name} · ${from}–${to}` : name));
       choices.append(option);
     }
-    const preferred = preferredRange();
     const selection = preferredBookingPeriod(preferred, selectedBooking.date, room, availability, now);
     if (custom) customControls.value = selection === customPeriod ? preferred : custom;
     choices.append(customControls.root);
@@ -668,7 +726,8 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     if (bookPending) event.preventDefault();
   });
   dialog.addEventListener('close', () => {
-    if (trigger?.isConnected) trigger.focus();
+    if (trigger?.isConnected && !trigger.closest('[hidden]')) trigger.focus();
+    else if (trigger) search.focus();
     trigger = null;
     selectedBooking = null;
   });
@@ -846,11 +905,65 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     return element;
   }
 
-  function showFilterResults(count, inFloor = false) {
+  function currentSearchAlternatives(floor) {
+    if (bookingStatus !== 'ready' || !dateIsBookable()) return [];
+    const scopeRoomIds = floor ? new Set(eligibleFloorMarkers(floor, plan.rooms).map(({room}) => room.id)) : null;
+    return searchBookingAlternatives(plan, bookingsByRoom, {
+      date: dateInput.value, range: preferredRange(), query: floorFilters.query,
+      equipment: selectedEquipment, onlyFavorites, scopeRoomIds, allowInProgressPreset: rangeIsExplicit,
+    });
+  }
+
+  function drawSearchAlternatives(floor) {
+    const options = currentSearchAlternatives(floor);
+    const focused = suggestionList.contains(document.activeElement) ? document.activeElement.dataset.alternative : null;
+    const floorTitles = new Map();
+    if (floor && options.some(option => option.kind === 'room')) {
+      for (const otherFloor of floors) {
+        for (const {room} of eligibleFloorMarkers(otherFloor, plan.rooms)) {
+          if (!floorTitles.has(room.id)) floorTitles.set(room.id, otherFloor.title);
+        }
+      }
+    }
+    const optionKey = option => [option.kind, option.room.id, ...option.range].join('/');
+    suggestionList.replaceChildren(...options.map(option => {
+      const {room, range, kind, minutes} = option;
+      const choice = button('', secondaryButton + ' rp-search-alternative');
+      choice.dataset.alternative = optionKey(option);
+      const floorLabel = floorTitles.get(room.id);
+      const change = kind === 'later' ? `${minutes} Min. später` : kind === 'shorter' ? `${minutes} Min. kürzer`
+        : floorLabel && floorLabel !== floor?.title ? `Gleiche Zeit · ${floorLabel}` : 'Gleiche Zeit';
+      choice.append(icon(kind === 'room' ? 'layers' : 'clock'), el('span', 'rp-alternative-name', room.name),
+        el('span', 'rp-alternative-time', `${range[0]}–${range[1]} Uhr`),
+        el('span', 'rp-alternative-change', change));
+      choice.addEventListener('click', () => {
+        // A boundary may have passed while these controls were visible.
+        const current = currentSearchAlternatives(floor).find(item => optionKey(item) === optionKey(option));
+        if (!current) {
+          drawSearchAlternatives(floor);
+          status('Diese Alternative ist nicht mehr verfügbar.', true);
+          return;
+        }
+        openBooking(current.room, choice, current.range);
+      });
+      const row = el('li');
+      row.append(choice);
+      return row;
+    }));
+    searchSuggestions.hidden = options.length === 0;
+    if (focused) {
+      const previous = [...suggestionList.querySelectorAll('button')].find(item => item.dataset.alternative === focused);
+      (previous || suggestionList.querySelector('button') || search).focus();
+    }
+    return options.length;
+  }
+
+  function showFilterResults(count, inFloor = false, suggestions = 0) {
     let text = '';
     const hasSearch = normalizeRoomSearch(floorFilters.query).length > 0;
     const hasFilters = hasSearch || selectedEquipment.length > 0 || onlyFree;
-    if (hasFilters && (!onlyFree || bookingStatus === 'ready')) {
+    if (suggestions) text = 'Kein Raum für deine Auswahl.';
+    else if (hasFilters && (!onlyFree || bookingStatus === 'ready')) {
       if (count > 0) text = count === 1 ? '1 passender Raum' : `${count} passende Räume`;
       else if (onlyFavorites && !plan.favorites.length) text = 'Noch keine Favoriten.';
       else if (inFloor) text = 'Keine passenden Räume auf diesem Grundriss.';
@@ -859,7 +972,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       else text = 'Keine passenden Räume mit dieser Ausstattung.';
     }
     // Keep a live region outside the replaced result content so it also announces zero matches.
-    filterResult.toggleAttribute('data-empty', Boolean(text) && count === 0);
+    filterResult.toggleAttribute('data-empty', Boolean(text) && (count === 0 || suggestions > 0));
     if (filterResult.textContent !== text) filterResult.textContent = text;
     return hasFilters;
   }
@@ -944,7 +1057,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
         floor, rooms: plan.rooms, filters: floorFilters, roomDetails: focus,
         availabilityStatus: bookingStatus,
         canBook: matchesFreeFilter, matchesEquipment,
-        onResultCount: count => showFilterResults(count, true),
+        onResultCount: count => showFilterResults(count, true, drawSearchAlternatives(floor)),
         onOpenList() {
           chooseView('list');
           content.focus();
@@ -985,7 +1098,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     const visible = plan.rooms.filter(room => (!onlyFavorites || plan.favorites.includes(room.id))
       && matchesRoomSearch(`${room.number ?? ''} ${room.name ?? ''}`, floorFilters.query)
       && matchesEquipment(room) && (!onlyFree || matchesFreeFilter(room)));
-    const hasFilters = showFilterResults(visible.length);
+    const hasFilters = showFilterResults(visible.length, false, drawSearchAlternatives(null));
     if (!visible.length) {
       const noFavorites = onlyFavorites && !plan.favorites.length;
       const text = hasFilters ? '' : noFavorites ? 'Noch keine Favoriten.' : 'Keine Räume verfügbar.';
@@ -1127,6 +1240,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       retry.hidden = false;
       content.replaceChildren();
       filterResult.textContent = '';
+      searchSuggestions.hidden = true;
       status(error.message || 'Raumplan konnte nicht geladen werden.', true);
     } finally {
       if (invocation === planRun) content.setAttribute('aria-busy', 'false');
@@ -1141,6 +1255,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       bookingStatus = 'idle';
       content.replaceChildren();
       filterResult.textContent = '';
+      searchSuggestions.hidden = true;
       content.setAttribute('aria-busy', 'false');
       status('Bitte ein Datum auswählen.', true);
       resetDate.disabled = false;

@@ -42,6 +42,7 @@ export function normalizeRoomplan(response, availableFavorites = []) {
             type: String(raw.type ?? ''),
             capacity: Math.max(0, Math.min(500, Number.parseInt(raw.capacity, 10) || 0)),
             canBook: raw.can_book !== false,
+            bookingPolicyKnown: typeof raw.can_book === 'boolean' && typeof raw.requires_approval === 'boolean',
             requiresApproval: raw.requires_approval === true,
             hasPhoto: raw.has_photo === true,
             amenities: decodeList(raw.equipment).filter(v => typeof v === 'string').slice(0, 32),

@@ -117,3 +117,85 @@ test('standard windows stay bookable until their Berlin end; approval needs a fu
   assert.equal(morning(false, '2026-06-01T10:00:00Z'), false);
   assert.equal(presetBookingWindowOpen(date, '12:00', '09:00', false, new Date('2026-06-01T06:00:00Z')), false);
 });
+
+async function importRoomplan(t) {
+  const root = await mkdtemp(join(tmpdir(), 'roomie-search-alternatives-'));
+  t.after(() => rm(root, {recursive: true, force: true}));
+  await writeFile(join(root, 'package.json'), '{"type":"module"}');
+  for (const file of ['view.js', 'api.js', 'floor-view.js', 'booking-window.js']) {
+    await copyFile(new URL(`../assets/roomplan/${file}`, import.meta.url), join(root, file));
+  }
+  return import(pathToFileURL(join(root, 'view.js')).href);
+}
+
+const room = (id, name, overrides = {}) => ({
+  id, name, capacity: 4, canBook: true, requiresApproval: false, bookingPolicyKnown: true,
+  amenities: ['projector'], ...overrides,
+});
+const searchDate = '2026-11-23';
+const searchNow = new Date('2026-11-22T12:00:00Z');
+
+test('search offers one-dimensional replacements with matching essentials only', async t => {
+  const {searchBookingAlternatives} = await importRoomplan(t);
+  const rooms = [
+    room(1, 'Atlas'), room(2, 'Düne'), room(3, 'Klein', {capacity: 3}),
+    room(4, 'Kein Beamer', {amenities: []}), room(5, 'Darf nicht buchen', {canBook: false}),
+    room(6, 'Nur Anfrage', {requiresApproval: true}), room(7, 'Unbekannt', {bookingPolicyKnown: false}),
+    room(8, 'Gesperrt'), room(9, 'Eigene Buchung'), room(10, 'Defekte Belegung'),
+    room(11, 'Standardersatz', {capacity: 6}),
+  ];
+  const plan = {rooms, favorites: [1, 2]};
+  const rows = new Map([
+    [1, Array(rooms[0].capacity).fill(slot('10:45', '11:00'))],
+    [8, [{...slot('10:00', '10:15'), blocked: true}]],
+    [9, [slot('09:45', '10:01', true)]],
+    [10, [slot('unknown', '14:00')]],
+  ]);
+  const filters = {
+    date: searchDate, range: ['10:00', '11:00'], equipment: ['projector'], query: 'Atlas',
+    scopeRoomIds: new Set([1, 3, 4, 5, 6, 7, 8, 9, 10]),
+  };
+  const summarize = list => list.map(({room, range, kind, minutes}) => [room.id, ...range, kind, minutes]);
+  assert.deepEqual(summarize(searchBookingAlternatives(plan, rows, filters, searchNow)), [
+    [2, '10:00', '11:00', 'room', undefined],
+    [1, '11:00', '12:00', 'later', 60],
+    [1, '10:00', '10:45', 'shorter', 15],
+  ]);
+  assert.deepEqual(searchBookingAlternatives(plan, new Map(), filters, searchNow), []);
+  assert.deepEqual(searchBookingAlternatives(plan, null, filters, searchNow), []);
+  assert.deepEqual(searchBookingAlternatives(plan, rows, {...filters, query: 'unbekannte Raumnummer'}, searchNow), []);
+  assert.deepEqual(searchBookingAlternatives(plan, rows, {...filters, range: ['10:13', '11:00']}, searchNow), []);
+  assert.deepEqual(searchBookingAlternatives(plan, rows, filters, new Date('2026-11-23T11:00:00Z')), []);
+  assert.deepEqual(summarize(searchBookingAlternatives(plan, rows, {...filters, onlyFavorites: true}, searchNow)), [
+    [2, '10:00', '11:00', 'room', undefined],
+    [1, '11:00', '12:00', 'later', 60],
+    [1, '10:00', '10:45', 'shorter', 15],
+  ]);
+  const withoutPreferred = {...plan, favorites: [1]};
+  assert.equal(searchBookingAlternatives(withoutPreferred, rows, {...filters, onlyFavorites: true}, searchNow)
+    .some(option => option.kind === 'room'), false);
+});
+
+test('search caps replacements at three; short slots stay whole and shifts cannot extend past closing', async t => {
+  const {searchBookingAlternatives} = await importRoomplan(t);
+  const plan = {rooms: [
+    room(1, 'Atlas'), room(2, 'Berg'), room(3, 'Canyon'), room(4, 'Düne'), room(5, 'Elbe'),
+  ], favorites: [3]};
+  const filters = {date: searchDate, range: ['16:45', '17:00'], query: 'Atlas'};
+  const rows = new Map([[1, [{...slot('16:45', '17:00'), blocked: true}]]]);
+  const options = searchBookingAlternatives(plan, rows, filters, searchNow);
+  assert.deepEqual(options.map(({room, kind, range}) => [room.id, kind, ...range]), [
+    [3, 'room', '16:45', '17:00'], [2, 'room', '16:45', '17:00'], [4, 'room', '16:45', '17:00'],
+  ]);
+});
+
+test('search permits an ongoing preset only with explicit range and direct booking policy', async t => {
+  const {searchBookingAlternatives} = await importRoomplan(t);
+  const plan = {rooms: [room(1, 'Atlas'), room(2, 'Berg'), room(3, 'Canyon', {requiresApproval: true})], favorites: []};
+  const rows = new Map([[1, [{...slot('09:00', '12:00'), blocked: true}]]]);
+  const filters = {date: searchDate, range: ['09:00', '12:00'], query: 'Atlas'};
+  const now = new Date('2026-11-23T09:00:00Z'); // 10:00 Berlin.
+  assert.deepEqual(searchBookingAlternatives(plan, rows, filters, now), []);
+  assert.deepEqual(searchBookingAlternatives(plan, rows, {...filters, allowInProgressPreset: true}, now)
+    .map(({room, kind}) => [room.id, kind]), [[2, 'room']]);
+});

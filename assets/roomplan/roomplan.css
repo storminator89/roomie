@@ -192,6 +192,22 @@ html:has(body.roomplan-page > #roomplan), body.roomplan-page:has(> #roomplan) { 
     margin: 0; color: var(--roomplan-muted); font-size: .875rem; font-weight: 600;
 }
 .rp-filter-result:not(:empty) { margin-block: .35rem .75rem; }
+.rp-search-alternatives:not([hidden]) {
+    margin-block: 0 1rem; padding: .85rem; border: 1px solid var(--roomplan-border);
+    border-radius: var(--roomplan-control-radius); background: var(--roomplan-surface);
+}
+.rp-search-alternatives h2 { margin: 0 0 .55rem; font-size: 1rem; }
+.rp-search-alternative-list {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    gap: .5rem; list-style: none; margin: 0; padding: 0;
+}
+#roomplan .rp-search-alternative {
+    width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr);
+    gap: .12rem .5rem; text-align: start; white-space: normal; overflow-wrap: anywhere;
+}
+.rp-alternative-time, .rp-alternative-change {
+    grid-column: 2; font-size: .82rem; font-weight: 600; color: var(--roomplan-muted);
+}
 
 .rp-status, .rp-empty {
     margin-block: .5rem .85rem; padding: .7rem .85rem;

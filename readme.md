@@ -37,7 +37,8 @@ lesen. [Vollständige Betriebsanleitung](docs/betrieb.md)
 ## Benutzen
 
 - **Raumplan** oder **Räume** öffnen. Im Raumplan Datum wählen und mit
-  **Nur frei** eingrenzen. In der Raumansicht den Termin buchen. Bei freigabepflichtigen
+  **Nur frei** eingrenzen. Wenn nichts passt, zeigt **Passt auch …** bis zu drei
+  Alternativen. Erst im Buchungsdialog bestätigst du verbindlich. Bei freigabepflichtigen
   Räumen wird daraus zunächst eine Anfrage.
 - **Buchungen → Optionen** für Verschieben, Storno oder Kalenderdatei nutzen.
   Bei einer neuen wöchentlichen Serie steht dort **Serie bearbeiten**.
