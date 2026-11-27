@@ -26,7 +26,7 @@ alte Uploads oder SQLite-Dateien einschließlich Begleitdateien. Nur die
 Anwendung bereitstellen, nicht `.git`, Build-Tools oder private Daten.
 Ausnahme für geplanten Entra-Abgleich: `build-files/entra-worker.php` am
 relativen Pfad beibehalten, nur für die CLI; per HTTP weiterhin sperren.
-Insbesondere die eingeschränkten Header von MCP-Admin und QR-Druck und die
+Insbesondere die eingeschränkten Header von MCP-Admin, QR-Druck und Gästelinks und die
 Weitergabe von `Authorization` an `mcp.php` beibehalten. Am HTTPS-Proxy den
 echten Host und die TLS-Information vertrauenswürdig an PHP weitergeben,
 damit der Sitzungscookie als Secure gesetzt wird und die Check-in-
@@ -305,3 +305,52 @@ QR-Druck zusätzlich einen echten Ausdruck mit einem Handy scannen.
 ## Optional: Entra-Abgleich
 
 Gruppenbasierter Benutzerabgleich mit Vorschau und Zeitplan: [Einrichtung und Grenzen](entra.md).
+
+## Weg zum Raum
+
+Unter **Buchungen → Optionen → Weg zum Raum** sehen Buchende den Grundriss
+mit ihrem markierten Raum. Ohne verknüpfte Zone erscheint nur die
+Raumbezeichnung. Bei mehreren Markierungen wird der zuerst angelegte
+verknüpfte Grundriss verwendet. **Kalenderdatei (.ics)** bekommt bei
+konfigurierter `ROOMIE_PUBLIC_BASE_URL` denselben Link. Er bleibt privat:
+Anmeldung, Buchungsinhaberschaft und aktuelle Raumrechte sind nötig.
+Bereits importierte Kalenderdateien aktualisieren sich nicht automatisch.
+
+### Optionale Gästelinks
+
+Standardmäßig aus. Nur für Ausschnitte, die der Betreiber visuell geprüft
+und zur externen Weitergabe freigegeben hat. Vorher den gewählten
+Grundriss mit der markierten Zone sowie Raumname, Nummer und
+Stockwerksbezeichnung prüfen. Im Ausschnitt dürfen keine internen
+Beschriftungen oder Hinweise stehen. Auf Wunsch einen gesondert
+aufbereiteten Plan verwenden. Überlappende Raumzonen sowie reservierte
+Raumtypen sind von der Freigabe ausgeschlossen.
+
+- `ROOMIE_PUBLIC_BASE_URL`: die echte HTTPS-Basis, wie beim QR-Druck.
+- `ROOMIE_GUEST_MAP_KEY`: eigener zufälliger 32-Byte-Schlüssel als 64
+  Hex-Zeichen (generieren z. B. per `php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'`).
+  Im Secret Store des Webhandlers hinterlegen, nicht mit Entra oder einem
+  anderen Dienst teilen.
+- `ROOMIE_GUEST_MAP_APPROVALS`: freigegebene Kombinationen ohne Leerzeichen,
+  Komma-getrennt in der Form `Raum-ID:Grundriss-ID:Revision`
+  (Beispiel `12:3:4,38:5:2`). Die Grundrissliste liefert die IDs und
+  Revision; für einen Raum gilt der zuerst angelegte verknüpfte Plan.
+  Nach Planänderung keine Freigabe fortschreiben, bevor der geänderte
+  Ausschnitt erneut geprüft wurde.
+
+Buchende erstellen den Link selbst über **Gästelink erstellen** und
+entscheiden, wem sie ihn weitergeben. Die Vorschau zeigt exakt denselben
+Ausschnitt, den Gäste ohne Anmeldung sehen. Der Link ist erst verfügbar,
+wenn maximal sieben Tage bis zum Terminende bleiben, und verfällt mit
+Terminende. Bei Storno, Änderung der Buchung, Planrevision oder Verlust
+der Raumrechte wird er ungültig. Um ihn administrativ zu widerrufen, die
+Freigabe entfernen; Schlüsselrotation widerruft alle zuvor erstellten Links.
+Nach Restore den Schlüssel neu setzen, damit alte Links nicht wieder gelten.
+Keine Links automatisch in ICS oder E-Mails an Gäste übernehmen.
+
+Der Link selbst ist ein Zugriffsschlüssel. Für `guest_room_way.php` am
+Proxy und Webserver keine Querystrings in Zugriffslogs speichern. Keine
+öffentlich zwischengespeicherte Kopie ausliefern; Referrer, Indexierung
+und Einbettung blockieren. Der Gast erhält nur einen neu codierten
+PNG-Ausschnitt und dessen Raumbeschriftung, keine Buchungsdaten oder
+ungeschnittene Plan-Datei.

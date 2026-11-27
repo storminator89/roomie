@@ -945,6 +945,17 @@ def smoke_room_watches(command, root, env, date, guest, admin, admin_status, use
     removed = user.request(endpoint, dict(foreign, csrf_token=user_status["csrf_token"]))
     expect(removed[0] == 303 and rows() == [], "Owner can dismiss a notice")
 
+    expect(user.request(endpoint, fields)[0] == 303 and rows()[0][2] is None,
+           "A user can explicitly re-subscribe if the interval is occupied again")
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("DELETE FROM bookings WHERE room_id=?", (atlas,))
+    baseline = bookings()
+    run(worker, root, env)
+    worker_ready = rows()
+    expect(len(worker_ready) == 1 and worker_ready[0][2] is not None and bookings() == baseline,
+           "The scheduled worker can record a notice without a dashboard visit or booking")
+    user.request(endpoint, dict(foreign, watch_id=worker_ready[0][0], csrf_token=user_status["csrf_token"]))
+
     expect(user.request(endpoint, dict(fields, room_id=restricted))[0] == 303 and len(rows()) == 1,
            "Granted members may watch a restricted room")
     run(command + ["-r", """
@@ -963,7 +974,17 @@ def smoke_room_watches(command, root, env, date, guest, admin, admin_status, use
            "Entra group revocation prevents a now-free interval from notifying")
     expect(user.request(endpoint, dict(fields, room_id=restricted))[1].get("Location") == "index.php#rm-room-watches"
            and rows() == [], "A direct POST cannot bypass Entra room policy")
-    print("Room watches: lazy schema, owner/CSRF, exact full-slot capacity and blocks, dashboard fallback, worker idempotency, dismissal and group denial passed",
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("INSERT INTO room_blocks (room_id,date,start_time,end_time) VALUES (?,?,'09:00','17:00')", (atlas, date))
+        db.execute("INSERT INTO room_watches (user_id,room_id,date,start_time,end_time) VALUES (?,?,'2020-01-01','09:00','09:15')", (owner, atlas))
+    for minute in range(11):
+        def slot(offset):
+            return f"{9 + offset // 4:02d}:{(offset % 4) * 15:02d}"
+        expect(user.request(endpoint, dict(fields, start_time=slot(minute), end_time=slot(minute + 1)))[0] == 303,
+               "Watch request should redirect")
+    expect(len(rows()) == 10 and "bereits 10 Frei-Meldungen" in user.request(route)[2],
+           "Expired rows are pruned and the per-user cap is enforced")
+    print("Room watches: lazy schema, owner/CSRF, full-slot capacity and blocks, dashboard fallback, worker, dismissal, expiry/cap and group denial passed",
           flush=True)
 
 
@@ -1663,6 +1684,107 @@ def smoke_booking_approvals(env, scratch, date, guest, admin, admin_status, conc
           + ("; concurrent decisions passed" if concurrent else ""), flush=True)
 
 
+def smoke_wayfinding(command, root, env, date, guest, user, user_status, admin):
+    gd = run(command + ["-r", "echo extension_loaded('gd') && (imagetypes() & IMG_PNG) ? 'yes' : 'no';"], root, env)
+    if gd != "yes":
+        print("Wayfinding: skipped guest PNG check (GD PNG not enabled)", flush=True)
+        return
+    png = b64decode(run(command + ["-r", """
+        $img = imagecreatetruecolor(160, 80);
+        imagefill($img, 0, 0, imagecolorallocate($img, 240, 0, 0));
+        imagefilledrectangle($img, 16, 8, 55, 47, imagecolorallocate($img, 0, 240, 0));
+        ob_start(); imagepng($img); echo base64_encode(ob_get_clean());
+    """], root, env))
+    plan_id, room_id = 91901, 91901
+    with closing(sqlite3.connect(env["ROOMIE_DB_PATH"])) as db, db:
+        owner = db.execute("SELECT id FROM users WHERE email='smoke-user@example.test'").fetchone()[0]
+        old_booking = db.execute("SELECT id FROM bookings WHERE room_id=1 AND user_id=?", (owner,)).fetchone()[0]
+        db.execute("INSERT INTO rooms(id,name,number,type,capacity) VALUES (?, 'Wayfinding North', 'Q-2.14','office',1)", (room_id,))
+        db.execute("INSERT INTO floorplans(id,title,width,height,image_png,revision) VALUES (?,?,?,?,?,1)",
+                   (plan_id, "Wayfinding Floor 2", 160, 80, png))
+        db.execute("INSERT INTO floorplan_markers (floorplan_id,room_id,x,y,w,h) VALUES (?,?,0.1,0.1,0.25,0.5)",
+                   (plan_id, room_id))
+        args = (owner, room_id, date)
+        booking = db.execute("INSERT INTO bookings(user_id,room_id,date,start_time,end_time) VALUES (?,?,?,'10:15','11:15')", args).lastrowid
+        alternate = db.execute("INSERT INTO bookings(user_id,room_id,date,start_time,end_time) VALUES (?,?,?,'14:00','14:30')", args).lastrowid
+    route = f"room_way.php?booking_id={booking}"
+    status, redirect, _ = guest.request(route)
+    expect(status == 303 and redirect["Location"] == f"login.php?way_booking={booking}", "Calendar intent must survive login")
+    login = Client(guest.base_url)
+    status, _, form = login.request(redirect["Location"])
+    token = re.search(r'name="csrf_token" value="([0-9a-f]{64})"', form)
+    expect(status == 200 and token, "Expected safe continuation login form")
+    status, location, _ = login.request(redirect["Location"], {"email": "smoke-user@example.test",
+        "password": env["ROOMIE_SMOKE_PASSWORD"], "csrf_token": token.group(1)})
+    expect(status == 303 and location["Location"] == route and login.request(route)[0] == 200,
+           "Signed-in owner must reach their original booking, not an arbitrary redirect")
+    status, headers, private_map = user.request(route)
+    expect(status == 200 and "no-store" in headers["Cache-Control"] and 'id="rw-room-highlight"' in private_map
+           and f"floorplan_image.php?id={plan_id}" in private_map and "Wayfinding Floor 2" in private_map,
+           "Owner sees current floor and marked room")
+    expect(f"room_way.php?booking_id={booking}" in user.request(f"bookings.php?focus={booking}")[2]
+           and admin.request(route)[0] == 404, "Only the owner gets a wayfinding action or link")
+    no_map = user.request(f"room_way.php?booking_id={old_booking}")[2]
+    expect("Gästelink erstellen" not in no_map, "Unapproved plan must never offer a public capability")
+    _, _, ics = user.request(f"bookings.php?download=calendar&booking_id={booking}")
+    unfolded = ics.replace("\r\n ", "")
+    expect(f"\r\nURL:https://bookings.example.test/roomie/{route}\r\n" in unfolded
+           and "guest_room_way.php" not in unfolded, "Standard calendar contains only a trusted private URL")
+    expect(user.request(route, {"action": "create_guest"})[0] == 403, "Issuance requires CSRF")
+    post = {"action": "create_guest", "csrf_token": user_status["csrf_token"]}
+    def issue(path):
+        code, _, body = user.request(path, post)
+        m = re.search(r'id="rw-guest-link" readonly value="https://bookings\.example\.test/roomie/(guest_room_way\.php\?t=[^"]+)"', body)
+        expect(code == 200 and m, "Expected explicit owner creation of an approved guest link")
+        return m.group(1), body
+    share, preview = issue(route)
+    other_link, _ = issue(f"room_way.php?booking_id={alternate}")
+    fresh = Client(guest.base_url)
+    status, headers, published = fresh.request(share)
+    expect(status == 200 and headers.get("Set-Cookie") is None and headers["Referrer-Policy"] == "no-referrer"
+           and headers["X-Frame-Options"] == "DENY" and "no-store" in headers["Cache-Control"],
+           "Anonymous guest excerpt must not need or create a session and must be private from caches/referrers")
+    image = re.search('src="data:image/png;base64,([^"]+)"', published)
+    expect(image and image.group(1) in preview and not any(k in published for k in (
+        "floorplan_image.php", "Roomie Smoke User", "09:00", "10:15", "11:15", "bookings.php", "Buchung stornieren")),
+        "Guest gets the exact approved preview, not the raw floorplan or booking details")
+    payload = b64decode(image.group(1))
+    expect(struct.unpack(">II", payload[16:24]) == (40, 40), "Guest PNG bounds must equal the approved room")
+    rgb = run(command + ["-r", """
+        $img = imagecreatefromstring(base64_decode($argv[1]));
+        for ($y=0; $y<imagesy($img); ++$y) for ($x=0; $x<imagesx($img); ++$x) {
+            if ((imagecolorat($img,$x,$y) & 0xffffff) !== 0x00f000) exit(1);
+        }
+        echo 'only-approved-pixels';
+    """, image.group(1)], root, env)
+    expect(rgb == "only-approved-pixels", "No pixel outside the approved room may survive the re-encoding")
+    expect(fresh.request(f"floorplan_image.php?id={plan_id}")[0] == 401
+           and fresh.request(share[:-1] + ('a' if share[-1] != 'a' else 'b'))[0] == 404
+           and fresh.request("guest_room_way.php")[0] == 404, "Guest cannot fetch the original or tamper with a link")
+    expired = run(command + ["-r", """
+        require 'room_way_data.php';
+        echo roomieWayToken(hex2bin(str_repeat('17',32)),1,time()-30,str_repeat('a',64));
+    """], root, env)
+    expect(fresh.request("guest_room_way.php?t=" + expired)[0] == 404, "Expired capability is rejected")
+    with closing(sqlite3.connect(env["ROOMIE_DB_PATH"])) as db, db:
+        db.execute("INSERT INTO floorplan_markers(floorplan_id,room_id,x,y,w,h) VALUES (?,1,.31,.33,.10,.23)", (plan_id,))
+    expect(fresh.request(share)[0] == 404 and user.request(route, post)[0] == 404,
+           "A partially overlapping second room must stop both guest access and issuance")
+    with closing(sqlite3.connect(env["ROOMIE_DB_PATH"])) as db, db:
+        db.execute("DELETE FROM floorplan_markers WHERE floorplan_id=? AND room_id=1", (plan_id,))
+        db.execute("UPDATE rooms SET type='fk-office' WHERE id=?", (room_id,))
+    expect(fresh.request(share)[0] == 404 and user.request(route)[0] == 404,
+           "Current booking rights gate both private and guest routes")
+    with closing(sqlite3.connect(env["ROOMIE_DB_PATH"])) as db, db:
+        db.execute("UPDATE rooms SET type='office' WHERE id=?", (room_id,))
+        db.execute("DELETE FROM bookings WHERE id=?", (alternate,))
+        db.execute("UPDATE floorplans SET revision=revision+1 WHERE id=?", (plan_id,))
+    expect(fresh.request(other_link)[0] == 404 and fresh.request(share)[0] == 404
+           and user.request(route)[0] == 200 and "Gästelink erstellen" not in user.request(route)[2],
+           "Cancellation and changed plan revision revoke approvals; private map still works")
+    print("Wayfinding: logged-out calendar continuation, owner ACL, trusted ICS, signed guest links, exact crop, overlap/privacy and revocation passed", flush=True)
+
+
 def smoke(php, root, scratch, expected_minor):
     env = {key: value for key, value in os.environ.items()
            if not key.startswith("ROOMIE_") and key != "PHP_CLI_SERVER_WORKERS"}
@@ -1674,7 +1796,8 @@ def smoke(php, root, scratch, expected_minor):
         "ROOMIE_SMOKE_PASSWORD": "FreshTempSmokeOnly!91",
     })
     concurrent = os.name == "posix"
-    server_env = dict(env)
+    server_env = dict(env, ROOMIE_PUBLIC_BASE_URL="https://bookings.example.test/roomie",
+                      ROOMIE_GUEST_MAP_KEY="17" * 32, ROOMIE_GUEST_MAP_APPROVALS="91901:91901:1")
     server_args = []
     if concurrent:
         # Capture transactional email locally. Never invoke a system MTA or transmit a message.
@@ -1850,6 +1973,7 @@ def smoke(php, root, scratch, expected_minor):
                 smoke_room_watches(command, root, env, date, guest, admin, admin_status, user, user_status)
                 smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, concurrent)
                 smoke_booking_approvals(env, scratch, date, guest, admin, admin_status, concurrent)
+                smoke_wayfinding(command, root, env, date, guest, user, user_status, admin)
             finally:
                 if concurrent:
                     try:

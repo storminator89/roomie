@@ -335,6 +335,7 @@ $requestLabels = [
                             <?php if ($seriesId !== null) : ?>
                             <a class="roomplan-action roomplan-action-secondary" href="series_manage.php?id=<?= (int) $seriesId ?>">Serie bearbeiten</a>
                             <?php endif; ?>
+                            <a class="roomplan-action roomplan-action-secondary" href="room_way.php?booking_id=<?= $bookingId ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 10c0 5-7 10-7 10S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.4"/></svg>Weg zum Raum</a>
                             <a class="roomplan-action roomplan-action-secondary" href="bookings.php?download=calendar&amp;booking_id=<?= $bookingId ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v11m-4-4 4 4 4-4M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3"/></svg>Kalenderdatei (.ics)</a>
                             <?php if ($canChangeRoom) : ?>
                             <a class="roomplan-action roomplan-action-secondary" href="change_booking_room.php?id=<?= $bookingId ?>">Raum wechseln</a>

@@ -2,11 +2,19 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_helpers.php';
 
-// Only a numeric room ID is carried across login, never a supplied redirect URL.
+// Only typed IDs are carried across login. Do not accept arbitrary redirect URLs.
 $qrRoom = roomiePositiveId($_GET['qr_room'] ?? null);
-$loginAction = $qrRoom === null ? 'login.php' : 'login.php?qr_room=' . $qrRoom;
-$home = $qrRoom === null ? 'index.php' : 'room_qr.php?id=' . $qrRoom;
+$wayBooking = $qrRoom === null ? roomiePositiveId($_GET['way_booking'] ?? null) : null;
+$loginAction = 'login.php';
+$home = 'index.php';
 if ($qrRoom !== null) {
+    $loginAction .= '?qr_room=' . $qrRoom;
+    $home = 'room_qr.php?id=' . $qrRoom;
+} elseif ($wayBooking !== null) {
+    $loginAction .= '?way_booking=' . $wayBooking;
+    $home = 'room_way.php?booking_id=' . $wayBooking;
+}
+if ($qrRoom !== null || $wayBooking !== null) {
     header('Cache-Control: private, no-store');
     header('Referrer-Policy: no-referrer');
 }

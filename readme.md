@@ -45,6 +45,9 @@ lesen. [Vollständige Betriebsanleitung](docs/betrieb.md)
   geht die bisherige Reservierung nicht verloren. Möglich für direkte Einzelbuchungen
   ohne Sitzplatz oder Check-in. Bereits importierte Kalenderdateien aktualisieren sich nicht automatisch.
   Bei einer neuen wöchentlichen Serie steht dort **Serie bearbeiten**.
+- **Weg zum Raum** markiert den gebuchten Raum im richtigen Grundriss. Mit
+  hinterlegter Webadresse öffnet ihn auch der Kalenderlink. Gäste bekommen
+  auf Wunsch nur einen vorab freigegebenen, befristeten Ausschnitt.
 - **Frei-Meldung:** Einen belegten Wunschraum mit gewählter Uhrzeit öffnen und
   **Bei Freiwerden melden** wählen. In der Übersicht erscheint eine Meldung,
   sobald der ganze Zeitraum bei einer Prüfung frei ist. Sie reserviert nichts.

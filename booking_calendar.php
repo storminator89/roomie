@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/booking_helpers.php';
+require_once __DIR__ . '/roomie_public_url.php';
 
 function roomieDateLabel(string $date): string
 {
@@ -42,6 +43,7 @@ function roomieCalendar(array $bookings): string
     $instance = substr(hash('sha256', $namespace), 0, 32);
     $utc = new DateTimeZone('UTC');
     $timezone = new DateTimeZone('Europe/Berlin');
+    $base = roomiePublicBase(getenv('ROOMIE_PUBLIC_BASE_URL'));
     $lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Roomie//Room Booking//DE', 'CALSCALE:GREGORIAN'];
     foreach ($bookings as $booking) {
         $date = parseBookingDate($booking['date']);
@@ -58,6 +60,9 @@ function roomieCalendar(array $bookings): string
         $lines[] = 'DTEND:' . $end->setTimezone($utc)->format('Ymd\THis\Z');
         $lines[] = 'SUMMARY:' . roomieCalendarText($booking['room_name']);
         $lines[] = 'DESCRIPTION:' . roomieCalendarText($booking['user_name']);
+        if ($base !== null && ($id = roomiePositiveId($booking['id'])) !== null) {
+            $lines[] = 'URL:' . $base . '/room_way.php?booking_id=' . $id;
+        }
         $lines[] = 'END:VEVENT';
     }
     $lines[] = 'END:VCALENDAR';
