@@ -59,9 +59,13 @@ function roomieCalendar(array $bookings): string
         $lines[] = 'DTSTART:' . $start->setTimezone($utc)->format('Ymd\THis\Z');
         $lines[] = 'DTEND:' . $end->setTimezone($utc)->format('Ymd\THis\Z');
         $lines[] = 'SUMMARY:' . roomieCalendarText($booking['room_name']);
-        $lines[] = 'DESCRIPTION:' . roomieCalendarText($booking['user_name']);
-        if ($base !== null && ($id = roomiePositiveId($booking['id'])) !== null) {
-            $lines[] = 'URL:' . $base . '/room_way.php?booking_id=' . $id;
+        $id = roomiePositiveId($booking['id']);
+        $wayUrl = $base !== null && $id !== null ? $base . '/room_way.php?booking_id=' . $id : null;
+        // Some calendar clients do not display the standard URL property.
+        $description = $booking['user_name'] . ($wayUrl === null ? '' : "\n\nWeg zum Raum:\n" . $wayUrl);
+        $lines[] = 'DESCRIPTION:' . roomieCalendarText($description);
+        if ($wayUrl !== null) {
+            $lines[] = 'URL:' . $wayUrl;
         }
         $lines[] = 'END:VEVENT';
     }

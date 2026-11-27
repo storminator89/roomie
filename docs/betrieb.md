@@ -312,9 +312,12 @@ Unter **Buchungen → Optionen → Weg zum Raum** sehen Buchende den Grundriss
 mit ihrem markierten Raum. Ohne verknüpfte Zone erscheint nur die
 Raumbezeichnung. Bei mehreren Markierungen wird der zuerst angelegte
 verknüpfte Grundriss verwendet. **Kalenderdatei (.ics)** bekommt bei
-konfigurierter `ROOMIE_PUBLIC_BASE_URL` denselben Link. Er bleibt privat:
-Anmeldung, Buchungsinhaberschaft und aktuelle Raumrechte sind nötig.
-Bereits importierte Kalenderdateien aktualisieren sich nicht automatisch.
+konfigurierter `ROOMIE_PUBLIC_BASE_URL` denselben Link im URL-Feld und
+zusätzlich im Termintext. Der Link bleibt privat: Anmeldung,
+Buchungsinhaberschaft und aktuelle Raumrechte sind nötig. Nach einem
+Raumwechsel zeigt er den neuen Raum, auch wenn der importierte
+Kalendertitel unverändert bleibt. Ob der Termintext den Link anklickbar
+anzeigt, hängt vom Kalenderprogramm ab.
 
 ### Optionale Gästelinks
 

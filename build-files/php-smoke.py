@@ -1728,8 +1728,14 @@ def smoke_wayfinding(command, root, env, date, guest, user, user_status, admin):
     expect("Gästelink erstellen" not in no_map, "Unapproved plan must never offer a public capability")
     _, _, ics = user.request(f"bookings.php?download=calendar&booking_id={booking}")
     unfolded = ics.replace("\r\n ", "")
-    expect(f"\r\nURL:https://bookings.example.test/roomie/{route}\r\n" in unfolded
-           and "guest_room_way.php" not in unfolded, "Standard calendar contains only a trusted private URL")
+    link = f"https://bookings.example.test/roomie/{route}"
+    expect(f"\r\nURL:{link}\r\n" in unfolded
+           and f"\\n\\nWeg zum Raum:\\n{link}\r\n" in unfolded
+           and unfolded.count("\r\nDESCRIPTION:") == 1
+           and "guest_room_way.php" not in unfolded,
+           "Standard calendar carries only the trusted private link, both as URL and in the appointment body")
+    expect(all(len(line.encode("utf-8")) <= 75 for line in ics.split("\r\n")),
+           "Calendar body lines keep the ICS folding limit")
     expect(user.request(route, {"action": "create_guest"})[0] == 403, "Issuance requires CSRF")
     post = {"action": "create_guest", "csrf_token": user_status["csrf_token"]}
     def issue(path):
@@ -1957,7 +1963,8 @@ def smoke(php, root, scratch, expected_minor):
                 expect(content[0] == "BEGIN:VCALENDAR" and content[-2:] == ["END:VCALENDAR", ""]
                        and content.count("BEGIN:VEVENT") == 1, "Expected one complete CRLF-delimited ICS event")
                 expect("SUMMARY:Besprechung\\, Süd" in content
-                       and "DESCRIPTION:Roomie Smoke User" in content, "Expected escaped event metadata")
+                       and "DESCRIPTION:Roomie Smoke User\\n\\nWeg zum Raum:\\nhttps://" in ics,
+                       "Expected escaped event metadata and a wayfinding address in the body")
                 stamp = dt.date.fromisoformat(date).strftime("%Y%m%d")
                 expect(any(re.fullmatch(f"DTSTART:{stamp}T[0-9]{{6}}Z", line) for line in content),
                        "Expected UTC event time for booked date")
