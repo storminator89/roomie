@@ -868,6 +868,105 @@ def smoke_room_change(command, root, env, date, guest, admin, admin_status, user
           flush=True)
 
 
+def smoke_room_watches(command, root, env, date, guest, admin, admin_status, user, user_status):
+    db_path = env["ROOMIE_DB_PATH"]
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("DROP TABLE room_watches")  # Synthetic old installation.
+        users = dict(db.execute("SELECT email,id FROM users"))
+        owner, blocker = [users[f"smoke-{role}@example.test"] for role in ("user", "admin")]
+
+        def add_room(name, kind="office"):
+            return db.execute("INSERT INTO rooms (name,type,capacity) VALUES (?,?,1)", (name, kind)).lastrowid
+
+        atlas = add_room("QA Watch Atlas")
+        restricted = add_room("QA Watch Private", "fk-office")
+        approval = add_room("QA Watch Approval")
+        db.execute("INSERT INTO permissions (room_id,user_id) VALUES (?,?)", (restricted, owner))
+        db.execute("INSERT INTO room_booking_approval_policies VALUES (?)", (approval,))
+        conflict = db.execute("INSERT INTO bookings (room_id,user_id,date,start_time,end_time) "
+                              "VALUES (?,?,?,'10:00','10:30')", (atlas, blocker, date)).lastrowid
+        db.execute("INSERT INTO room_blocks (room_id,date,start_time,end_time) VALUES (?,?,'10:30','11:00')", (atlas, date))
+        db.execute("INSERT INTO room_blocks (room_id,date,start_time,end_time) VALUES (?,?,'10:00','11:00')", (restricted, date))
+
+    endpoint = "room_watch_action.php"
+    worker = command + ["build-files/room-watch-worker.php"]
+    run(worker, root, env)  # Backward-compatible when the optional schema is absent.
+    fields = {"action": "subscribe", "room_id": atlas, "date": date, "start_time": "10:00",
+              "end_time": "11:00", "csrf_token": user_status["csrf_token"]}
+    route = f"room_details.php?id={atlas}&date={date}&start_time=10%3A00&end_time=11%3A00"
+
+    def rows():
+        with closing(sqlite3.connect(db_path)) as db:
+            return db.execute("SELECT id,room_id,notified_at FROM room_watches ORDER BY id").fetchall()
+
+    def bookings():
+        with closing(sqlite3.connect(db_path)) as db:
+            return db.execute("SELECT id, room_id,user_id,date,start_time,end_time FROM bookings ORDER BY id").fetchall()
+
+    expect("Bei Freiwerden melden" in user.request(route)[2], "A busy exact future interval offers its watch")
+    expect(guest.request(endpoint, fields)[0] == 303 and user.request(endpoint, dict(fields, csrf_token=""))[0] == 403,
+           "Watch mutation needs a signed-in account and CSRF")
+    expect(user.request(endpoint, dict(fields, date="2020-01-01"))[1].get("Location") == "index.php#rm-room-watches"
+           and user.request(endpoint, dict(fields, room_id=approval))[1].get("Location") == "index.php#rm-room-watches",
+           "Past dates and approval-only rooms cannot be subscribed")
+    baseline = bookings()
+    first = user.request(endpoint, fields)
+    expect(first[0] == 303 and first[1].get("Location") == route + "#rb-room-watch"
+           and "Frei-Meldung aktiv." in user.request(route)[2], "A valid watch returns to its original exact interval")
+    prior = rows()
+    expect(len(prior) == 1 and prior[0][1:] == (atlas, None), "Only one pending watch was inserted")
+    watch_id = prior[0][0]
+    expect(user.request(endpoint, fields)[0] == 303 and rows() == prior and bookings() == baseline,
+           "Repeated subscribe is idempotent and never reserves anything")
+    foreign = {"action": "remove", "watch_id": watch_id, "csrf_token": admin_status["csrf_token"]}
+    expect(admin.request(endpoint, foreign)[0] == 303 and rows() == prior
+           and 'rm-room-watches-title' not in admin.request("index.php")[2], "Other users cannot read or dismiss a watch")
+
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("DELETE FROM bookings WHERE id=?", (conflict,))
+    run(worker, root, env)
+    expect(rows() == prior and "Wartet auf freien Zeitraum" in user.request("index.php")[2],
+           "Partial availability with a maintenance block does not emit a notice")
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("DELETE FROM room_blocks WHERE room_id=?", (atlas,))
+    baseline = bookings()
+    page = user.request("index.php")[2]  # No cron required for the signed-in owner.
+    ready = rows()
+    expect(len(ready) == 1 and ready[0][2] is not None and "War frei" in page and "Verfügbarkeit prüfen" in page,
+           "Opening the dashboard evaluates the full interval and shows the private notice")
+    run(worker, root, env)
+    expect(rows() == ready and bookings() == baseline, "Repeated checks do not emit twice or change bookings")
+
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("INSERT INTO bookings (room_id,user_id,date,start_time,end_time) VALUES (?,?,?,'10:45','11:00')",
+                   (atlas, blocker, date))
+    expect("War frei" in user.request("index.php")[2] and "gewählte Zeitraum ist nicht verfügbar" in user.request(route)[2],
+           "A notice is historical and the link checks the current interval")
+    removed = user.request(endpoint, dict(foreign, csrf_token=user_status["csrf_token"]))
+    expect(removed[0] == 303 and rows() == [], "Owner can dismiss a notice")
+
+    expect(user.request(endpoint, dict(fields, room_id=restricted))[0] == 303 and len(rows()) == 1,
+           "Granted members may watch a restricted room")
+    run(command + ["-r", """
+        require 'database.php';
+        require 'entra_groups.php';
+        $db = getDatabaseConnection();
+        roomieEntraSchema($db);
+        roomieEntraGroupSchema($db);
+        $db->exec("INSERT INTO roomie_entra_booking_groups (object_id,label,tenant_id) VALUES ('synthetic-room-watch','QA','tenant')");
+        $db->prepare("INSERT INTO roomie_entra_room_groups (room_id,group_id) VALUES (?,?)")
+            ->execute([(int) $argv[1], (int) $db->lastInsertId()]);
+        $db->prepare("DELETE FROM room_blocks WHERE room_id = ?")->execute([(int) $argv[1]]);
+    """, str(restricted)], root, env)
+    run(worker, root, env)
+    expect(rows() == [] and "QA Watch Private" not in user.request("index.php")[2],
+           "Entra group revocation prevents a now-free interval from notifying")
+    expect(user.request(endpoint, dict(fields, room_id=restricted))[1].get("Location") == "index.php#rm-room-watches"
+           and rows() == [], "A direct POST cannot bypass Entra room policy")
+    print("Room watches: lazy schema, owner/CSRF, exact full-slot capacity and blocks, dashboard fallback, worker idempotency, dismissal and group denial passed",
+          flush=True)
+
+
 class SeriesHTML(HTMLParser):
     def __init__(self, html):
         super().__init__()
@@ -1748,6 +1847,7 @@ def smoke(php, root, scratch, expected_minor):
                 smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, concurrent)
                 smoke_series(command, root, env, date, guest, admin, admin_status, user, user_status, concurrent)
                 smoke_room_change(command, root, env, date, guest, admin, admin_status, user, user_status, concurrent)
+                smoke_room_watches(command, root, env, date, guest, admin, admin_status, user, user_status)
                 smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, concurrent)
                 smoke_booking_approvals(env, scratch, date, guest, admin, admin_status, concurrent)
             finally:

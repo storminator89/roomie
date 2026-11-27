@@ -199,3 +199,26 @@ test('search permits an ongoing preset only with explicit range and direct booki
   assert.deepEqual(searchBookingAlternatives(plan, rows, {...filters, allowInProgressPreset: true}, now)
     .map(({room, kind}) => [room.id, kind]), [[2, 'room']]);
 });
+
+test('watch shortcut requires one exact visible writable busy room and a future interval', async t => {
+  const {roomForUnavailableWatch} = await importRoomplan(t);
+  const now = new Date('2026-11-22T12:00:00Z');
+  const date = '2026-11-23';
+  const atlas = {id: 1, name: 'Atlas', number: 'B-02', capacity: 1, canBook: true, bookingPolicyKnown: true};
+  const rows = new Map([[1, [{start_time: '10:45', end_time: '11:00', blocked: true}]]]);
+  const context = {date, range: ['10:00', '11:00'], query: 'Atlas', equipment: [], onlyFavorites: false, favorites: []};
+  const find = (options = {}, candidate = atlas, schedule = rows) =>
+    roomForUnavailableWatch([candidate], schedule, {...context, ...options}, now);
+  assert.equal(find(), atlas);
+  assert.equal(find({query: 'b 02'}), atlas);
+  assert.equal(find({query: 'Atla'}), null);
+  assert.equal(find({onlyFavorites: true}), null);
+  assert.equal(find({date: '2026-11-22'}), null);
+  assert.equal(find({}, {...atlas, requiresApproval: true}), null);
+  assert.equal(find({}, {...atlas, canBook: false}), null);
+  assert.equal(find({}, {...atlas, bookingPolicyKnown: false}), null);
+  assert.equal(find({}, atlas, new Map([[1, [{start_time: '10:00', end_time: '11:00', own: true}]]])), null);
+  assert.equal(find({}, atlas, new Map([[1, [{start_time: 'broken', end_time: '11:00'}]]])), null);
+  assert.equal(find({}, atlas, new Map([[1, [{start_time: '11:00', end_time: '12:00'}]]])), null);
+  assert.equal(roomForUnavailableWatch([atlas, {...atlas, id: 2}], rows, context, now), null);
+});

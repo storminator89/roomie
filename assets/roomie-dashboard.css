@@ -196,3 +196,58 @@
 @media (max-width: 42.5rem) {
     .rm-dash-form-fields :is(input, select) { font-size: 1rem; }
 }
+
+.rm-dash-watches {
+    margin-block-end: .75rem;
+}
+.rm-dash-watches summary {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    margin: 0;
+    min-block-size: 2.75rem;
+    cursor: pointer;
+    font-weight: 700;
+}
+.rm-dash-watches summary::after {
+    content: '';
+    margin-inline-start: auto;
+    inline-size: .45rem;
+    block-size: .45rem;
+    border-inline-end: 2px solid;
+    border-block-end: 2px solid;
+    transform: rotate(45deg);
+}
+.rm-dash-watches[open] summary::after { transform: rotate(225deg); }
+.rm-dash-watches summary span { color: var(--roomie-muted); }
+.rm-dash-watch-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.rm-dash-watch-list li {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: .65rem;
+    padding-block: .65rem;
+}
+.rm-dash-watch-list li + li {
+    border-top: 1px solid var(--rp-line, #e2e8f0);
+}
+.rm-dash-watch-list strong {
+    overflow-wrap: anywhere;
+}
+.rm-dash-watch-state {
+    font-size: .875rem;
+    margin: .3rem 0 0;
+}
+.rm-dash-watch-state[data-ready] {
+    font-weight: 700;
+}
+.rm-dash-watch-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+}

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/room_access.php';
 require_once __DIR__ . '/booking_approvals.php';
+require_once __DIR__ . '/room_watches.php';
 
 header('Cache-Control: private, no-store');
 if (!isLoggedIn()) {
@@ -48,6 +49,20 @@ try {
     $loadFailed = true;
 }
 
+$watches = [];
+if (!$loadFailed) {
+    try {
+        // The dashboard is the fallback for installations without a cron worker.
+        // Only the logged-in person's watches are evaluated here.
+        roomieWatchSweep($db, $userId);
+        $watches = roomieOwnWatchList($db, $userId, new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')));
+    } catch (Throwable $error) {
+        error_log('Roomie dashboard watches unavailable');
+    }
+}
+$watchNotice = $_SESSION['roomie_watch_notice'] ?? '';
+unset($_SESSION['roomie_watch_notice']);
+
 $isCurrent = $nextBooking !== null && $nextBooking['date'] === $today
     && str_pad($nextBooking['start_time'], 8, ':00') <= $now->format('H:i:s');
 $bookingDateLabel = $nextBooking === null ? '' : (
@@ -80,6 +95,39 @@ unset($_SESSION['error'], $_SESSION['success']);
         <?php endif; ?>
         <?php if (is_string($flashSuccess) && $flashSuccess !== '') : ?>
             <p class="rp-status" role="status"><?= $dashboardEscape($flashSuccess) ?></p>
+        <?php endif; ?>
+
+        <?php if ($watchNotice !== '') : ?>
+            <p class="rp-status" role="status"><?= $dashboardEscape($watchNotice) ?></p>
+        <?php endif; ?>
+        <?php if ($watches !== []) :
+            $watchReady = count(array_filter($watches, static fn(array $watch): bool => $watch['notified_at'] !== null));
+        ?>
+            <details<?= $watchReady ? ' open' : '' ?> id="rm-room-watches" class="roomplan-panel rm-dash-watches" aria-labelledby="rm-room-watches-title">
+                <summary id="rm-room-watches-title"><svg class="rm-dash-heading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg>Frei-Meldungen <span><?= count($watches) ?></span></summary>
+                <ul class="rm-dash-watch-list">
+                    <?php foreach ($watches as $watch) : $ready = $watch['notified_at'] !== null; ?>
+                        <li>
+                            <div>
+                                <strong><?= $dashboardEscape($watch['room_name']) ?></strong>
+                                <p class="rm-dash-meta"><?= $dashboardEscape(parseBookingDate($watch['date'])?->format('d.m.Y') ?? '') ?> · <?= $dashboardEscape($watch['start_time'] . '–' . $watch['end_time']) ?> Uhr</p>
+                                <p class="rm-dash-watch-state"<?= $ready ? ' data-ready' : '' ?>><?= $ready ? 'War frei' : 'Wartet auf freien Zeitraum' ?></p>
+                            </div>
+                            <div class="rm-dash-watch-actions">
+                                <?php if ($ready) : ?>
+                                    <a class="roomplan-action roomplan-action-secondary" href="<?= $dashboardEscape(roomieWatchRoomUrl((int) $watch['room_id'], $watch['date'], $watch['start_time'], $watch['end_time'])) ?>">Verfügbarkeit prüfen</a>
+                                <?php endif; ?>
+                                <form method="post" action="room_watch_action.php">
+                                    <input type="hidden" name="csrf_token" value="<?= $dashboardEscape(csrfToken()) ?>">
+                                    <input type="hidden" name="action" value="remove">
+                                    <input type="hidden" name="watch_id" value="<?= (int) $watch['id'] ?>">
+                                    <button class="roomplan-action roomplan-action-secondary" type="submit"><?= $ready ? 'Meldung ausblenden' : 'Frei-Meldung abbestellen' ?></button>
+                                </form>
+                            </div>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </details>
         <?php endif; ?>
 
         <div class="rm-dash-overview">

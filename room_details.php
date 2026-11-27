@@ -8,6 +8,7 @@ require_once __DIR__ . '/booking_approvals.php';
 require_once __DIR__ . '/room_visual.php';
 require_once __DIR__ . '/room_photo_store.php';
 require_once __DIR__ . '/room_checkin.php';
+require_once __DIR__ . '/room_watches.php';
 
 if (!isLoggedIn()) {
     header("Location: login.php");
@@ -191,6 +192,21 @@ $equipmentLabels = [
 ];
 $equipment = json_decode((string) $room['equipment'], true);
 $equipment = is_array($equipment) ? array_slice(array_unique(array_filter($equipment, 'is_string')), 0, 20) : [];
+$watch = null;
+$showWatch = false;
+$watchNotice = $_SESSION['roomie_watch_notice'] ?? '';
+unset($_SESSION['roomie_watch_notice']);
+if ($canBookRoom && !$requiresApproval && $capacity > 0 && $requestedCustom !== null) {
+    try {
+        [$watchStart, $watchEnd] = $requestedCustom;
+        $watch = roomieWatchFind($db, $userId, $room_id, $selected_date, $watchStart, $watchEnd);
+        $conflict = roomieBookingConflict($bookings, $capacity, $userId, $watchStart, $watchEnd);
+        $showWatch = $watch !== null || ($conflict !== 'own'
+            && ($conflict === 'capacity' || roomieRoomBlockOverlaps($roomBlocks, $watchStart, $watchEnd)));
+    } catch (Throwable $error) {
+        error_log('Roomie watch controls unavailable');
+    }
+}
 $roomName = (string) $room['name'];
 $planUrl = 'raumplan.php?' . http_build_query(['date' => $selected_date] + $detailContext);
 $blocksAdminUrl = 'admin_room_blocks.php?' . http_build_query(['room_id' => $room_id, 'date' => $selected_date]);
@@ -304,6 +320,29 @@ if ($admin) {
     <div class="rb-room-columns">
         <section class="roomplan-panel rb-room-panel" aria-labelledby="rb-room-booking-title">
             <h2 id="rb-room-booking-title" class="rb-icon-row"><svg class="rb-icon rb-icon-accent" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18m-9 3v5m-2.5-2.5h5"/></svg><span><?= $requiresApproval ? 'Raum anfragen' : 'Raum buchen' ?></span></h2>
+            <?php if ($showWatch || $watchNotice !== '') : ?>
+                <div id="rb-room-watch" class="rb-room-watch">
+                    <?php if ($watchNotice !== '') : ?><p class="rb-notice" role="status"><?= detailEscape($watchNotice) ?></p><?php endif; ?>
+                    <?php if ($showWatch) : ?>
+                        <form method="post" action="room_watch_action.php">
+                            <input type="hidden" name="csrf_token" value="<?= detailEscape(csrfToken()) ?>">
+                            <input type="hidden" name="return_to" value="room">
+                            <?php if ($watch === null) : ?>
+                                <input type="hidden" name="action" value="subscribe">
+                                <input type="hidden" name="room_id" value="<?= $room_id ?>">
+                                <input type="hidden" name="date" value="<?= detailEscape($selected_date) ?>">
+                                <input type="hidden" name="start_time" value="<?= detailEscape($watchStart) ?>">
+                                <input type="hidden" name="end_time" value="<?= detailEscape($watchEnd) ?>">
+                            <?php else : ?>
+                                <input type="hidden" name="action" value="remove">
+                                <input type="hidden" name="watch_id" value="<?= (int) $watch['id'] ?>">
+                            <?php endif; ?>
+                            <p class="rb-room-watch-time"><?= detailEscape($watchStart . '–' . $watchEnd) ?> Uhr · Meldung in Roomie</p>
+                            <button type="submit" class="roomplan-action roomplan-action-secondary rb-icon-row"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/></svg><?= $watch === null ? 'Bei Freiwerden melden' : ($watch['notified_at'] === null ? 'Frei-Meldung abbestellen' : 'Meldung ausblenden') ?></button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
             <?php if (!$canBookRoom) : ?><p class="rb-empty">Für diesen Raum fehlt dir die Buchungsberechtigung.</p>
             <?php elseif (!$canBookDate) : ?><p class="rb-empty">Für dieses Datum nicht buchbar.</p>
             <?php elseif ($firstPeriod === null) : ?><p class="rb-empty">Kein buchbarer Zeitraum.</p>

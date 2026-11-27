@@ -192,6 +192,23 @@ Der UTF-8-CSV-Export enthält Raumname, Zeitraum, gebuchte Minuten und
 Spitzenstunden, keine personenbezogenen Buchungsdetails. Bestätigte
 Check-ins bleiben getrennt. Weder Bericht noch Check-in messen Anwesenheit.
 
+## Frei-Meldungen
+
+- Frei-Meldungen gelten für einen bestimmten, noch nicht begonnenen Zeitraum
+  eines direkt buchbaren Raums. Die App berücksichtigt Zeitfenster, Platz,
+  Sperren und Raumrechte; die Meldung ist keine Reservierung.
+- Die Übersicht prüft beim Öffnen die eigenen Vormerkungen. Für Prüfungen, auch
+  wenn niemand die App geöffnet hat, kann der Server einmal pro Minute
+  `php /pfad/zu/roomie/build-files/room-watch-worker.php` ausführen. Dazu
+  `ROOMIE_DB_PATH` und `ROOMIE_DOCUMENT_ROOT` wie bei der PHP-CLI setzen und
+  das App-Konto verwenden. Der Worker verarbeitet bis zu 50 offene Einträge pro
+  Lauf, die am längsten nicht geprüft wurden, zuerst. Weder Worker noch Übersicht
+  versenden E-Mails oder Push-Nachrichten.
+- Eine Meldung bleibt bis zum Ausblenden oder Beginn des Zeitfensters sichtbar.
+  „War frei“ ist eine Momentaufnahme. Beim Öffnen des Links prüft Roomie die
+  Verfügbarkeit neu. Bei Buchungsbeginn laufen Vormerkungen ab; die nächste
+  Prüfung räumt die abgelaufenen Einträge auf.
+
 ## Raum-QR
 
 Setze `ROOMIE_PUBLIC_BASE_URL` auf die stabile HTTPS-Basisadresse, z. B.

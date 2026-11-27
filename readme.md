@@ -45,6 +45,9 @@ lesen. [Vollständige Betriebsanleitung](docs/betrieb.md)
   geht die bisherige Reservierung nicht verloren. Möglich für direkte Einzelbuchungen
   ohne Sitzplatz oder Check-in. Bereits importierte Kalenderdateien aktualisieren sich nicht automatisch.
   Bei einer neuen wöchentlichen Serie steht dort **Serie bearbeiten**.
+- **Frei-Meldung:** Einen belegten Wunschraum mit gewählter Uhrzeit öffnen und
+  **Bei Freiwerden melden** wählen. In der Übersicht erscheint eine Meldung,
+  sobald der ganze Zeitraum bei einer Prüfung frei ist. Sie reserviert nichts.
 - **Als Admin:** Unter **Raumplan → Räume & Grundrisse verwalten** Räume,
   Zonen und Fotos bearbeiten. In den Raumdetails stehen **Sperrzeiten**,
   Freigabe, optionaler Check-in und **Raum-QR drucken** zur Verfügung.

@@ -59,6 +59,7 @@ const iconPaths = Object.freeze({
   chevron: 'm6 9 6 6 6-6',
   calendar: 'M15 3v4M9 3v4M4 10h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z',
   calendarPlus: 'M15 3v4M9 3v4M4 10h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm6 8v5m-2.5-2.5h5',
+  bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4',
   clock: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 7v5l3 2',
   check: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-13 0 2.5 2.5 5.5-5',
   star: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z',
@@ -252,6 +253,33 @@ export function searchBookingAlternatives(plan, bookingsByRoom, {
     if (room) shorter = {room, range, kind: 'shorter', minutes: step * 15};
   }
   return [sameTime[0], later, shorter, ...sameTime.slice(1)].filter(Boolean).slice(0, 3);
+}
+
+// Link to the exact wish only. The detail route rechecks availability and
+// rights; following this link never creates a watch or a booking.
+export function roomForUnavailableWatch(rooms, rowsByRoom, {date, range, query, equipment, onlyFavorites, favorites}, now = new Date()) {
+  const name = value => normalizeRoomSearch(value).join(' ');
+  const wish = name(query);
+  if (!wish || !(rowsByRoom instanceof Map) || !range || !validBookingWindow(...range)
+    || !bookingWindowInFuture(date, range[0], now)) return null;
+  const named = rooms.filter(room => name(room.name) === wish || name(room.number) === wish);
+  if (named.length !== 1) return null;
+  const [room] = named;
+  if (room.bookingPolicyKnown !== true || room.canBook !== true || room.requiresApproval
+    || !Number.isInteger(room.capacity) || room.capacity < 1
+    || (onlyFavorites && !favorites.includes(room.id)) || !matchesRoomAmenities(room, equipment)) return null;
+  const rows = rowsByRoom.get(room.id);
+  const [from, to] = range.map(time => time + ':00');
+  // A broken or incomplete booking response cannot prove this room is busy.
+  if (!Array.isArray(rows) || !rows.length || rows.some(entry => {
+    const start = entry?.start_time;
+    const end = entry?.end_time;
+    if (!clock(start) || !clock(end) || ![5, 8].includes(start.length) || ![5, 8].includes(end.length)) return true;
+    const a = start.length === 5 ? start + ':00' : start;
+    const b = end.length === 5 ? end + ':00' : end;
+    return a >= b || (entry.own === true && a < to && b > from);
+  })) return null;
+  return !periodCanBeBooked(room.capacity, rows, ...range) ? room : null;
 }
 
 function dateValue(value) {
@@ -466,6 +494,8 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   suggestionTitle.id = 'rp-search-alternatives-title';
   const suggestionList = el('ul', 'rp-search-alternative-list');
   searchSuggestions.append(suggestionTitle, suggestionList);
+  const watchLink = withIcon(el('a', secondaryButton + ' rp-watch-search', 'Bei Freiwerden melden'), 'bell');
+  watchLink.hidden = true;
   const content = el('div', 'rp-view-content');
   content.id = 'rp-view-content';
   content.tabIndex = -1;
@@ -475,7 +505,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   retry.hidden = true;
   toolbar.setAttribute('role', 'group');
   toolbar.setAttribute('aria-label', 'Raumplan filtern');
-  view.replaceChildren(toolbar, notice, retry, filterResult, searchSuggestions, content);
+  view.replaceChildren(toolbar, notice, retry, filterResult, searchSuggestions, watchLink, content);
 
   function preferredRange() {
     return onlyFree || rangeIsExplicit ? dateRange.value : null;
@@ -915,6 +945,21 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
   }
 
   function drawSearchAlternatives(floor) {
+    const range = preferredRange();
+    const wish = onlyFree && rangeIsExplicit && bookingStatus === 'ready' && dateIsBookable()
+      ? roomForUnavailableWatch(plan.rooms, bookingsByRoom, {
+        date: dateInput.value, range, query: floorFilters.query,
+        equipment: selectedEquipment, onlyFavorites, favorites: plan.favorites,
+      })
+      : null;
+    watchLink.hidden = wish === null;
+    if (wish) {
+      watchLink.href = detailsUrl(wish, dateInput.value, range, onlyFree) + '#rb-room-watch';
+      watchLink.setAttribute('aria-label', `Bei Freiwerden melden: ${wish.name}`);
+    } else {
+      watchLink.removeAttribute('href');
+      if (watchLink === document.activeElement) search.focus();
+    }
     const options = currentSearchAlternatives(floor);
     const focused = suggestionList.contains(document.activeElement) ? document.activeElement.dataset.alternative : null;
     const floorTitles = new Map();
@@ -1241,6 +1286,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       content.replaceChildren();
       filterResult.textContent = '';
       searchSuggestions.hidden = true;
+      watchLink.hidden = true;
       status(error.message || 'Raumplan konnte nicht geladen werden.', true);
     } finally {
       if (invocation === planRun) content.setAttribute('aria-busy', 'false');
@@ -1256,6 +1302,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       content.replaceChildren();
       filterResult.textContent = '';
       searchSuggestions.hidden = true;
+      watchLink.hidden = true;
       content.setAttribute('aria-busy', 'false');
       status('Bitte ein Datum auswählen.', true);
       resetDate.disabled = false;
