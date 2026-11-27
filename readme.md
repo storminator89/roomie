@@ -40,7 +40,10 @@ lesen. [Vollständige Betriebsanleitung](docs/betrieb.md)
   **Nur frei** eingrenzen. Wenn nichts passt, zeigt **Passt auch …** bis zu drei
   Alternativen. Erst im Buchungsdialog bestätigst du verbindlich. Bei freigabepflichtigen
   Räumen wird daraus zunächst eine Anfrage.
-- **Buchungen → Optionen** für Verschieben, Storno oder Kalenderdatei nutzen.
+- **Buchungen → Optionen** für Verschieben, **Raum wechseln**, Storno oder Kalenderdatei nutzen.
+  Der Raumwechsel behält die Uhrzeit und die Buchungsnummer. Scheitert der Wechsel,
+  geht die bisherige Reservierung nicht verloren. Möglich für direkte Einzelbuchungen
+  ohne Sitzplatz oder Check-in. Bereits importierte Kalenderdateien aktualisieren sich nicht automatisch.
   Bei einer neuen wöchentlichen Serie steht dort **Serie bearbeiten**.
 - **Als Admin:** Unter **Raumplan → Räume & Grundrisse verwalten** Räume,
   Zonen und Fotos bearbeiten. In den Raumdetails stehen **Sperrzeiten**,

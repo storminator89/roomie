@@ -595,7 +595,9 @@ def smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, c
     forms = MoveFormsHTML(html)
     own_forms = forms.forms
     expect(not forms.opened, "Move disclosures should stay closed until the owner opens them or retries")
-    expect(code == 200 and "Verschieben" in html and own_forms.get(own) == {key: str(value) for key, value in original(own).items()},
+    expect(code == 200 and "Verschieben" in html and {key: value for key, value in own_forms.get(own, {}).items() if key != "original_snapshot"}
+           == {key: str(value) for key, value in original(own).items()}
+           and re.fullmatch("[0-9a-f]{64}", own_forms[own]["original_snapshot"]),
            "Future owner booking must show move form with its exact original snapshot and CSRF")
     expect(conflicting not in own_forms and ended not in own_forms and started not in own_forms,
            "No move form for someone else's, past, or already started booking")
@@ -695,6 +697,175 @@ def smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, c
 
     print("Reschedule: role, CSRF, started/expired, grant/seat/capacity, stale forms, unchanged row identity, and updated calendar passed"
           + ("; both concurrent races passed" if concurrent else ""), flush=True)
+
+
+class RoomChangeHTML(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.active, self.fields, self.options = False, {}, set()
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "form":
+            self.active = attrs.get("id") == "rb-change-room-form"
+        elif self.active and tag == "input" and attrs.get("type") == "hidden":
+            self.fields[attrs["name"]] = attrs["value"]
+        elif self.active and tag == "option" and attrs.get("value"):
+            self.options.add(int(attrs["value"]))
+
+    def handle_endtag(self, tag):
+        if tag == "form":
+            self.active = False
+
+
+def smoke_room_change(command, root, env, date, guest, admin, admin_status, user, user_status, concurrent):
+    db_path = env["ROOMIE_DB_PATH"]
+    today = dt.datetime.now(ZoneInfo("Europe/Berlin")).date().isoformat()
+    with closing(sqlite3.connect(db_path)) as db, db:
+        users = dict(db.execute("SELECT email,id FROM users"))
+        who, other = [users[f"smoke-{role}@example.test"] for role in ("user", "admin")]
+
+        def room(label, kind="office", capacity=1):
+            return db.execute("INSERT INTO rooms (name,type,capacity) VALUES (?,?,?)",
+                              ("QA Room Change " + label, kind, capacity)).lastrowid
+
+        def book(room_id, owner=who, begins="10:00", ends="11:00", seat=None, on=date):
+            return db.execute("INSERT INTO bookings (room_id,user_id,date,start_time,end_time,seat_id) "
+                              "VALUES (?,?,?,?,?,?)", (room_id, owner, on, begins, ends, seat)).lastrowid
+
+        source, good, race, dynamic, second, blocked, busy, mandatory = (
+            room(s) for s in ("Source", "Good", "Race", "Dynamic", "Second", "Blocked", "Busy", "Needs approval"))
+        restricted = room("Hidden", "fk-office")
+        group = room("Group")
+        own_target = room("Own overlap", capacity=2)
+        bid = book(source)
+        race_booking = book(source, begins="11:15", ends="12:00")
+        race_booking2 = book(source, begins="12:15", ends="13:00")
+        book(good, other, "09:00", "10:00")  # Adjacency must be allowed.
+        book(busy, other, "10:45", "11:00")  # A partial interval cannot be offered.
+        book(own_target)
+        someone_elses = book(second, other, "13:00", "14:00")
+        seat = db.execute("INSERT INTO seats (room_id,top,left_pos) VALUES (?,'0','0')", (source,)).lastrowid
+        seat_booking = book(source, begins="14:00", ends="15:00", seat=seat)
+        started = book(source, begins="00:00", ends="09:00", on=today)
+        approval_origin = book(source, begins="15:00", ends="15:30")
+        db.execute("INSERT INTO booking_requests (user_id,room_id,date,start_time,end_time,status,resolved_at,booking_id) "
+                   "VALUES (?,?,?,?,?,'approved',CURRENT_TIMESTAMP,?)",
+                   (who, source, date, "15:00", "15:30", approval_origin))
+        series_booking = book(source, begins="15:30", ends="16:00")
+        series_id = db.execute("INSERT INTO booking_series (user_id) VALUES (?)", (who,)).lastrowid
+        db.execute("INSERT INTO booking_series_members (booking_id,series_id) VALUES (?,?)", (series_booking, series_id))
+        db.execute("INSERT INTO room_booking_approval_policies VALUES (?)", (mandatory,))
+        db.execute("INSERT INTO room_blocks (room_id,date,start_time,end_time) VALUES (?,?,'10:15','10:30')",
+                   (blocked, date))
+
+    run(command + ["-r", """
+        require 'database.php';
+        require 'entra_groups.php';
+        $db = getDatabaseConnection();
+        roomieEntraSchema($db);
+        roomieEntraGroupSchema($db);
+        $db->exec("INSERT INTO roomie_entra_booking_groups (object_id,label,tenant_id) VALUES ('synthetic-room-change','QA','tenant')");
+        $db->prepare("INSERT INTO roomie_entra_room_groups (room_id,group_id) VALUES (?,?)")->execute(
+            [(int) $argv[1], (int) $db->lastInsertId()]);
+    """, str(group)], root, env)
+
+    endpoint = "change_booking_room.php"
+
+    def route(id_):
+        return f"{endpoint}?id={id_}"
+
+    def get(id_):
+        code, headers, html = user.request(route(id_))
+        expect(code == 200 and headers.get("Cache-Control") == "private, no-store", "Expected private room change page")
+        return RoomChangeHTML(html), html
+
+    def state(id_):
+        with closing(sqlite3.connect(db_path)) as db:
+            return db.execute("SELECT room_id,user_id,date,start_time,end_time,seat_id FROM bookings WHERE id=?", (id_,)).fetchone()
+
+    listed, html = get(bid)
+    forbidden = {source, blocked, busy, mandatory, restricted, group, own_target}
+    expect({good, race, second, dynamic} <= listed.options and not listed.options & forbidden,
+           "Room change offers only directly bookable, unblocked targets for the full booking duration")
+    expect("QA Room Change Hidden" not in html, "Unauthorized room names must not be included")
+    expect(guest.request(route(bid))[0] == 303 and admin.request(route(bid))[0] == 404
+           and user.request(route(someone_elses))[0] == 404, "Only the signed-in booking owner can see room changes")
+    for id_ in (seat_booking, started, approval_origin, series_booking):
+        expect(user.request(route(id_))[0] == 409, "Seat, started, approval-origin and series bookings are excluded")
+
+    baseline = state(bid)
+
+    def target(id_, **changes):
+        return dict(listed.fields, target_room_id=id_, **changes)
+
+    expect(user.request(endpoint, target(good, csrf_token=""))[0] == 403, "Missing move CSRF must reject")
+    expect(admin.request(endpoint, target(good, csrf_token=admin_status["csrf_token"]))[0] == 404,
+           "Admin is not authorized to move a booking owned by another user")
+    for id_ in sorted(forbidden):
+        code, _, text = user.request(endpoint, target(id_))
+        expect(code == 409 and "Deine Buchung bleibt bestehen" in text and state(bid) == baseline,
+               f"Unavailable target {id_} must not release the source")
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("INSERT INTO bookings (room_id,user_id,date,start_time,end_time) VALUES (?,?,?,'10:00','11:00')",
+                   (dynamic, other, date))
+    expect(user.request(endpoint, target(dynamic))[0] == 409 and state(bid) == baseline,
+           "A target filled after reading the options must not release the source")
+
+    cal = f"bookings.php?download=calendar&booking_id={bid}"
+    before_ics = user.request(cal)[2]
+    stale_clock = MoveFormsHTML(user.request(f"bookings.php?edit={bid}")[2]).forms[bid]
+    changed = user.request(endpoint, target(good))
+    expect(changed[0] == 303 and changed[1].get("Location") == f"bookings.php?focus={bid}#booking-{bid}"
+           and state(bid) == (good, *baseline[1:]), "The same owned booking must move in place without schedule changes")
+    code, _, html = user.request(f"bookings.php?focus={bid}")
+    expect(code == 200 and "Raum gewechselt." in html and "QA Room Change Good" in html and not MoveFormsHTML(html).opened,
+           "Redirect must confirm the move without opening date/time inputs")
+    after_ics = user.request(cal)[2]
+    get_uid = lambda value: re.search(r"(?m)^UID:([^\r\n]+)", value).group(1)
+    expect("SUMMARY:QA Room Change Good" in after_ics and get_uid(before_ics) == get_uid(after_ics),
+           "Updated calendar export must retain the same event UID")
+    expect(user.request("reschedule_booking.php", dict(stale_clock, date=date, start_time="09:00", end_time="09:30"))[0] == 409
+           and state(bid) == (good, *baseline[1:]), "A stale time-only form cannot act on the newly selected room")
+
+    refreshed, _ = get(bid)
+    expect(user.request(endpoint, dict(refreshed.fields, target_room_id=source))[0] == 303
+           and state(bid) == baseline, "A fresh form may move back to the old room")
+    expect(user.request(endpoint, target(good))[0] == 409 and state(bid) == baseline,
+           "Returning to the same source must not make an old move form replayable")
+
+    if concurrent:
+        second_session = Client(user.base_url)
+        second_status = second_session.login("smoke-user@example.test", env["ROOMIE_SMOKE_PASSWORD"])
+
+        def parallel(a, b):
+            barrier = Barrier(2, timeout=5)
+            def begin(action):
+                barrier.wait()
+                return action()
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                first_job, second_job = pool.submit(begin, a), pool.submit(begin, b)
+                return first_job.result(), second_job.result()
+
+        existing, _ = get(race_booking)
+        a, b = parallel(lambda: user.request(endpoint, dict(existing.fields, target_room_id=good))[0],
+                        lambda: second_session.request(endpoint, dict(existing.fields, target_room_id=second,
+                                                      csrf_token=second_status["csrf_token"]))[0])
+        expect(sorted((a, b)) == [303, 409] and state(race_booking)[0] == (good if a == 303 else second),
+               "Concurrent room changes using one source form must have exactly one winner")
+
+        existing, _ = get(race_booking2)
+        fields = {"csrf_token": admin_status["csrf_token"], "selectedWorkspace": race, "time_period": "individuell",
+                  "start_date": date, "end_date": date, "start_time": "12:15", "end_time": "13:00"}
+        moved, created = parallel(lambda: user.request(endpoint, dict(existing.fields, target_room_id=race))[0],
+                                  lambda: admin.request("process_booking.php", fields))
+        expect(moved in (303, 409) and json.loads(created[2]).get("success") is (moved == 409)
+               and state(race_booking2)[0] == (race if moved == 303 else source),
+               "Move and new booking must contend for the same last place without losing the source")
+
+    print("Room change: visibility, approval/ACL/group/block/capacity, owner/CSRF, stable booking and ICS, stale and concurrent writes passed",
+          flush=True)
 
 
 class SeriesHTML(HTMLParser):
@@ -1576,6 +1747,7 @@ def smoke(php, root, scratch, expected_minor):
                                         user, user_status, concurrent)
                 smoke_reschedule(env, date, guest, admin, admin_status, user, user_status, concurrent)
                 smoke_series(command, root, env, date, guest, admin, admin_status, user, user_status, concurrent)
+                smoke_room_change(command, root, env, date, guest, admin, admin_status, user, user_status, concurrent)
                 smoke_room_blocks(env, date, guest, admin, admin_status, user, user_status, concurrent)
                 smoke_booking_approvals(env, scratch, date, guest, admin, admin_status, concurrent)
             finally:

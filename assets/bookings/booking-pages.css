@@ -310,3 +310,10 @@
     .rb-filter > label:has(input[type="date"]) { flex-basis: 100%; }
     .rb-filter input[type="date"] { inline-size: 100%; }
 }
+
+.rb-room-change { justify-items:start; }
+.rb-room-change-panel { display:grid; gap:.65rem; width:min(100%,38rem); min-width:0; }
+.rb-room-change-panel strong { overflow-wrap:anywhere; }
+.rb-room-change-slot { color:var(--roomplan-muted,#525b65); }
+.rb-room-change-panel .rb-filter label { flex:1 1 12rem; min-width:0; }
+.rb-room-change-panel .rb-filter select { width:100%; }

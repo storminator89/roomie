@@ -5,6 +5,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_helpers.php';
 require_once __DIR__ . '/room_blocks.php';
 require_once __DIR__ . '/booking_approvals.php';
+require_once __DIR__ . '/booking_room_change.php';
 
 header('Cache-Control: private, no-store');
 header('Content-Type: text/html; charset=utf-8');
@@ -69,7 +70,7 @@ try {
     }
 
     $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
-    $find = $db->prepare("SELECT $effectiveRoom AS room_id, b.seat_id, b.date, b.start_time, b.end_time
+    $find = $db->prepare("SELECT b.id, b.user_id, $effectiveRoom AS room_id, b.seat_id, b.date, b.start_time, b.end_time
         FROM bookings b WHERE b.id = ? AND b.user_id = ?");
     $find->execute([$bookingId, $userId]);
     $booking = $find->fetch(PDO::FETCH_ASSOC);
@@ -86,6 +87,13 @@ try {
         throw new RoomieRescheduleRejected('Dieser Raum braucht eine Freigabe. Stelle für einen anderen Termin eine neue Anfrage.', 409);
     }
     $retryBooking = $bookingId;
+    $revision = (int) (roomieBookingRevisions($db, [$bookingId])[$bookingId] ?? 0);
+    $snapshot = $_POST['original_snapshot'] ?? null;
+    // An old pre-update form is usable only until the first committed edit.
+    if (($snapshot !== null || $revision > 0)
+        && (!is_string($snapshot) || !hash_equals(roomieBookingRevisionSnapshot($booking, $revision), $snapshot))) {
+        throw new RoomieRescheduleRejected('Diese Buchung wurde inzwischen geändert. Bitte öffne sie erneut.', 409);
+    }
     $expectedDate = $originalDate->format('Y-m-d');
     if ($booking['date'] !== $expectedDate || $booking['start_time'] !== $originalStart || $booking['end_time'] !== $originalEnd) {
         throw new RoomieRescheduleRejected('Diese Buchung wurde inzwischen geändert. Bitte öffne sie erneut.', 409);
@@ -155,6 +163,7 @@ try {
     }
 
     // Change only the schedule; the booking ID, room, seat and owner remain unchanged.
+    roomieBookingEnableRevisions($db);
     $update = $db->prepare('UPDATE bookings SET date = ?, start_time = ?, end_time = ?
         WHERE id = ? AND user_id = ? AND date = ? AND start_time = ? AND end_time = ?');
     $update->execute([$date, $start, $end, $bookingId, $userId, $expectedDate, $originalStart, $originalEnd]);

@@ -4,6 +4,7 @@ require_once __DIR__ . '/booking_calendar.php';
 require_once __DIR__ . '/booking_approvals.php';
 require_once __DIR__ . '/room_checkin.php';
 require_once __DIR__ . '/booking_series_store.php';
+require_once __DIR__ . '/booking_room_change.php';
 
 header('Cache-Control: private, no-store');
 if (!isLoggedIn()) {
@@ -94,6 +95,7 @@ $filterDate = parseBookingDate($_GET['date'] ?? null)?->format('Y-m-d') ?? '';
 $scope = ($_GET['scope'] ?? null) === 'all' ? 'all' : 'mine';
 $searchName = $scope === 'all' && $isAdmin && is_string($_GET['search'] ?? null) ? substr(trim($_GET['search']), 0, 100) : '';
 $editBookingId = roomiePositiveId($_GET['edit'] ?? null);
+$focusBookingId = $editBookingId ?? roomiePositiveId($_GET['focus'] ?? null);
 $page = min(201, roomiePositiveId($_GET['page'] ?? null) ?? 1);
 $perPage = 50;
 $offset = ($page - 1) * $perPage;
@@ -106,6 +108,9 @@ $ownRequests = [];
 $approvalRooms = [];
 $checkinFlags = [];
 $bookingSeriesIds = [];
+$bookingRevisions = [];
+$approvalBookings = [];
+$roomChangeAvailable = false;
 $hasNext = false;
 
 try {
@@ -144,10 +149,10 @@ try {
         $params['search_name'] = '%' . $searchName . '%';
     }
     $editOrder = '';
-    // A retry link must find an owned booking even when it sorts onto a later page.
-    if ($editBookingId !== null && $page === 1) {
+    // A link back to a booking must find it even when it sorts onto a later page.
+    if ($focusBookingId !== null && $page === 1) {
         $editOrder = 'CASE WHEN b.id = :edit_id AND b.user_id = :edit_owner THEN 0 ELSE 1 END, ';
-        $params += ['edit_id' => $editBookingId, 'edit_owner' => $user_id];
+        $params += ['edit_id' => $focusBookingId, 'edit_owner' => $user_id];
     }
     $stmt = $db->prepare($query . ' ORDER BY ' . $editOrder . 'b.date, b.start_time, b.id LIMIT ' . ($perPage + 1) . ' OFFSET ' . $offset);
     foreach ($params as $key => $value) {
@@ -174,8 +179,11 @@ if ($bookings) {
     try {
         $ownedBookingIds = array_map(static fn (array $entry): int => (int) $entry['id'], $ownBookings);
         $bookingSeriesIds = roomieBookingSeriesIds($db, $user_id, $ownedBookingIds);
+        $bookingRevisions = roomieBookingRevisions($db, $ownedBookingIds);
+        $approvalBookings = roomieRoomChangeApprovalBookings($db, $ownedBookingIds);
+        $roomChangeAvailable = true;
     } catch (PDOException | UnexpectedValueException) {
-        error_log('Roomie booking series links unavailable');
+        error_log('Roomie booking change metadata unavailable');
     }
 }
 function bookingPageUrl(string $scope, string $date = '', string $search = '', int $page = 1): string
@@ -213,7 +221,7 @@ $filterUrl = $filterPage . (str_contains($filterPage, '?') ? '&' : '?') . 'filte
     . ($editBookingId !== null ? '&edit=' . $editBookingId : '') . '#rb-booking-filter-fields';
 // Highlight the first upcoming entry in the default personal view without changing ledger order.
 $nextBookingId = null;
-if ($scope === 'mine' && !$hasFilters && $page === 1 && $editBookingId === null) {
+if ($scope === 'mine' && !$hasFilters && $page === 1 && $focusBookingId === null) {
     $nowClock = $now->format('H:i:s');
     foreach ($bookings as $entry) {
         $clock = roomieBookingClock($entry['start_time']);
@@ -294,6 +302,10 @@ $requestLabels = [
                 $canMove = $owner && $future && !$deniedForGroup && !isset($approvalRooms[(int) $booking['room_id']]);
                 $seriesId = $owner && $future ? ($bookingSeriesIds[$bookingId] ?? null) : null;
                 $reopenMove = $canMove && $bookingId === $editBookingId;
+                $canChangeRoom = $roomChangeAvailable && $canMove && $seriesId === null
+                    && !isset($approvalBookings[$bookingId]) && $booking['seat_id'] === null
+                    && ($checkin['state'] ?? null) !== 'checked'
+                    && roomieRoomChangeWindow($booking, $now) !== null;
                 $clockLabel = substr((string) $booking['start_time'], 0, 5) . '–' . substr((string) $booking['end_time'], 0, 5);
                 $optionLabel = 'Optionen für ' . $booking['room_name'] . ', ' . roomieDateLabel($date) . ', ' . $clockLabel . ' Uhr';
             ?>
@@ -324,6 +336,9 @@ $requestLabels = [
                             <a class="roomplan-action roomplan-action-secondary" href="series_manage.php?id=<?= (int) $seriesId ?>">Serie bearbeiten</a>
                             <?php endif; ?>
                             <a class="roomplan-action roomplan-action-secondary" href="bookings.php?download=calendar&amp;booking_id=<?= $bookingId ?>"><svg class="rb-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v11m-4-4 4 4 4-4M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3"/></svg>Kalenderdatei (.ics)</a>
+                            <?php if ($canChangeRoom) : ?>
+                            <a class="roomplan-action roomplan-action-secondary" href="change_booking_room.php?id=<?= $bookingId ?>">Raum wechseln</a>
+                            <?php endif; ?>
                             <?php if ($canMove) :
                                 $moveDate = $date <= $lastDate ? $date : '';
                                 $moveStart = substr((string) $booking['start_time'], 0, 5);
@@ -337,6 +352,7 @@ $requestLabels = [
                                     <input type="hidden" name="original_date" value="<?= bookingEscape((string) $booking['date']) ?>">
                                     <input type="hidden" name="original_start_time" value="<?= bookingEscape((string) $booking['start_time']) ?>">
                                     <input type="hidden" name="original_end_time" value="<?= bookingEscape((string) $booking['end_time']) ?>">
+                                    <input type="hidden" name="original_snapshot" value="<?= bookingEscape(roomieBookingRevisionSnapshot($booking, (int) ($bookingRevisions[$bookingId] ?? 0))) ?>">
                                     <div class="rb-filter">
                                         <label>Datum<input type="date" name="date" min="<?= $todayKey ?>" max="<?= $lastDate ?>" value="<?= bookingEscape($moveDate) ?>" required></label>
                                         <label>Von
