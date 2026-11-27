@@ -9,6 +9,7 @@
 .roomie-qr-status[data-status=busy], .roomie-qr-status[data-status=blocked] { background: #fff1eb; color: #7a3315; }
 .roomie-qr-card button { inline-size: 100%; min-block-size: 48px; }
 .roomie-qr-time { margin: 1rem 0 .45rem; font-variant-numeric: tabular-nums; }
+.roomie-qr-checkin-done { margin: 1rem 0 .45rem; color: #145039; font-weight: 700; }
 .roomie-qr-details, .roomie-qr-after a { display: inline-grid; align-content: center; min-block-size: 44px; }
 .roomie-qr-details { margin-block-start: .5rem; }
 .roomie-qr-after { display: flex; gap: .25rem 1rem; flex-wrap: wrap; }

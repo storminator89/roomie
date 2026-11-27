@@ -5,9 +5,10 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/room_qr_availability.php';
 require_once __DIR__ . '/room_blocks.php';
 require_once __DIR__ . '/booking_approvals.php';
+require_once __DIR__ . '/room_checkin.php';
 
 header('Cache-Control: private, no-store');
-header('Referrer-Policy: no-referrer');
+header('Referrer-Policy: same-origin');
 
 if (!in_array($_SERVER['REQUEST_METHOD'] ?? '', ['GET', 'HEAD'], true)) {
     header('Allow: GET, HEAD');
@@ -27,6 +28,7 @@ $room = null;
 $state = null;
 $bookable = false;
 $approval = false;
+$checkins = [];
 $now = new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin'));
 $date = $now->format('Y-m-d');
 if ($id !== null) {
@@ -47,6 +49,7 @@ if ($id !== null) {
             $approval = roomieRoomRequiresApproval($db, $id);
             $state = roomieQrAvailability($now, (int) $room['capacity'], $userId,
                 roomieRoomBookingRows($db, $id, $date), roomieRoomBlocksForDate($db, $id, $date));
+            $checkins = roomieCheckinForRoom($db, $id, $userId, $now);
         }
         $db->commit();
     } catch (Throwable $error) {
@@ -54,6 +57,7 @@ if ($id !== null) {
             $db->rollBack();
         }
         $state = null;
+        $checkins = [];
         http_response_code(503);
         error_log('Roomie QR room availability failed');
     }
@@ -95,7 +99,25 @@ $title = $room !== null ? (string) $room['name'] :
             <span>bis <?= $escape($clockLabel($state['until'])) ?> Uhr</span>
         <?php endif; ?>
     </section>
-    <?php if ($slot !== null) : ?>
+    <?php if ($checkins !== []) : ?>
+        <section class="roomie-qr-checkins" aria-label="Meine Buchung">
+        <?php foreach ($checkins as $checkin) : ?>
+            <?php if ($checkin['state'] === 'checked') : ?>
+                <p class="roomie-qr-checkin-done" role="status">✓ Eingecheckt · <?= $escape($checkin['time']) ?> Uhr</p>
+            <?php else : ?>
+                <form method="post" action="room_checkin_action.php">
+                    <input type="hidden" name="csrf_token" value="<?= $escape(csrfToken()) ?>">
+                    <input type="hidden" name="action" value="checkin">
+                    <input type="hidden" name="source" value="qr">
+                    <input type="hidden" name="booking_id" value="<?= (int) $checkin['booking_id'] ?>">
+                    <input type="hidden" name="booking_snapshot" value="<?= $escape($checkin['snapshot']) ?>">
+                    <p class="roomie-qr-time"><?= $escape($checkin['time']) ?> Uhr</p>
+                    <button class="roomplan-action" type="submit" aria-label="<?= $escape('Einchecken: ' . $checkin['time'] . ' Uhr') ?>">Einchecken</button>
+                </form>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        </section>
+    <?php elseif ($slot !== null) : ?>
         <form id="roomie-qr-booking" method="post" action="process_booking.php" hidden>
             <input type="hidden" name="csrf_token" value="<?= $escape(csrfToken()) ?>">
             <input type="hidden" name="selectedWorkspace" value="<?= $id ?>">

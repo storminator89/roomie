@@ -166,7 +166,9 @@ Buchungen bleiben bestehen.
 
 In den Raumdetails pro Raum aktivierbar; standardmäßig aus. Die buchende
 Person mit weiterhin bestehendem Raumzugriff kann in **Buchungen** ab
-10 Minuten vor Beginn bestätigen. Das Fenster endet 10 Minuten nach
+10 Minuten vor Beginn bestätigen. Alternativ den Raum-QR scannen und auf
+**Einchecken** tippen. Der QR allein bestätigt keine Anwesenheit. Das Fenster
+endet 10 Minuten nach
 Beginn oder am früheren Ende des Termins. Kein Check-in storniert oder gibt
 einen Raum automatisch frei. Der optionale Tageswert im Raumdetail erfasst
 nur bereits begonnene, berechtigte Buchungen seit Aktivierung und deren

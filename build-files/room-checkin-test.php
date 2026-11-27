@@ -78,6 +78,13 @@ verify(roomieCheckinFlags($db, [$row], $at('10:10')) === [], 'no CTA by default'
 denies(fn() => $check(11, 1, $token, '10:10'), 409, 'no check-in when disabled');
 $write(fn() => roomieCheckinSetPolicy($db, 1, true, $at('09:30')));
 verify(roomieCheckinRoomPolicy($db, 1) && !roomieCheckinRoomPolicy($db, 2), 'scope only enabled room');
+verify(roomieCheckinForRoom($db, 1, 1, $at('10:04:59')) === [], 'QR does not show early check-in');
+verify(roomieCheckinForRoom($db, 1, 1, $at('10:06')) === [
+    ['state' => 'eligible', 'snapshot' => $token, 'booking_id' => 11, 'time' => '10:15–10:19'],
+    ['state' => 'eligible', 'snapshot' => $legacyToken, 'booking_id' => 12, 'time' => '10:15–10:45'],
+], 'room QR only lists active current owner bookings, including legacy seats');
+verify(roomieCheckinForRoom($db, 2, 1, $at('10:06')) === [], 'QR does not show check-in for a disabled room');
+
 denies(fn() => $check(11, 2, $token, '10:10'), 404, 'other owner');
 denies(fn() => $check(14, 1, $token, '10:10'), 404, 'restricted without permission');
 denies(fn() => $check(11, 1, str_repeat('0', 64), '10:10'), 409, 'stale fingerprint');
@@ -87,6 +94,10 @@ verify(roomieCheckinFlags($db, [$row], $at('10:05')) === [
 ], 'start minus 10 is inclusive');
 $check(11, 1, $token, '10:05');
 $check(11, 1, $token, '10:06');
+verify(roomieCheckinForRoom($db, 1, 1, $at('10:06'))[0] === [
+    'state' => 'checked', 'booking_id' => 11, 'time' => '10:15–10:19',
+], 'QR shows check-in receipt without resubmission form');
+
 verify(roomieCheckinFlags($db, [$row], $at('10:06')) === [
     11 => ['state' => 'checked'],
 ], 'durable idempotent check-in marker');

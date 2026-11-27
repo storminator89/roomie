@@ -182,8 +182,37 @@ function roomieCheckinFlags(PDO $db, array $rows, DateTimeImmutable $now): array
     return $flags;
 }
 
+/** Private, read-only QR view: only the visitor's own active check-in windows for this room. */
+function roomieCheckinForRoom(PDO $db, int $roomId, int $actorId, DateTimeImmutable $now): array
+{
+    if (!roomieCheckinRoomPolicy($db, $roomId)) {
+        return [];
+    }
+    $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
+    $query = $db->prepare("SELECT b.id, b.user_id, b.seat_id, :room AS room_id, b.date, b.start_time, b.end_time
+        FROM bookings b WHERE b.user_id = :owner AND b.date = :day AND $effectiveRoom = :room
+        ORDER BY b.start_time, b.id");
+    $query->bindValue(':room', $roomId, PDO::PARAM_INT);
+    $query->bindValue(':owner', $actorId, PDO::PARAM_INT);
+    $query->bindValue(':day', $now->format('Y-m-d'));
+    $query->execute();
+    $rows = [];
+    while ($row = $query->fetch(PDO::FETCH_ASSOC)) {
+        $times = roomieCheckinBookingTimes($row);
+        if ($times !== null && roomieCheckinWindowOpen($now, $times)) {
+            $rows[(int) $row['id']] = ['row' => $row, 'time' => $times[0]->format('H:i') . '–' . $times[1]->format('H:i')];
+        }
+    }
+    $flags = roomieCheckinFlags($db, array_column($rows, 'row'), $now);
+    $choices = [];
+    foreach ($flags as $id => $flag) {
+        $choices[] = $flag + ['booking_id' => $id, 'time' => $rows[$id]['time']];
+    }
+    return $choices;
+}
+
 /** Caller acquired writer reservation and refreshed the account in that transaction. */
-function roomieCheckinConfirm(PDO $db, int $bookingId, int $actorId, string $snapshot, DateTimeImmutable $now): void
+function roomieCheckinConfirm(PDO $db, int $bookingId, int $actorId, string $snapshot, DateTimeImmutable $now): int
 {
     $row = roomieCheckinBooking($db, $bookingId, $actorId);
     if ($row === null) {
@@ -204,6 +233,7 @@ function roomieCheckinConfirm(PDO $db, int $bookingId, int $actorId, string $sna
     $query = $db->prepare('INSERT INTO main.room_booking_checkins (booking_id, room_id) VALUES (?, ?)
         ON CONFLICT (booking_id) DO NOTHING');
     $query->execute([$bookingId, $roomId]);
+    return $roomId;
 }
 
 /** Today only, started after activation. Admin aggregate; no owner IDs or times are returned. */

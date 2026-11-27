@@ -76,8 +76,10 @@ try {
     }
     $now = roomieCheckinNow();
     if ($action === 'checkin') {
-        roomieCheckinConfirm($db, $id, (int) $actor['id'], $snapshot, $now);
-        $destination = 'bookings.php?checkin=ok';
+        $roomId = roomieCheckinConfirm($db, $id, (int) $actor['id'], $snapshot, $now);
+        $destination = ($_POST['source'] ?? null) === 'qr'
+            ? 'room_qr.php?id=' . $roomId
+            : 'bookings.php?checkin=ok';
     } else {
         roomieCheckinSetPolicy($db, $id, $enabled === '1', $now);
         $destination = 'room_details.php?id=' . $id . '&checkin_policy=' . $enabled;
