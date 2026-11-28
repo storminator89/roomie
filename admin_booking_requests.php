@@ -5,6 +5,8 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/booking_approvals.php';
 
 header('Cache-Control: private, no-store');
+header('Referrer-Policy: no-referrer');
+header('Content-Type: text/html; charset=utf-8');
 if (!isLoggedIn()) {
     header('Location: login.php', true, 303);
     exit;
@@ -20,23 +22,75 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
 }
 
 $requestEscape = static fn (mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$requests = [];
+$focused = array_key_exists('id', $_GET);
+$id = $focused ? roomiePositiveId($_GET['id']) : null;
+$selected = null;
+$queue = ['upcoming' => [], 'elapsed' => []];
 $error = null;
+$now = new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin'));
 try {
-    $requests = roomieListPendingBookingRequests(getDatabaseConnection());
+    if ($focused) {
+        if ($id === null) {
+            http_response_code(400);
+            $error = 'Ungültige Anfrage.';
+        } else {
+            $selected = roomieFindAdminBookingRequest(getDatabaseConnection(), $id);
+            if ($selected === null) {
+                http_response_code(404);
+                $error = 'Anfrage nicht gefunden.';
+            }
+        }
+    } else {
+        $queue = roomieListAdminBookingRequests(getDatabaseConnection(), $now);
+    }
 } catch (Throwable) {
-    error_log('Roomie booking requests list unavailable');
+    error_log('Roomie booking requests unavailable');
     http_response_code(503);
     $error = 'Anfragen sind zurzeit nicht verfügbar.';
 }
-$notice = match ($_GET['request'] ?? null) {
+$notice = $focused ? null : match ($_GET['request'] ?? null) {
     'approved' => 'Anfrage genehmigt.',
     'declined' => 'Anfrage abgelehnt.',
     default => null,
 };
-$now = new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin'));
 $today = $now->format('Y-m-d');
 $clock = $now->format('H:i:s');
+$renderItem = static function (array $request, bool $isFocused) use ($requestEscape, $today, $clock): void {
+    $date = parseBookingDate((string) $request['date']);
+    $starts = roomieBookingClock($request['start_time']);
+    $pending = $request['status'] === 'pending';
+    $upcoming = $date !== null && $starts !== null
+        && ($request['date'] > $today || ($request['date'] === $today && $starts > $clock));
+    $status = match ($request['status']) {
+        'pending' => $upcoming ? null : 'Termin verstrichen',
+        'approved' => 'Genehmigt',
+        'declined' => 'Abgelehnt',
+        'cancelled' => 'Zurückgezogen',
+        default => 'Nicht verfügbar',
+    };
+    $heading = $isFocused ? 'h2' : 'h3';
+    ?>
+    <li class="rb-entry">
+        <div class="rb-entry-main">
+            <<?= $heading ?>><?= $requestEscape($request['room_name']) ?></<?= $heading ?>>
+            <p><time datetime="<?= $requestEscape($request['date']) ?>"><?= $requestEscape($date?->format('d.m.Y')) ?></time> ·
+                <?= $requestEscape(substr((string) $request['start_time'], 0, 5) . '–' . substr((string) $request['end_time'], 0, 5)) ?> Uhr</p>
+            <p>Anfrage von <?= $requestEscape($request['user_name']) ?></p>
+            <?php if ($status !== null) : ?><p class="rb-request-status"><?= $requestEscape($status) ?></p><?php endif; ?>
+        </div>
+        <?php if ($pending) : ?>
+            <form class="rb-entry-actions" method="post" action="booking_request_action.php">
+                <input type="hidden" name="csrf_token" value="<?= $requestEscape(csrfToken()) ?>">
+                <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
+                <?php if ($upcoming) : ?>
+                    <button type="submit" name="action" value="approve" class="roomplan-action">Genehmigen</button>
+                <?php endif; ?>
+                <button type="submit" name="action" value="decline" class="roomplan-action roomplan-action-secondary">Ablehnen</button>
+            </form>
+        <?php endif; ?>
+    </li>
+    <?php
+};
 ?>
 <!doctype html>
 <html lang="de">
@@ -52,38 +106,28 @@ $clock = $now->format('H:i:s');
 <body class="roomplan-page">
 <?php $roomieActivePage = 'bookings.php'; require __DIR__ . '/roomplan_shell.php'; ?>
 <main id="rb-admin-booking-requests" class="roomplan-main rb-page" tabindex="-1">
-    <a class="rb-inline-link rb-back" href="bookings.php">← Buchungen</a>
-    <header class="rb-header rm-area-head"><h1>Buchungsanfragen</h1><img class="rm-area-art" src="assets/illustrations/admin-requests.svg" width="96" height="64" alt=""></header>
+    <a class="rb-inline-link rb-back" href="<?= $focused ? 'admin_booking_requests.php' : 'admin_dashboard.php' ?>"><?= $focused ? '← Alle Anfragen' : '← Admin-Übersicht' ?></a>
+    <header class="rb-header rm-area-head"><h1><?= $focused ? 'Buchungsanfrage' : 'Buchungsanfragen' ?></h1><img class="rm-area-art" src="assets/illustrations/admin-requests.svg" width="96" height="64" alt=""></header>
     <?php if ($error !== null) : ?><p class="rb-notice rb-notice-error" role="alert"><?= $requestEscape($error) ?></p>
     <?php elseif ($notice !== null) : ?><p class="rb-notice" role="status"><?= $requestEscape($notice) ?></p><?php endif; ?>
 
-    <?php if (!$requests && $error === null) : ?><p class="roomplan-panel rb-empty">Keine offenen Anfragen.</p><?php endif; ?>
-    <?php if ($requests) : ?>
-    <ul class="rb-list" aria-label="Offene Anfragen">
-    <?php foreach ($requests as $request) :
-        $date = parseBookingDate((string) $request['date']);
-        $starts = roomieBookingClock($request['start_time']);
-        $canApprove = $date !== null && $starts !== null
-            && ($request['date'] > $today || ($request['date'] === $today && $starts > $clock));
-    ?>
-        <li class="rb-entry">
-            <div class="rb-entry-main">
-                <h2><?= $requestEscape($request['room_name']) ?></h2>
-                <p><time datetime="<?= $requestEscape($request['date']) ?>"><?= $requestEscape($date?->format('d.m.Y')) ?></time> ·
-                    <?= $requestEscape(substr((string) $request['start_time'], 0, 5) . '–' . substr((string) $request['end_time'], 0, 5)) ?> Uhr</p>
-                <p>Anfrage von <?= $requestEscape($request['user_name']) ?></p>
-            </div>
-            <form class="rb-entry-actions" method="post" action="booking_request_action.php">
-                <input type="hidden" name="csrf_token" value="<?= $requestEscape(csrfToken()) ?>">
-                <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
-                <?php if ($canApprove) : ?>
-                    <button type="submit" name="action" value="approve" class="roomplan-action">Genehmigen</button>
-                <?php else : ?><span class="rb-request-status">Termin verstrichen</span><?php endif; ?>
-                <button type="submit" name="action" value="decline" class="roomplan-action roomplan-action-secondary">Ablehnen</button>
-            </form>
-        </li>
-    <?php endforeach; ?>
-    </ul>
+    <?php if ($selected !== null) : ?>
+        <ul class="rb-list"><?php $renderItem($selected, true); ?></ul>
+    <?php elseif (!$focused && $error === null) : ?>
+        <?php if ($queue['upcoming']) : ?>
+            <section aria-labelledby="rb-upcoming-requests">
+                <h2 id="rb-upcoming-requests">Anstehend</h2>
+                <ul class="rb-list"><?php foreach ($queue['upcoming'] as $request) { $renderItem($request, false); } ?></ul>
+            </section>
+        <?php else : ?>
+            <p class="roomplan-panel rb-empty">Keine anstehenden Anfragen.</p>
+        <?php endif; ?>
+        <?php if ($queue['elapsed']) : ?>
+            <details class="roomplan-panel rb-request-cleanup">
+                <summary>Verstrichene Anfragen</summary>
+                <ul class="rb-list"><?php foreach ($queue['elapsed'] as $request) { $renderItem($request, false); } ?></ul>
+            </details>
+        <?php endif; ?>
     <?php endif; ?>
 </main>
 </body>

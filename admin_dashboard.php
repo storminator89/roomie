@@ -44,7 +44,7 @@ try {
         $pending = (int) $db->query("SELECT COUNT(*) FROM main.booking_requests q
             JOIN rooms r ON r.id = q.room_id JOIN users u ON u.id = q.user_id
             WHERE q.status = 'pending'")->fetchColumn();
-        $stmt = $db->prepare("SELECT q.date, q.start_time, q.end_time, r.name AS room_name
+        $stmt = $db->prepare("SELECT q.id, q.date, q.start_time, q.end_time, r.name AS room_name
             FROM main.booking_requests q JOIN rooms r ON r.id = q.room_id JOIN users u ON u.id = q.user_id
             WHERE q.status = 'pending' AND (q.date > :today OR (q.date = :today AND q.start_time > :clock))
             ORDER BY q.date, q.start_time, q.id LIMIT 3");
@@ -140,7 +140,7 @@ $metrics = [
                 <?php else : ?>
                     <ul class="ad-items">
                     <?php foreach ($overview['requests'] as $row) : ?>
-                        <li><strong><?= $e($row['room_name']) ?></strong><span><time datetime="<?= $e($row['date']) ?>"><?= $e(parseBookingDate($row['date'])?->format('d.m.')) ?></time> · <?= $e($row['start_time'] . '–' . $row['end_time']) ?></span></li>
+                        <li><a href="admin_booking_requests.php?id=<?= (int) $row['id'] ?>"><?= $e($row['room_name']) ?></a><span><time datetime="<?= $e($row['date']) ?>"><?= $e(parseBookingDate($row['date'])?->format('d.m.')) ?></time> · <?= $e($row['start_time'] . '–' . $row['end_time']) ?></span></li>
                     <?php endforeach; ?>
                     </ul>
                 <?php endif; ?>

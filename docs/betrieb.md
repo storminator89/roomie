@@ -186,9 +186,9 @@ entsteht bei der ersten ausdrücklichen Aktivierung.
 
 **Konto → Admin-Übersicht** zeigt offene Freigaben, bestätigte Buchungen
 für den heutigen Berliner Kalendertag und noch nicht beendete Sperren.
-Die Freigabeliste zeigt die drei zeitlich nächsten Anfragen. Der Zähler
-berücksichtigt auch verstrichene Anfragen, die noch in der Warteschlange
-liegen. Die Übersicht zeigt keine Namen der Buchenden und ändert keine
+Die Freigabeliste verlinkt die drei nächsten Anfragen direkt. In der
+Warteschlange stehen anstehende Entscheidungen oben und verstrichene
+Anfragen eingeklappt darunter. Der Zähler erfasst weiterhin beide Gruppen. Die Übersicht zeigt keine Namen der Buchenden und ändert keine
 Buchung. Entscheidungen, Rechte und Integrationen bleiben auf ihren
 eigenen Seiten.
 

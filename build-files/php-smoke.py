@@ -1551,6 +1551,25 @@ def smoke_booking_approvals(env, scratch, date, guest, admin, admin_status, conc
     code, _, html = admin.request(queue_path)
     expect(code == 200 and all(value in html for value in ("Roomie Approval Owner", "Roomie Approval Peer", "Genehmigen", "Ablehnen")),
            "Admin review queue displays pending requests and explicit decisions")
+    # The queue previously let 500 older IDs hide a still-actionable request.
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.executemany("INSERT INTO booking_requests (id, user_id, room_id, date, start_time, end_time) "
+                       "VALUES (?, ?, ?, '2000-01-01', '09:00', '09:15')",
+                       [(-i, ids["peer"], rooms["Expired"]) for i in range(1, 501)])
+    code, _, html = admin.request(queue_path)
+    expect(code == 200 and html.index('id="rb-upcoming-requests"') < html.index('Verstrichene Anfragen')
+           and f'name="request_id" value="{req}"' in html.split('Verstrichene Anfragen')[0],
+           "A full expired backlog must not hide upcoming decisions")
+    detail_path = f"{queue_path}?id={req}"
+    code, _, html = admin.request(detail_path)
+    expect(code == 200 and "Roomie Approval Owner" in html and "Roomie Approval Peer" not in html and "Genehmigen" in html,
+           "A focused queue entry must display only the requested pending item")
+    expect(owner.request(detail_path)[0] == 403 and guest.request(detail_path)[0] in (302, 303, 401, 403)
+           and admin.request(f"{queue_path}?id[]=1")[0] == 400
+           and admin.request(f"{queue_path}?id=99999999")[0] == 404,
+           "A direct request link must preserve access control and reject invalid or missing IDs")
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("DELETE FROM booking_requests WHERE id < 0")
     expect(outbox_size() == mail_before, "Pending creation, deduplication and queue/availability reads must not send email")
     expect(decide(req, actor=owner, token=owner_token) == 403, "Requestor cannot approve their own request")
     expect(decide(req, actor=guest, token="") in (302, 303, 401, 403), "Guest cannot approve a request")
@@ -1559,6 +1578,9 @@ def smoke_booking_approvals(env, scratch, date, guest, admin, admin_status, conc
     expect(decide(req, operation="cancel", actor=owner, token="") == 403, "Withdrawal must require CSRF")
     expect(decide(req, operation="cancel", actor=owner, token=owner_token) == 303 and snapshot(req)[3:] == ("cancelled", None),
            "Owner can withdraw a pending request without creating a booking")
+    code, _, html = admin.request(detail_path)
+    expect(code == 200 and "Zurückgezogen" in html and 'action="booking_request_action.php"' not in html,
+           "A bookmarked resolved request displays its live status and no decision form")
     expect(decide(req) == 409 and schedule(queue) == [], "Withdrawn request cannot become a booking")
     expect(outbox_size() == mail_before, "Withdrawing an unconfirmed request must not send a booking or cancellation email")
 

@@ -122,17 +122,39 @@ function roomieListOwnBookingRequests(PDO $db, int $userId): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/** Only for the authenticated administrator queue. */
-function roomieListPendingBookingRequests(PDO $db): array
+/** Admin-only readers share this query; callers verify the role before reading. */
+function roomieAdminBookingRequestsQuery(): string
+{
+    return 'SELECT q.id, r.name AS room_name, u.name AS user_name, q.date, q.start_time, q.end_time, q.status
+        FROM main.booking_requests q JOIN rooms r ON r.id = q.room_id JOIN users u ON u.id = q.user_id';
+}
+
+function roomieFindAdminBookingRequest(PDO $db, int $id): ?array
 {
     if (!roomieBookingApprovalsAvailable($db)) {
-        return [];
+        return null;
     }
-    $stmt = $db->query("SELECT q.id, q.room_id, r.name AS room_name, q.user_id, u.name AS user_name, q.date,
-        q.start_time, q.end_time, q.status, q.requested_at, q.resolved_at, q.booking_id
-        FROM main.booking_requests q JOIN rooms r ON r.id = q.room_id JOIN users u ON u.id = q.user_id
-        WHERE q.status = 'pending' ORDER BY q.id LIMIT 500");
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $db->prepare(roomieAdminBookingRequestsQuery() . ' WHERE q.id = ?');
+    $stmt->execute([$id]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function roomieListAdminBookingRequests(PDO $db, DateTimeImmutable $now): array
+{
+    $queue = ['upcoming' => [], 'elapsed' => []];
+    if (!roomieBookingApprovalsAvailable($db)) {
+        return $queue;
+    }
+    // The request schema stores canonical HH:MM; a request is no longer actionable at its start.
+    $future = '(q.date > :today OR (q.date = :today AND q.start_time > :clock))';
+    $args = ['today' => $now->format('Y-m-d'), 'clock' => $now->format('H:i')];
+    foreach (['upcoming' => $future, 'elapsed' => 'NOT ' . $future] as $section => $condition) {
+        $stmt = $db->prepare(roomieAdminBookingRequestsQuery()
+            . " WHERE q.status = 'pending' AND $condition ORDER BY q.date, q.start_time, q.id LIMIT 500");
+        $stmt->execute($args);
+        $queue[$section] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    return $queue;
 }
 
 /** A malformed legacy booking cannot safely prove that capacity is free. */
