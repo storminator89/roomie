@@ -222,3 +222,34 @@ test('watch shortcut requires one exact visible writable busy room and a future 
   assert.equal(find({}, atlas, new Map([[1, [{start_time: '11:00', end_time: '12:00'}]]])), null);
   assert.equal(roomForUnavailableWatch([atlas, {...atlas, id: 2}], rows, context, now), null);
 });
+
+test('same-day fallback keeps duration, scope and filters and can show approval rooms', async t => {
+  const {searchBookingAlternatives} = await importRoomplan(t);
+  const plan = {rooms: [
+    room(1, 'Atlas', {requiresApproval: true}),
+    room(2, 'Atlas ohne Beamer', {amenities: []}),
+    room(3, 'Atlas gesperrt', {canBook: false}),
+    room(4, 'Berg', {}),
+    room(5, 'Atlas ohne Favorit'),
+    room(6, 'Atlas anderes Stockwerk'),
+  ], favorites: [1, 2, 3, 4, 6]};
+  const blocked = to => ({...slot('09:00', to), blocked: true});
+  const rows = new Map([
+    [1, [blocked('11:45')]], [4, [blocked('11:15')]], [5, [blocked('10:45')]], [6, [blocked('10:30')]],
+  ]);
+  const filters = {
+    date: searchDate, range: ['10:00', '10:30'], equipment: ['projector'], query: 'Atlas', onlyFavorites: true,
+    scopeRoomIds: new Set([1, 2, 3, 4, 5]), allowDayFallback: true,
+  };
+  const next = searchBookingAlternatives(plan, rows, filters, searchNow)
+    .filter(option => option.kind === 'later-search');
+  assert.deepEqual(next.map(({room, range}) => [room.id, room.requiresApproval, ...range]), [[1, true, '11:45', '12:15']]);
+  assert.equal(searchBookingAlternatives(plan, rows, {...filters, allowDayFallback: false}, searchNow)
+    .some(option => option.kind === 'later-search'), false);
+  assert.equal(searchBookingAlternatives(plan, null, filters, searchNow).length, 0);
+  assert.equal(searchBookingAlternatives(plan, new Map([[1, [blocked('16:45')]]]), filters, searchNow)
+    .some(option => option.kind === 'later-search'), false);
+  const atStart = new Date('2026-11-23T10:45:00Z');
+  assert.deepEqual(searchBookingAlternatives(plan, rows, filters, atStart)
+    .find(option => option.kind === 'later-search')?.range, ['12:00', '12:30']);
+});

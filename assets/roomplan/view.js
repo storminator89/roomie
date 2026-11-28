@@ -207,7 +207,7 @@ export function sameTimeBookingAlternatives(rooms, bookings, attempted, {period,
 // require a replacement to be at least as large as the named room(s).
 export function searchBookingAlternatives(plan, bookingsByRoom, {
   date, range, query = '', equipment = [], onlyFavorites = false,
-  scopeRoomIds = null, allowInProgressPreset = false,
+  scopeRoomIds = null, allowInProgressPreset = false, allowDayFallback = false,
 }, now = new Date()) {
   if (!(bookingsByRoom instanceof Map) || !range || !validBookingWindow(...range)) return [];
   const [from, to] = range;
@@ -245,6 +245,21 @@ export function searchBookingAlternatives(plan, bookingsByRoom, {
     const range = [timeOptions[fromIndex + step], timeOptions[toIndex + step]];
     const room = nearby.find(room => fits(room, ...range));
     if (room) later = {room, range, kind: 'later', minutes: step * 15};
+  }
+  if (allowDayFallback && !later && exact.length) {
+    // An explicit free-room search can move to a later time without changing
+    // any other choice. Only use this date's already-loaded availability.
+    for (let step = 1; toIndex + step < timeOptions.length; step++) {
+      const range = [timeOptions[fromIndex + step], timeOptions[toIndex + step]];
+      if (!bookingWindowInFuture(date, range[0], now)) continue;
+      const room = exact.find(room => periodCanBeBooked(
+        room.capacity, bookingsByRoom.get(room.id) ?? [], ...range,
+      ));
+      if (room) {
+        later = {room, range, kind: 'later-search'};
+        break;
+      }
+    }
   }
   // Keep at least half the selected duration and never shorten by more than an hour.
   for (let step = 1; step <= Math.min(4, Math.floor((toIndex - fromIndex) / 2)) && !shorter; step++) {
@@ -935,16 +950,18 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     return element;
   }
 
-  function currentSearchAlternatives(floor) {
+  function currentSearchAlternatives(floor, allowDayFallback) {
     if (bookingStatus !== 'ready' || !dateIsBookable()) return [];
     const scopeRoomIds = floor ? new Set(eligibleFloorMarkers(floor, plan.rooms).map(({room}) => room.id)) : null;
     return searchBookingAlternatives(plan, bookingsByRoom, {
       date: dateInput.value, range: preferredRange(), query: floorFilters.query,
       equipment: selectedEquipment, onlyFavorites, scopeRoomIds, allowInProgressPreset: rangeIsExplicit,
+      allowDayFallback,
     });
   }
 
-  function drawSearchAlternatives(floor) {
+  function drawSearchAlternatives(floor, noMatches = false) {
+    const allowDayFallback = noMatches && !floor && onlyFree && rangeIsExplicit;
     const range = preferredRange();
     const wish = onlyFree && rangeIsExplicit && bookingStatus === 'ready' && dateIsBookable()
       ? roomForUnavailableWatch(plan.rooms, bookingsByRoom, {
@@ -960,7 +977,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       watchLink.removeAttribute('href');
       if (watchLink === document.activeElement) search.focus();
     }
-    const options = currentSearchAlternatives(floor);
+    const options = currentSearchAlternatives(floor, allowDayFallback);
     const focused = suggestionList.contains(document.activeElement) ? document.activeElement.dataset.alternative : null;
     const floorTitles = new Map();
     if (floor && options.some(option => option.kind === 'room')) {
@@ -977,16 +994,23 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
       choice.dataset.alternative = optionKey(option);
       const floorLabel = floorTitles.get(room.id);
       const change = kind === 'later' ? `${minutes} Min. später` : kind === 'shorter' ? `${minutes} Min. kürzer`
+        : kind === 'later-search' ? (room.requiresApproval ? 'Später suchen · Auf Anfrage' : 'Später suchen')
         : floorLabel && floorLabel !== floor?.title ? `Gleiche Zeit · ${floorLabel}` : 'Gleiche Zeit';
       choice.append(icon(kind === 'room' ? 'layers' : 'clock'), el('span', 'rp-alternative-name', room.name),
         el('span', 'rp-alternative-time', `${range[0]}–${range[1]} Uhr`),
         el('span', 'rp-alternative-change', change));
       choice.addEventListener('click', () => {
         // A boundary may have passed while these controls were visible.
-        const current = currentSearchAlternatives(floor).find(item => optionKey(item) === optionKey(option));
+        const current = currentSearchAlternatives(floor, allowDayFallback).find(item => optionKey(item) === optionKey(option));
         if (!current) {
-          drawSearchAlternatives(floor);
+          drawSearchAlternatives(floor, noMatches);
           status('Diese Alternative ist nicht mehr verfügbar.', true);
+          return;
+        }
+        if (current.kind === 'later-search') {
+          dateRange.value = current.range;
+          applyViewRange();
+          content.focus();
           return;
         }
         openBooking(current.room, choice, current.range);
@@ -1143,7 +1167,7 @@ export function mountRoomplan(main, api = createRoomplanApi({ csrf: main.dataset
     const visible = plan.rooms.filter(room => (!onlyFavorites || plan.favorites.includes(room.id))
       && matchesRoomSearch(`${room.number ?? ''} ${room.name ?? ''}`, floorFilters.query)
       && matchesEquipment(room) && (!onlyFree || matchesFreeFilter(room)));
-    const hasFilters = showFilterResults(visible.length, false, drawSearchAlternatives(null));
+    const hasFilters = showFilterResults(visible.length, false, drawSearchAlternatives(null, visible.length === 0));
     if (!visible.length) {
       const noFavorites = onlyFavorites && !plan.favorites.length;
       const text = hasFilters ? '' : noFavorites ? 'Noch keine Favoriten.' : 'Keine Räume verfügbar.';
