@@ -182,6 +182,16 @@ Verschieben, Stornieren oder Deaktivieren löscht die Bestätigung entsprechend.
 Private Backup-Aufbewahrung bleibt davon unberührt. Das optionale Schema
 entsteht bei der ersten ausdrücklichen Aktivierung.
 
+### Admin-Übersicht
+
+**Konto → Admin-Übersicht** zeigt offene Freigaben, bestätigte Buchungen
+für den heutigen Berliner Kalendertag und noch nicht beendete Sperren.
+Die Freigabeliste zeigt die drei zeitlich nächsten Anfragen. Der Zähler
+berücksichtigt auch verstrichene Anfragen, die noch in der Warteschlange
+liegen. Die Übersicht zeigt keine Namen der Buchenden und ändert keine
+Buchung. Entscheidungen, Rechte und Integrationen bleiben auf ihren
+eigenen Seiten.
+
 ### Raumauswertung
 
 **Konto → Raumauswertung** zeigt die letzten sieben Tage oder einen Zeitraum

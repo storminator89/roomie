@@ -20,7 +20,7 @@ $roomieActiveNav = $roomieActivePage === 'room_details.php' ? 'rooms.php' : $roo
 $roomieAccountName = $_SESSION['user_name'] ?? 'Konto';
 $roomieSkipTarget = match ($roomieActivePage) {
     'raumplan.php' => '#roomplan',
-    'index.php', 'profile.php' => '#main-content',
+    'index.php', 'profile.php', 'admin_dashboard.php' => '#main-content',
     default => null,
 };
 ?>
@@ -58,6 +58,10 @@ $roomieSkipTarget = match ($roomieActivePage) {
                     </a>
                     <?php if (isAdmin()) : ?>
                         <div class="roomie-shell-menu-separator"></div>
+                        <a href="admin_dashboard.php" <?= $roomieActivePage === 'admin_dashboard.php' ? 'aria-current="page"' : '' ?>>
+                            <svg class="roomie-shell-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16m-7 0v10"/></svg>
+                            <span>Admin-Übersicht</span>
+                        </a>
                         <a href="admin_users.php" <?= $roomieActivePage === 'admin_users.php' ? 'aria-current="page"' : '' ?>>
                             <svg class="roomie-shell-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1m1-15a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5v1" /></svg>
                             <span>Benutzerverwaltung</span>

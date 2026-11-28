@@ -1955,6 +1955,13 @@ def smoke(php, root, scratch, expected_minor):
                 status, _, html = user.request(f"room_details.php?id={room_id}&date={date}")
                 expect(status == 200 and 'id="rb-room-book"' in html and 'name="csrf_token"' in html,
                        "Eligible users should get the direct, CSRF-protected booking form")
+                status, headers, overview = admin.request("admin_dashboard.php")
+                expect(status == 200 and "no-store" in headers.get("Cache-Control", "")
+                       and 'data-metric="pending"' in overview
+                       and 'data-metric="booked"' in overview
+                       and 'data-metric="blocked"' in overview, "Admins see a non-cacheable overview")
+                expect(user.request("admin_dashboard.php")[0] == 403, "Non-admins cannot open the admin overview")
+                expect(admin.request("admin_dashboard.php", {})[0] == 405, "Admin overview does not accept writes")
                 print("App UX: own booking default, admin overview, room search and direct booking passed", flush=True)
                 status, headers, ics = user.request(f"bookings.php?download=calendar&booking_id={booking_id}")
                 expect(status == 200 and "text/calendar" in headers.get("Content-Type", ""),
