@@ -239,7 +239,7 @@ function roomieCheckinConfirm(PDO $db, int $bookingId, int $actorId, string $sna
 /** Today only, started after activation. Admin aggregate; no owner IDs or times are returned. */
 function roomieCheckinRoomReport(PDO $db, int $roomId, DateTimeImmutable $now): array
 {
-    $result = ['booked' => 0, 'checked' => 0];
+    $result = ['checked' => 0, 'open' => 0, 'missing' => 0];
     if (!roomieCheckinReady($db)) {
         return $result;
     }
@@ -249,20 +249,26 @@ function roomieCheckinRoomReport(PDO $db, int $roomId, DateTimeImmutable $now): 
     }
     $day = $now->setTimezone(new DateTimeZone('Europe/Berlin'))->format('Y-m-d');
     $effectiveRoom = ROOMIE_EFFECTIVE_BOOKING_ROOM_SQL;
-    $query = $db->prepare("SELECT b.date, b.start_time, b.end_time, x.booking_id IS NOT NULL AS checked
+    $query = $db->prepare("SELECT b.user_id, b.date, b.start_time, b.end_time, x.booking_id IS NOT NULL AS checked
         FROM bookings b LEFT JOIN main.room_booking_checkins x ON x.booking_id = b.id AND x.room_id = ?
         WHERE b.date = ? AND $effectiveRoom = ?");
     $query->bindValue(1, $roomId, PDO::PARAM_INT);
     $query->bindValue(2, $day, PDO::PARAM_STR);
     $query->bindValue(3, $roomId, PDO::PARAM_INT);
     $query->execute();
+    $visibleToOwner = [];
     while ($row = $query->fetch(PDO::FETCH_ASSOC)) {
         $times = roomieCheckinBookingTimes($row);
         if ($times === null || $times[0]->getTimestamp() < $enabled || $times[0] > $now) {
             continue;
         }
-        ++$result['booked'];
-        $result['checked'] += (int) $row['checked'];
+        $owner = (int) $row['user_id'];
+        $visibleToOwner[$owner] ??= roomieVisibleRoom($db, $roomId, $owner, false) !== null;
+        if (!$visibleToOwner[$owner]) {
+            continue;
+        }
+        $state = (bool) $row['checked'] ? 'checked' : (roomieCheckinWindowOpen($now, $times) ? 'open' : 'missing');
+        ++$result[$state];
     }
     return $result;
 }

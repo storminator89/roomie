@@ -105,8 +105,22 @@ denies(fn() => $check(11, 1, $token, '10:19'), 409, 'window capped by end, exclu
 denies(fn() => $check(12, 1, $legacyToken, '10:05:19'), 409, 'legacy seconds retained');
 $check(12, 1, $legacyToken, '10:05:20');
 denies(fn() => $check(12, 1, $legacyToken, '10:25:20'), 409, 'ten after start is exclusive');
-verify(roomieCheckinRoomReport($db, 1, $at('10:14')) === ['booked' => 0, 'checked' => 0], 'report excludes future');
-verify(roomieCheckinRoomReport($db, 1, $at('10:20')) === ['booked' => 3, 'checked' => 2], 'admin aggregate excludes pre-activation');
+verify(roomieCheckinRoomReport($db, 1, $at('10:14')) === ['checked' => 0, 'open' => 0, 'missing' => 0], 'report excludes future');
+$unchanged = $db->query('SELECT total_changes()')->fetchColumn();
+verify(roomieCheckinRoomReport($db, 1, $at('10:24:59')) === ['checked' => 2, 'open' => 1, 'missing' => 0],
+    'admin aggregate excludes pre-activation and does not label an open booking missing');
+verify(roomieCheckinRoomReport($db, 1, $at('10:25:00')) === ['checked' => 2, 'open' => 0, 'missing' => 1],
+    'missing only at the exclusive close; confirmed status persists');
+verify(roomieCheckinRoomReport($db, 2, $at('10:25:00')) === ['checked' => 0, 'open' => 0, 'missing' => 0],
+    'disabled room has no aggregate');
+verify($db->query('SELECT total_changes()')->fetchColumn() === $unchanged, 'preview makes no writes');
+$db->exec("SAVEPOINT preview_eligibility; UPDATE rooms SET type='fk-office' WHERE id=1; INSERT INTO permissions VALUES (2,1); UPDATE bookings SET end_time='10:19' WHERE id=13");
+verify(roomieCheckinRoomReport($db, 1, $at('10:18:59')) === ['checked' => 0, 'open' => 1, 'missing' => 0],
+    'revoked owners are excluded and a short booking remains open just before its end');
+verify(roomieCheckinRoomReport($db, 1, $at('10:19:00')) === ['checked' => 0, 'open' => 0, 'missing' => 1],
+    'short booking closes at its end rather than ten minutes after start');
+$db->exec("ROLLBACK TO preview_eligibility; RELEASE preview_eligibility");
+
 $db->exec("UPDATE bookings SET start_time='10:18' WHERE id=11");
 denies(fn() => $check(11, 1, $token, '10:10'), 409, 'stale after booking change');
 $db->exec("UPDATE bookings SET start_time='10:15' WHERE id=11");

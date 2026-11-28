@@ -170,9 +170,11 @@ Person mit weiterhin bestehendem Raumzugriff kann in **Buchungen** ab
 **Einchecken** tippen. Der QR allein bestätigt keine Anwesenheit. Das Fenster
 endet 10 Minuten nach
 Beginn oder am früheren Ende des Termins. Kein Check-in storniert oder gibt
-einen Raum automatisch frei. Der optionale Tageswert im Raumdetail erfasst
-nur bereits begonnene, berechtigte Buchungen seit Aktivierung und deren
-Selbstbestätigung. Es ist keine Anwesenheitsmessung.
+einen Raum automatisch frei. Admins sehen unter **Raumdetails → Check-in**
+für heute begonnene, berechtigte Buchungen seit Aktivierung drei zusammengefasste
+Anzahlen: eingecheckt, noch offen und ohne Check-in. Als ohne Check-in zählt
+eine Buchung erst nach Ablauf ihres Check-in-Fensters. Die Übersicht misst
+keine Anwesenheit und ändert keine Buchungen.
 
 Die Datenbank speichert nur den Buchungs- und Raumbezug der Bestätigung,
 keine zusätzliche Identität, Zeitmarke, IP-Adresse, Geräte- oder Standortdaten.

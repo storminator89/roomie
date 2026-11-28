@@ -308,7 +308,15 @@ if ($admin) {
             <button type="submit" class="roomplan-action roomplan-action-secondary">Check-in <?= $checkinEnabled ? 'deaktivieren' : 'aktivieren' ?></button>
         </form>
         <?php if ($checkinReport !== null) : ?>
-            <p>Heute: <?= (int) $checkinReport['checked'] ?> / <?= (int) $checkinReport['booked'] ?> eingecheckt.</p>
+            <div aria-label="Heute begonnene Buchungen" role="group">
+                <strong>Heute begonnen</strong>
+                <ul class="rb-tags" id="rb-checkin-status">
+                    <li><?= (int) $checkinReport['checked'] ?> eingecheckt</li>
+                    <li><?= (int) $checkinReport['open'] ?> noch offen</li>
+                    <li><?= (int) $checkinReport['missing'] ?> ohne Check-in</li>
+                </ul>
+                <p class="rb-empty">Selbstbestätigung, kein Anwesenheitsnachweis.</p>
+            </div>
         <?php endif; ?>
         <p class="rb-empty"><?= $checkinEnabled ? 'Deaktivieren löscht Check-ins, nicht Buchungen.' : 'Buchungen bleiben auch ohne Check-in bestehen.' ?></p>
         <?php if ($checkinPolicyUpdated) : ?>

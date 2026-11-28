@@ -328,3 +328,6 @@
     font-size: .875rem;
     margin: 0 0 .35rem;
 }
+
+#rb-checkin-status { list-style: none; padding: 0; margin: .4rem 0; }
+#rb-checkin-status li { background: #f0f0f4; color: #303445; border-radius: .5rem; padding: .3rem .55rem; }
