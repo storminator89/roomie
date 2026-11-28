@@ -32,6 +32,30 @@ function roomieBookingToday(): DateTimeImmutable
     return new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin'));
 }
 
+// Resolve on arrival, not when the dashboard was rendered.
+function roomieQuickFreeRoomQuery(?DateTimeImmutable $now = null): array
+{
+    $zone = new DateTimeZone('Europe/Berlin');
+    $now = ($now ?? new DateTimeImmutable('now', $zone))->setTimezone($zone);
+    $step = ROOMIE_BOOKING_STEP_MINUTES;
+    $minutes = (int) $now->format('G') * 60 + (int) $now->format('i');
+    $rounded = (intdiv($minutes, $step) + 1) * $step;
+    $start = max(ROOMIE_BOOKING_OPEN_TIME, sprintf('%02d:%02d', intdiv($rounded, 60), $rounded % 60));
+    $date = $now;
+    if ($start >= ROOMIE_BOOKING_CLOSE_TIME) {
+        $date = $now->modify('+1 day');
+        $start = ROOMIE_BOOKING_OPEN_TIME;
+    }
+
+    return [
+        'view' => 'list',
+        'free' => '1',
+        'date' => $date->format('Y-m-d'),
+        'start_time' => $start,
+        'end_time' => $date->modify($start)->modify("+{$step} minutes")->format('H:i'),
+    ];
+}
+
 function parseBookingDate($date): ?DateTimeImmutable
 {
     if (!is_string($date) || !preg_match('/\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z/', $date)) {

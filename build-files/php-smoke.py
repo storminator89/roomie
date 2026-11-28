@@ -1937,9 +1937,39 @@ def smoke(php, root, scratch, expected_minor):
                 expect(json.loads(body).get("booking_id") == int(booking_id),
                        "Confirmed single booking must include the calendar link ID")
                 status, _, dashboard = user.request("index.php")
-                expect(status == 200 and 'raumplan.php?view=list&amp;free=1&amp;' in dashboard
-                       and 'Freien Raum finden' in dashboard and 'start_time=' in dashboard,
-                       "Dashboard must open the list filtered to a suggested free interval")
+                expect(status == 200 and 'href="raumplan.php?quick_free=1"' in dashboard
+                       and 'Freien Raum finden' in dashboard,
+                       "Dashboard shortcut must not freeze an explicit time in the rendered page")
+                status, headers, _ = user.request("raumplan.php?quick_free=1")
+                shortcut_target = headers.get("Location", "")
+                expect(status == 302 and shortcut_target.startswith("raumplan.php?view=list&free=1&date=")
+                       and "&start_time=" in shortcut_target and "&end_time=" in shortcut_target
+                       and "quick_free=" not in shortcut_target and "no-store" in headers.get("Cache-Control", ""),
+                       "Dashboard shortcut must resolve to a fresh fixed range without caching")
+                expect(user.request(shortcut_target)[0] == 200,
+                       "Resolved shortcut must load the room plan normally")
+                expect(guest.request("raumplan.php?quick_free=1")[1].get("Location") == "login.php",
+                       "Shortcut must use the room plan authentication guard")
+                explicit = f"raumplan.php?view=list&free=1&date={date}&start_time=10%3A15&end_time=10%3A30"
+                expect(user.request(explicit)[0] == 200 and user.request(explicit + "&quick_free=1")[0] == 200,
+                       "Explicit date ranges must not be changed by the shortcut")
+                run(command + ["-r", """
+                    require 'booking_helpers.php';
+                    foreach ([
+                        ['2026-11-26T09:02:00Z', '2026-11-26', '10:15', '10:30'],
+                        ['2026-11-26T09:16:00Z', '2026-11-26', '10:30', '10:45'],
+                        ['2026-11-26T15:44:59Z', '2026-11-26', '16:45', '17:00'],
+                        ['2026-11-26T15:45:00Z', '2026-11-27', '09:00', '09:15'],
+                        ['2026-12-31T16:30:00Z', '2027-01-01', '09:00', '09:15'],
+                        ['2026-06-03T06:59:59Z', '2026-06-03', '09:00', '09:15'],
+                        ['2026-06-03T07:00:00Z', '2026-06-03', '09:15', '09:30'],
+                    ] as [$instant, $date, $from, $to]) {
+                        $query = roomieQuickFreeRoomQuery(new DateTimeImmutable($instant));
+                        if ([$query['date'], $query['start_time'], $query['end_time']] !== [$date, $from, $to]) {
+                            fwrite(STDERR, 'Incorrect quick room window at ' . $instant); exit(1);
+                        }
+                    }
+                """], root, env)
                 for actor, can_manage in ((admin, True), (user, False)):
                     status, _, html = actor.request("rooms.php")
                     expect(status == 200 and ('raumplan.php?manage=1' in html) == can_manage,

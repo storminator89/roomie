@@ -10,6 +10,11 @@ if (!isLoggedIn()) {
 }
 header('Cache-Control: private, no-store');
 
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && $_GET === ['quick_free' => '1']) {
+    header('Location: raumplan.php?' . http_build_query(roomieQuickFreeRoomQuery()), true, 302);
+    exit;
+}
+
 $roomieActivePage = 'raumplan.php';
 $roomiePlanAdmin = isAdmin();
 $roomiePlanToday = roomieBookingToday();

@@ -13,15 +13,6 @@ if (!isLoggedIn()) {
 $userId = (int) $_SESSION['user_id'];
 $now = new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin'));
 $today = $now->format('Y-m-d');
-$quickRoomParams = ['view' => 'list', 'free' => '1'];
-$quickStart = max(9 * 60, (intdiv((int) $now->format('G') * 60 + (int) $now->format('i'), 15) + 1) * 15);
-if ($quickStart >= 17 * 60) {
-    $quickRoomParams['date'] = $now->modify('+1 day')->format('Y-m-d');
-    $quickStart = 9 * 60;
-}
-$quickRoomParams['start_time'] = sprintf('%02d:%02d', intdiv($quickStart, 60), $quickStart % 60);
-$quickRoomParams['end_time'] = sprintf('%02d:%02d', intdiv($quickStart + 15, 60), ($quickStart + 15) % 60);
-$quickRoomUrl = 'raumplan.php?' . http_build_query($quickRoomParams);
 $lastDate = $now->modify('+' . ROOMIE_BOOKING_HORIZON_DAYS . ' days')->format('Y-m-d');
 $dashboardEscape = static fn ($value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
@@ -134,7 +125,7 @@ unset($_SESSION['error'], $_SESSION['success']);
             <section class="rm-dash-hero" aria-labelledby="rm-dash-find-title">
                 <div class="rm-dash-find">
                     <h2 id="rm-dash-find-title">Raum finden</h2>
-                    <a href="<?= $dashboardEscape($quickRoomUrl) ?>" class="roomplan-action">
+                    <a href="raumplan.php?quick_free=1" class="roomplan-action">
                         <svg class="rm-dash-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 11h8m0-7v16m4-5h4"/></svg>
                         Freien Raum finden
                     </a>
